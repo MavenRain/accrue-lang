@@ -1,0 +1,169 @@
+-- The one-hot ballot proofs on the chain (S7, Q-S7-8 (a)). A kit file: word
+-- literals and word ops are kit items. Each constant comes from the host
+-- (`build/sigmatool words`: pk = elg_public(blsag_key(5)), seed
+-- blsag_key(19), ctx blsag_key(23), k 2, choice 1), and test/precompile.sh
+-- deploys this contract after threshold.lang. randOk checks the sum proof
+-- (A, B, z) that C = (C1, C2) encrypts m: e is the hash chain from randTag
+-- ("rand") over ctx, PK, C1, C2, m, A and B, then z G = A + e C1 and
+-- z PK = B + e (C2 - m G). slotOk checks the OR proof that slot j encrypts 0
+-- or 1: e is the hash chain from onehotTag ("onehot") over ctx, j, PK, C1,
+-- C2, A0, B0, A1 and B1, then e0 + e1 = e modulo 2^256 and the two DLEQ
+-- branches (C2 for the bit 0, C2 - G for the bit 1). sumX and sumY give the
+-- pointwise sum of two ciphertext points (the C of randOk).
+state State := makeState (cast : Nat)
+
+def init : State := makeState 0
+
+def randTag : U256 := 0x72616e64u
+
+def onehotTag : U256 := 0x6f6e65686f74u
+
+def gen : Prod U256 U256 := pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u
+
+-- -G = (n - 1) G = (Gx, p - Gy).
+def negG : Prod U256 U256 := pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0xb7c52588d95c3b9aa25b0403f1eef75702e84bb7597aabe663b82f6f04ef2777u
+
+def maxWord : U256 := 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu
+
+def pointEq : (p q : Prod U256 U256) -> Flag :=
+  fun (p q : Prod U256 U256) => flagIf (u256Eq (first p) (first q)) (u256Eq (second p) (second q)) flagNo
+
+-- z P = A + e Q: 2 ecMul, 1 ecAdd.
+def holds : (p a q : Prod U256 U256) -> (z e : U256) -> Flag :=
+  fun (p a q : Prod U256 U256) (z e : U256) => pointEq (ecMul p z) (ecAdd a (ecMul q e))
+
+def randChallenge : (ctx pkx pky c1x c1y c2x c2y m ax ay bx by : U256) -> U256 :=
+  fun (ctx pkx pky c1x c1y c2x c2y m ax ay bx by : U256) =>
+    hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash randTag ctx) pkx) pky) c1x) c1y) c2x) c2y) m) ax) ay) bx) by
+
+def orChallenge : (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y : U256) -> U256 :=
+  fun (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y : U256) =>
+    hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash (hash onehotTag ctx) j) pkx) pky) c1x) c1y) c2x) c2y) a0x) a0y) b0x) b0y) a1x) a1y) b1x) b1y
+
+def randWith : (pkx pky c1x c1y c2x c2y m ax ay bx by z e : U256) -> Flag :=
+  fun (pkx pky c1x c1y c2x c2y m ax ay bx by z e : U256) =>
+    flagIf (holds gen (pair ax ay) (pair c1x c1y) z e)
+      (holds (pair pkx pky) (pair bx by) (ecAdd (pair c2x c2y) (ecMul negG m)) z e)
+      flagNo
+
+def rand : (ctx pkx pky c1x c1y c2x c2y m ax ay bx by z : U256) -> Flag :=
+  fun (ctx pkx pky c1x c1y c2x c2y m ax ay bx by z : U256) =>
+    randWith pkx pky c1x c1y c2x c2y m ax ay bx by z (randChallenge ctx pkx pky c1x c1y c2x c2y m ax ay bx by)
+
+-- e0 + e1 = e modulo 2^256, as the host split. u256Add traps on an overflow
+-- and about one honest split in two wraps, so the check uses no add: e1 =
+-- e - e0 when e0 <= e, else e1 - 1 = maxWord - (e0 - e) with e1 >= 1. Each
+-- u256Sub of a taken branch is exact.
+def splitOk : (e e0 e1 : U256) -> Flag :=
+  fun (e e0 e1 : U256) =>
+    flagIf (u256Le e0 e) (u256Eq (u256Sub e e0) e1)
+      (flagIf (u256Le 1u e1) (u256Eq (u256Sub e1 1u) (u256Sub maxWord (u256Sub e0 e))) flagNo)
+
+def slotWith : (pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 e : U256) -> Flag :=
+  fun (pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 e : U256) =>
+    flagIf (splitOk e e0 e1)
+      (flagIf (holds gen (pair a0x a0y) (pair c1x c1y) z0 e0)
+        (flagIf (holds (pair pkx pky) (pair b0x b0y) (pair c2x c2y) z0 e0)
+          (flagIf (holds gen (pair a1x a1y) (pair c1x c1y) z1 e1)
+            (holds (pair pkx pky) (pair b1x b1y) (ecAdd (pair c2x c2y) negG) z1 e1)
+            flagNo)
+          flagNo)
+        flagNo)
+      flagNo
+
+def slot : (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) -> Flag :=
+  fun (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) =>
+    slotWith pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1
+      (orChallenge ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y)
+
+-- One sum proof: 5 ecMul, 3 ecAdd, 12 hash.
+def randOk : (env : Env) -> (s : State) -> (ctx pkx pky c1x c1y c2x c2y m ax ay bx by z : U256) -> Flag :=
+  fun (env : Env) (s : State) (ctx pkx pky c1x c1y c2x c2y m ax ay bx by z : U256) =>
+    rand ctx pkx pky c1x c1y c2x c2y m ax ay bx by z
+
+-- One slot proof (22 arguments): 8 ecMul, 5 ecAdd, 16 hash.
+def slotOk : (env : Env) -> (s : State) -> (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) -> Flag :=
+  fun (env : Env) (s : State) (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) =>
+    slot ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1
+
+-- The split alone (the wrap case has no host proof in the words).
+def splitView : (env : Env) -> (s : State) -> (e e0 e1 : U256) -> Flag :=
+  fun (env : Env) (s : State) (e e0 e1 : U256) => splitOk e e0 e1
+
+-- The sum of two ciphertext points: 1 ecAdd.
+def sumX : (env : Env) -> (s : State) -> (ux uy vx vy : U256) -> U256 :=
+  fun (env : Env) (s : State) (ux uy vx vy : U256) => first (ecAdd (pair ux uy) (pair vx vy))
+
+def sumY : (env : Env) -> (s : State) -> (ux uy vx vy : U256) -> U256 :=
+  fun (env : Env) (s : State) (ux uy vx vy : U256) => second (ecAdd (pair ux uy) (pair vx vy))
+
+-- The host words (closed: the evaluator computes the curve ops and hashes).
+def wctx : U256 := 0x6fbd7ba72d1c4d30e158af9bb5f1d9faa2bde76173ad243e2927537d04a3531au
+def wpkx : U256 := 0x2761a96aa2f8946b0619281bb81e5efea492402710e94210648205f35f62ecbcu
+def wpky : U256 := 0x43dad9bf7bf12d56c7fcb5f8eb8981fb261a957aa81fc1b4d3686828536d1496u
+def s0c1x : U256 := 0x1335de36bb22bfcf237cc9d4fc22ff165314daa8804a832b606b504b75479d88u
+def s0c1y : U256 := 0xaebdba6c3bb3d891d9b4b611664c4c4713675012447995aba49ada1235fe86c7u
+def s0c2x : U256 := 0x10c31dd8f1e3384888addb69340d70086e50d38deffe785b735eda87d273f405u
+def s0c2y : U256 := 0xee379ae021bd8ed8431a77cca75dd062a3140190060a403fb06956e3ac7b94d5u
+def s0a0x : U256 := 0x297f443abe56bd5af61048be3605cd7c24a32f64c918fcfc02464abf85ae4d40u
+def s0a0y : U256 := 0x3281de534c99a0191cbb1f91c38dc4e428d173079202ec3bf224fd1e2a08abe7u
+def s0b0x : U256 := 0x2db10ce2d30d36d15075efe7b55019a7b337fcca8bd3f12f19838c7e2c331614u
+def s0b0y : U256 := 0x202b8a5e87f108ceac6304fac8b7ffa6cb66f0e096faf3884a8567376981ba47u
+def s0a1x : U256 := 0xdbeb6853deb3df2b8dd91d3aed332fb3aa1800d249b7908e8ba75e9147997096u
+def s0a1y : U256 := 0x7eb49da3f7265e8101727909750bcb92f24a2d7ebaed9fd526ca95df71dae5efu
+def s0b1x : U256 := 0x9f9207abb1e9037f8b40b87f4cc50656a4ad4c009cd8e5edd06dbb47dc4e8448u
+def s0b1y : U256 := 0x79f944cc1038f626a27b725b619ad8bfb2ab6872bbb91753a1ea8d2b4b99c1c7u
+def s0e0 : U256 := 0xffa958376231cd7ad999211aab944c662835576e962803d51162e4428988b8b9u
+def s0e1 : U256 := 0xaa7ddb84bb82d53db32dda62855b2c04c9609e49265327e46d80aa14482d4746u
+def s0z0 : U256 := 0x6965286f8f5f5835b637c35b66b1b6e00c8d4dbe3bd2049cd0775158d5e9ccbau
+def s0z1 : U256 := 0x02ca236961c67475a29869e80efc01a9df2b58bc861a1b3c464c32f274706058u
+def s1c1x : U256 := 0x36f667a8b7de7bad52f8090680d69394ce6f8c5db3e97312f7688558b8c68f08u
+def s1c1y : U256 := 0xf1dbba9bc46c2659a5382c461f31f2eb72707a110d201b76310557f3b61d25f2u
+def s1c2x : U256 := 0x71611b2377b3c1fcf446bba68bef7353e777a7d42037bd66fcfe3f3cb0f03b54u
+def s1c2y : U256 := 0x9f04bb33b874945c48506a309aa813e83aaf93db6a967e7779f4def65d6bb452u
+def s1a0x : U256 := 0xe2456a2228836555748e08a7f7a5d988115e702ec42886ddd9889732ad68a698u
+def s1a0y : U256 := 0xc0f99a0e4509c5210c0bc9ed198235ce7f0318a43a3ff390108a92408d73ff7cu
+def s1b0x : U256 := 0x0cc6b5f21d10cfd1812d6198f231ee3248b5a05ba904335b830220925a990818u
+def s1b0y : U256 := 0x0da3a7866d8f08af711a84c714535bbb5fa8b4be4f5e2c82bfce5044314ff79au
+def s1a1x : U256 := 0x32ee721680628e5bf10e9b3e2f296a472e554baaab232e76e91e384e44268dc9u
+def s1a1y : U256 := 0x7a53de2ba81e4b2ca62327be78314174bef8697f5b29caccccedf899ee577419u
+def s1b1x : U256 := 0x837c6cac8a2caa8c91ead364e9c06ed682974f473fcbe257de0fdd8808861792u
+def s1b1y : U256 := 0x9ea6e0c4897ef35a38124fe494b3c5040a99cc8aa6b0cc1c5f370d61246b9771u
+def s1e0 : U256 := 0xeb875122a69843a47f45ba31abe7d8a9648182a9ae32000a8928f5016016aaf9u
+def s1e1 : U256 := 0xeeedff108a36094f99c71beefb46eb78955e01ff581d6293be10d224fd1d42e7u
+def s1z0 : U256 := 0x4ee033065e0715050389a9a4bbf3095ad832195bdf0a8bfcbd52a3d506b9eb34u
+def s1z1 : U256 := 0xe8a3970d557fd4999abfbe747492eb91026fa3d0fb962946a89b7e8173374595u
+def sumc1x : U256 := 0x00978c1ffec0b793bd7db37d8e4b64c1be0366b59d00d97d6f9aa588acdb5942u
+def sumc1y : U256 := 0x121ae9350e1e1eba002f33d6a6714d369489c1464f784bdd90cb9803dbaee9f2u
+def sumc2x : U256 := 0x2092c077aed881199c6be8b53b99c7582d54c8afeca09fde542f8a0c87660732u
+def sumc2y : U256 := 0x6fdb3356b290e1d01e6744374daa5e46efc95c1b712a190b94e0b6dec4749835u
+def sumax : U256 := 0x8a3163e00fb9cacdd694f30de06965bf73dc7664d69ad591a0821c1764d097d3u
+def sumay : U256 := 0x6f21ffd287ceca02852e66d41ce0ade012b58ced6bc35b9bd95ee60def960383u
+def sumbx : U256 := 0x0782f403924f42c2f77737ebed990cd35253cdb4ff99401f4fd175f169cea20au
+def sumby : U256 := 0x6cf05b493b31820a5b9ab5e17129877e978a1ccc110bc3c18d2da8ed176acee2u
+def sumz : U256 := 0xd785d33c9ddd62fd8ab3560e03c066de8218b8f1eaf9bd454b8f39606c5a1574u
+def sumzbad : U256 := 0xd785d33c9ddd62fd8ab3560e03c066de8218b8f1eaf9bd454b8f39606c5a1575u
+def fc1x : U256 := 0x3b721e10d7973f8611627b7ba2df0e414360ef8080f048508770d3c38d02a61fu
+def fc1y : U256 := 0x9256004f792cc818bd1445e53b0b2be2f62e4b28ce6d40b7d47502aae4b5f819u
+def fc2x : U256 := 0xc9b4e84216fc2ce6521bc3e1017e74afb6ba80db3be9a363602c8c631e9a5c24u
+def fc2y : U256 := 0x581ebe1dc1634fd301e042548deaf7e16daed434b06de0e4899ac039f1698580u
+def fa0x : U256 := 0x8389a17b456b94f292136e6a6aee894a6b8d28464e9cab09d3e2ece94fb28eeeu
+def fa0y : U256 := 0x573222850ef2156b04eb4f0be92c6444a155016db10a251c2695b7e368a9e6a8u
+def fb0x : U256 := 0x32c6231dc34344a1e0e593991a7394360040760deb550eeadfb01f285cc95f04u
+def fb0y : U256 := 0x11d7677046919b8a8ba03487231ce95c2c826c4ac41509471c03fc2dd92908a3u
+def fa1x : U256 := 0xad108ce886d629f7c74f8f489b242b1b6d2284ca0530774e1003dfb8364044a7u
+def fa1y : U256 := 0x8dbb7505a0b2ca5d23780bda441e82d79db547ba634720a8954a67cf2d151816u
+def fb1x : U256 := 0xd08002c3058783bfedc01fb1ef27d8fe30484862b3c740ad1a996c7403a677aau
+def fb1y : U256 := 0xc53c77d754ce3a15aa958b79336c038f6715f7c2276863148580d1269bfbf652u
+def fe0 : U256 := 0x4190567735bcebb133b89af0becc41990ff3f2d50fb0427af6a559ab36c7c44eu
+def fe1 : U256 := 0xa0967a148e0fcf0eaab79d32d241bdd33325d587f4a74348843b5b51d8589950u
+def fz0 : U256 := 0xe3d0aedafb57b999baa5be9dc09ad9a9102c0b57ed20eabe6a68726e772862f0u
+def fz1 : U256 := 0x372934caa54c3d0fefc81c5851d5041000da5a3fe69ff7ec247e783392fbbc5au
+def randGood : Flag := rand wctx wpkx wpky sumc1x sumc1y sumc2x sumc2y 1u sumax sumay sumbx sumby sumz
+def randBad : Flag := rand wctx wpkx wpky sumc1x sumc1y sumc2x sumc2y 1u sumax sumay sumbx sumby sumzbad
+def slotGood : Flag := slot wctx 0u wpkx wpky s0c1x s0c1y s0c2x s0c2y s0a0x s0a0y s0b0x s0b0y s0a1x s0a1y s0b1x s0b1y s0e0 s0e1 s0z0 s0z1
+def slot1Good : Flag := slot wctx 1u wpkx wpky s1c1x s1c1y s1c2x s1c2y s1a0x s1a0y s1b0x s1b0y s1a1x s1a1y s1b1x s1b1y s1e0 s1e1 s1z0 s1z1
+def slotForged : Flag := slot wctx 0u wpkx wpky fc1x fc1y fc2x fc2y fa0x fa0y fb0x fb0y fa1x fa1y fb1x fb1y fe0 fe1 fz0 fz1
+-- maxWord + 2 = 1 modulo 2^256; maxWord + 0 is not 0.
+def splitWrap : Flag := splitOk 1u maxWord 2u
+def splitEdge : Flag := splitOk 0u maxWord 0u

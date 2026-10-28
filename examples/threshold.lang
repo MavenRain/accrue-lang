@@ -1,0 +1,74 @@
+-- The threshold opening on the chain (S6, Q-S6-6 and Q-S6-7 (a)). A kit file:
+-- word literals and word ops are kit items. Each constant comes from the
+-- host (`build/thresholdtool words`: n 3, t 2, m 1234, quorum {1, 2}), and
+-- test/precompile.sh deploys this contract after precompile.lang.
+-- dleqOk checks one Chaum-Pedersen proof (A, B, z) that D = s C1 for the
+-- share key PK = s G: e is the hash chain from dleqTag ("dleq") over PK, C1,
+-- D, A and B (a raw word, as the host), then z G = A + e PK and
+-- z C1 = B + e D. combineX and combineY give K = l1 D1 + l2 D2 (t = 2). The
+-- Lagrange coefficients are hints that the chain does not check in S6
+-- (Q-S6-7). openOk checks C2 = m G + K: the opener gives m, the BSGS stays
+-- off the chain.
+state State := makeState (opened : Nat)
+
+def init : State := makeState 0
+
+def dleqTag : U256 := 1684825457u
+
+def challenge : (pkx pky cx cy dx dy ax ay bx by : U256) -> U256 :=
+  fun (pkx pky cx cy dx dy ax ay bx by : U256) =>
+    hash (hash (hash (hash (hash (hash (hash (hash (hash (hash dleqTag pkx) pky) cx) cy) dx) dy) ax) ay) bx) by
+
+def pointEq : (p q : Prod U256 U256) -> Flag :=
+  fun (p q : Prod U256 U256) => flagIf (u256Eq (first p) (first q)) (u256Eq (second p) (second q)) flagNo
+
+def dleqWith : (pkx pky cx cy dx dy ax ay bx by z e : U256) -> Flag :=
+  fun (pkx pky cx cy dx dy ax ay bx by z e : U256) =>
+    flagIf (pointEq (ecMul (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u) z) (ecAdd (pair ax ay) (ecMul (pair pkx pky) e)))
+      (pointEq (ecMul (pair cx cy) z) (ecAdd (pair bx by) (ecMul (pair dx dy) e)))
+      flagNo
+
+def dleq : (pkx pky cx cy dx dy ax ay bx by z : U256) -> Flag :=
+  fun (pkx pky cx cy dx dy ax ay bx by z : U256) =>
+    dleqWith pkx pky cx cy dx dy ax ay bx by z (challenge pkx pky cx cy dx dy ax ay bx by)
+
+def opens : (ux uy vx vy n : U256) -> Flag :=
+  fun (ux uy vx vy n : U256) => pointEq (pair ux uy) (ecAdd (ecMul (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u) n) (pair vx vy))
+
+-- One DLEQ proof: 4 ecMul, 2 ecAdd, 10 hash.
+def dleqOk : (env : Env) -> (s : State) -> (pkx pky cx cy dx dy ax ay bx by z : U256) -> Flag :=
+  fun (env : Env) (s : State) (pkx pky cx cy dx dy ax ay bx by z : U256) => dleq pkx pky cx cy dx dy ax ay bx by z
+
+-- K = l1 D1 + l2 D2: 2 ecMul, 1 ecAdd.
+def combineX : (env : Env) -> (s : State) -> (ux uy l vx vy k : U256) -> U256 :=
+  fun (env : Env) (s : State) (ux uy l vx vy k : U256) => first (ecAdd (ecMul (pair ux uy) l) (ecMul (pair vx vy) k))
+
+def combineY : (env : Env) -> (s : State) -> (ux uy l vx vy k : U256) -> U256 :=
+  fun (env : Env) (s : State) (ux uy l vx vy k : U256) => second (ecAdd (ecMul (pair ux uy) l) (ecMul (pair vx vy) k))
+
+-- C2 = m G + K: 1 ecMul, 1 ecAdd.
+def openOk : (env : Env) -> (s : State) -> (ux uy vx vy n : U256) -> Flag :=
+  fun (env : Env) (s : State) (ux uy vx vy n : U256) => opens ux uy vx vy n
+
+-- The host words (closed: the evaluator computes the curve ops and hashes).
+def pk1x : U256 := 0x4a3faf0212ebee70c4d2a9e2481461155cd990df7c753213337a6a74f1989ffcu
+def pk1y : U256 := 0xf72d377b894b8fa4f490229c1075ea2ab8963897219e9afcf4eed25c66ebf1d5u
+def c1x : U256 := 0xa39dcfcb2de53f5c6a94fe755a1ed41680285350c2d31b9936834b032627b2beu
+def c1y : U256 := 0x88600a13e957d1db6e55d07fe9dbf0009512fe0a44e2c6c409d57199d74161bcu
+def d1x : U256 := 0xb81223813afd7044dc2c7bd5fe1d0135da649d4927629a759957cbf87bd6b902u
+def d1y : U256 := 0x0dd775d5e378ad1d58e32ca02eb285a9b5c2c3d3d60b5e4cac78a68be223cc0cu
+def a1x : U256 := 0x10e17ecad7ed8c6136bbd9967aebc0275d5a7ec9c79c5e356925fd5549e50d46u
+def a1y : U256 := 0x81810175af03b380a9508c5cee48eadfa424b9c9cd2114954c3fc195e74dc8f0u
+def b1x : U256 := 0x11ed1f3ce4cb2a5df9d8585787dfc730fe351a556c061799e803e64be78e28dcu
+def b1y : U256 := 0xa06e9f532420021999c40c235ef2514a2054660dd2e998c68d239ebabb0354dbu
+def z1 : U256 := 0x968dc13bbe1d211b1d760bc6e9dae4baad34a83ebeadbf10c2f542b1c4e23022u
+def z1bad : U256 := 0x968dc13bbe1d211b1d760bc6e9dae4baad34a83ebeadbf10c2f542b1c4e23023u
+def kx : U256 := 0x2b26b57cddb47bcf32e133cc1571a30054c209c5ac79a9e9746f18921a471e8fu
+def ky : U256 := 0xf73e26ac7409e78d7097caf9494db23291d7c7fc58dc6802b39afd70fc002e11u
+def c2x : U256 := 0x028447ab67252f3ce8d0c83f438919b3380f547ad7ae1111339d6dc7c6603192u
+def c2y : U256 := 0x639be435958c2bb165504b2c171117b96789454929624a1a1cd9b69be53df5dfu
+def m : U256 := 0x00000000000000000000000000000000000000000000000000000000000004d2u
+def dleqGood : Flag := dleq pk1x pk1y c1x c1y d1x d1y a1x a1y b1x b1y z1
+def dleqBad : Flag := dleq pk1x pk1y c1x c1y d1x d1y a1x a1y b1x b1y z1bad
+def openGood : Flag := opens c2x c2y kx ky m
+def openBad : Flag := opens c2x c2y kx ky 1235u

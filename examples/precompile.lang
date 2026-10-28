@@ -1,0 +1,47 @@
+-- Precompile views (slice S2, kickoff 1.5): ecAdd, ecMul, hash, natDiv, natMod and addrToU256. S4 removed ecPairing and ecrecover (secp256k1 group, SHA-256 hash).
+-- The `langc eval` rows of this file are in test/eval/expect.txt.
+-- The evaluator computes a closed ecAdd or ecMul (examples/secp256k1.lang): `langc eval examples/precompile.lang twoG` prints the 2 G words. An open curve op stays stuck (R17). hash, natDiv, natMod and addrToU256 compute.
+state State := makeState (sigs : List U256)
+
+def init : State := makeState nil
+
+-- Entry: push one word to the state.
+def sign : (env : Env) -> (s : State) -> (x : U256) -> Option (Prod State (List Out)) :=
+  fun (env : Env) (s : State) (x : U256) => some (pair (makeState (cons x (sigs s))) nil)
+
+-- ecAdd: the two coordinates of the sum of (ax, ay) and (bx, by).
+def addX : (env : Env) -> (s : State) -> (ax ay bx by : U256) -> U256 :=
+  fun (env : Env) (s : State) (ax ay bx by : U256) => first (ecAdd (pair ax ay) (pair bx by))
+
+def addY : (env : Env) -> (s : State) -> (ax ay bx by : U256) -> U256 :=
+  fun (env : Env) (s : State) (ax ay bx by : U256) => second (ecAdd (pair ax ay) (pair bx by))
+
+-- ecMul: the two coordinates of k times (ax, ay).
+def mulX : (env : Env) -> (s : State) -> (ax ay k : U256) -> U256 :=
+  fun (env : Env) (s : State) (ax ay k : U256) => first (ecMul (pair ax ay) k)
+
+def mulY : (env : Env) -> (s : State) -> (ax ay k : U256) -> U256 :=
+  fun (env : Env) (s : State) (ax ay k : U256) => second (ecMul (pair ax ay) k)
+
+-- (1, 1) is not on the curve: the precompile fails and the call reverts (R18). The y of the second point is an argument, so the curve op is open and the lowerer emits the call (S8 B1 folds a closed one to the host trap).
+def addBad : (env : Env) -> (s : State) -> (y : U256) -> U256 :=
+  fun (env : Env) (s : State) (y : U256) => first (ecAdd (pair 1u 1u) (pair 1u y))
+
+def hashv : (env : Env) -> (s : State) -> (a b : U256) -> U256 :=
+  fun (env : Env) (s : State) (a b : U256) => hash a b
+
+-- leaf i: the parent index of leaf i plus its side bit (natDiv and natMod of one Nat).
+def leaf : (i : Nat) -> Nat := fun (i : Nat) => natAdd (natDiv i 2) (natMod i 2)
+
+def leafStep : (env : Env) -> (s : State) -> (i : Nat) -> Nat :=
+  fun (env : Env) (s : State) (i : Nat) => leaf i
+
+def addrWord : (env : Env) -> (s : State) -> (a : Addr) -> U256 :=
+  fun (env : Env) (s : State) (a : Addr) => addrToU256 a
+
+-- Closed terms for `langc eval`: hash computes (SHA-256 of 64 zero bytes), the closed ecAdd computes, addrToU256 computes.
+def hashZero : U256 := hash 0u 0u
+
+def twoG : Prod U256 U256 := ecAdd (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u) (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u)
+
+def ownerWord : U256 := addrToU256 0x00000000000000000000000000000000000000aa

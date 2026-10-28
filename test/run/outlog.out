@@ -1,0 +1,7 @@
+1 note ok
+  emit 1 (cons 5u nil)
+  entry 0xfec942da6d0ca6154014d19287563212299bf817d821e6ed37f2121c39c59d8f
+  emit 2 nil
+  entry 0xf6a8d54c1e4c48cd5800ab677de003a523dfef245315c05cd57b1410fe1bc7b2
+state makeState 1
+head 0x180121f5519baf70300cc0b975b092fb036ec3ee91f38bf6fa506f7b9ed234a6

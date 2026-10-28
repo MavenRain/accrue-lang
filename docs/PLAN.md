@@ -14,8 +14,9 @@ questions for the USER. A reading that is not ruled stays a
 recommendation.
 
 Status: S0 DONE (seed 92349c9). S1 DONE: the USER took each
-recommendation of section 12 (section 1). Next: S2 (port the cairn-lang
-kernel, section 7.1).
+recommendation of section 12 (section 1). S2 DONE: the kernel is ported
+at cairn-lang 0743108, the tags are renamed, the time parts are removed.
+Next: S3 (R0 no trap, section 2).
 
 ## 1. Rulings
 
@@ -25,6 +26,8 @@ kernel, section 7.1).
 | 2026-10-27 | Name: accrue-lang. | DESIGN.md, S0 answers |
 | 2026-10-27 | Host: TinyCC. All of `langc` is C99 that TinyCC builds, `langc mcp` too. | DESIGN.md, request |
 | 2026-10-27 | S1, verbatim: "take recommendations". So each S0 question takes (a): Q-S0-1 the cairn-lang crypto (secp256k1, SHA-256, exponential ElGamal, FROST, Pedersen DKG with Feldman commitments); Q-S0-2 a stamp chain signed by a `tStamp` threshold of the DAO; Q-S0-3 plain `U256` amounts, only the ballots encrypted; Q-S0-4 the protocol holds no money, and each value move is an `Instruction` with a threshold `PayAuth` on the record; Q-S0-5 one-hot policy ballots over `D`; Q-S0-6 the DAO amends the whole `Constitution`, `rule` too; Q-S0-7 a capacity for each run-time list, and static memory; Q-S0-8 the Anthropic `count_tokens` endpoint, and the Python and Rust programs run with outputs equal to the accrue-lang output. | USER, S1 |
+| 2026-10-27 | Q-S2-1, verbatim: "(a) Port, then rename (Recommended)". S2 ports the cairn-lang bytes first and runs the gate. Then it renames the domain tags from cairn to accrue and makes the test vectors again with the same tools. | USER, S2 |
+| 2026-10-27 | Q-S2-2, verbatim: "(a) Remove in S2 (Recommended)". S2 removes `REFUSE_TIME` and `OpPos`. A guest writes `Count` for a position. | USER, S2 |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -218,7 +221,8 @@ mtimes). Keep: the Cubical TT checker and evaluator, `REFUSE_CELL`,
 `FreeMon`, `Enc`, `group.h` on secp256k1, SHA-256, the Sigma, ElGamal,
 DLEQ, threshold, bLSAG, FROST and DKG code, Part D and Part R. Remove:
 `REFUSE_TIME` and `OpPos` (accrue-lang has time, through stamps). Do not
-take `.kanon-exec/` or `.kanon-wait/`.
+take `.kanon-exec/` or `.kanon-wait/`. S2 took cairn-lang 0743108 (the
+cairn-lang S7 USER commit).
 
 S5 ports the retainer-lang domain (`domain/domain.lang`, the `earned`
 definition, the policy history, the regime checks) as guest code. The
@@ -280,8 +284,8 @@ refusal or a law kills at least one mutant of it.
 |---|---|---|
 | S0 | Seed from tcc-wasm, DESIGN.md verbatim, this plan; gate; seed commit; private repo | DONE |
 | S1 | The USER rules section 12. Record the rulings here. | DONE |
-| S2 | Port the cairn-lang kernel (7.1). Survey first: SAME, CHANGED, CAIRN-ONLY. | NEXT |
-| S3 | R0: N1, N5 in the kernel and eval; `REFUSE_PARTIAL`; checked `U256`, `mulDiv`. | |
+| S2 | Port the cairn-lang kernel (7.1). Survey first: SAME, CHANGED, CAIRN-ONLY. | DONE |
+| S3 | R0: N1, N5 in the kernel and eval; `REFUSE_PARTIAL`; checked `U256`, `mulDiv`. | NEXT |
 | S4 | Time: `Stamp`, the stamp chain, `REFUSE_CLOCK`; L12. | |
 | S5 | Part E: port the retainer-lang domain (7.1); L1 to L6. | |
 | S6 | Part D: PolicyBallot, Tally, `choice` table, `GovPi`, regimes, AmendBallot, reshare; L7 to L11. | |
@@ -300,8 +304,9 @@ refusal or a law kills at least one mutant of it.
 
 - O1 The kit base data is `Scalar`, `Point`, `Digest`, `U256`. If a slice
   needs more, it records why here first.
-- O2 cairn-lang is in its S8 (Wasm). S2 ports its newest USER commit;
-  S8 takes its Wasm writer only after the cairn-lang USER commit of S8.
+- O2 cairn-lang is in its S8 (Wasm). S2 ported its newest USER commit:
+  BASE 0743108. S8 takes its Wasm writer only after the cairn-lang USER
+  commit of S8.
 - O3 retainer-lang SPEC.md 82 still says EVM output PLANNED (its O-d16-1).
   accrue-lang takes only the domain, so this does not apply here.
 - O4 The secret marks for `REFUSE_TARGET_SECRET` (S9): the key shares,
