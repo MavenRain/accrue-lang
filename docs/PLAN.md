@@ -1,0 +1,355 @@
+# accrue-lang plan
+
+accrue-lang is a Cubical TT language for one job: off-chain retainer
+protocols. A client funds an engagement, a rate accrues over a window, and
+the firm settles what it earned. A threshold DAO governs the policy (rate,
+window, authorization, dispute) off chain: it encrypts its ballots (FHE),
+proves each step (ZK) and opens only by threshold (MPC). The DAO can amend
+its own rules. No program can trap.
+
+The design is `design/DESIGN.md`: the request, verbatim, and the
+retainer-lang domain design, verbatim. This file gives the readings of that
+request, the route, the slices and the open questions. Section 12 lists the
+questions for the USER. A reading that is not ruled stays a
+recommendation.
+
+Status: S0 DONE (seed). Next: S1 (the USER rules the section 12
+questions).
+
+## 1. Rulings
+
+| Date | Ruling | Source |
+|---|---|---|
+| 2026-10-27 | Targets: Wasm MVP (tcc-wasm kit), ES module + JSON (tcc-js kit), WGSL compute (tcc-webgpu kit). Wasm is the primary target. The gate runs it first, and the differential tests compare it with `langc eval`. | DESIGN.md, S0 answers |
+| 2026-10-27 | Name: accrue-lang. | DESIGN.md, S0 answers |
+| 2026-10-27 | Host: TinyCC. All of `langc` is C99 that TinyCC builds, `langc mcp` too. | DESIGN.md, request |
+
+The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
+Native code and EVM are not targets. EVM goes because the request makes
+each contract an off-chain protocol.
+
+## 2. The reading of R0: no trap
+
+R0: no program can trap or surface an exception, on any target.
+
+The reading: each operation is total on its declared type, and each run of
+each target gives a value of the result type. A failure that the domain
+knows (a bad signature, a residual below zero, a full list) is a value:
+`Option A` with `none`. There is no other failure path.
+
+| Rule | Statement | Where |
+|---|---|---|
+| N1 | Each partial operation has an `Option` result or a refinement argument. Subtraction is the residual `a - b` with a proof `b <= a`, or `sub? : U256 -> U256 -> Option U256`. Division takes a `NonZero` divisor. Addition and multiplication of `U256` are checked (`Option`). `mulDiv a b c` = `floor(a * b / c)` with a 512-bit product, `none` only when the result does not fit. | kernel types, eval, each writer |
+| N2 | No recursion at run time, no run-time closure, no run-time tree fold (the kit HOST-LIMITs). So no target can exhaust its stack. | kit, `REFUSE_REC` |
+| N3 | Each run-time list has a capacity that the program fixes (Q-S0-7). An operation that would pass the capacity gives `none`. Memory is static: no `memory.grow`, so each party runs in the same memory and gets the same result. | lowering, Wasm writer |
+| N4 | The writers emit no trap form. Wasm: no `unreachable`, each `div` and `rem` has a divisor that the type proves is not zero, each load and store is inside the static memory. ES: no `throw`, no BigInt division by zero. WGSL: no division by zero (WGSL defines it, but its value is not the eval value). | writers, `test/notrap/` |
+| N5 | `langc eval` never aborts on a checked program. The kit eval stops at a `Nat` above 2^64 - 1 (cairn-lang S8 shows this trap). accrue-lang gives such a value an `Option` form or refuses the program at check time. | eval |
+
+New refusal code `REFUSE_PARTIAL`: a program uses a partial kit word (for
+example `div`, `-` on `U256`, `head` of a list) without its `Option` form
+or its proof argument. The fix hint names the total form.
+
+Gate for R0: a C tool `test/notraptool.c` reads each built module and
+fails on each trap opcode and each unguarded `div` or `rem` (Wasm), and on
+each `throw` (ES). Each target runs the edge rows (zero divisor, 2^256 - 1,
+a full list, an empty list) and must give the eval value.
+
+## 3. The reading of R1
+
+R1: the type constructors are the cell monads and their duals, as realized
+in Cubical TT.
+
+cairn-lang (MavenRain/cairn-lang) has the same R1, and it took the reading
+and the kernel of intent-lang. accrue-lang takes them without change:
+
+- The ambient structure is not limited: Pi, Sigma, `Path`, `PathP`, the
+  interval `I`, `transp`, `hcomp`, the universe `U`, `Glue` and `ua`.
+- A declared type constructor must be one of two classes:
+  - CM, cell monad: the free algebra monad of a cell signature. The
+    parameter occurs only in the generator `eta : A -> T A`. Each other
+    cell takes closed base data and arguments of type `T A`. Unit is `eta`,
+    bind is the recursor, and the laws are paths by induction.
+  - CC, cocell comonad: the cofree coalgebra comonad of a cocell
+    signature. One observation `eps : D A -> A`, each other field `D A ->
+    D A` or `D A -> E -> D A`. Counit is `eps`, extend is the corecursor.
+- `REFUSE_CELL` refuses each other parameterized declaration. The cons
+  list is refused. The free monoid `FreeMon` is the admitted list.
+
+accrue-lang uses the duality in two places:
+
+- The accrual: the behaviour `Time -> Amount` of an engagement is a CC
+  (section 5). `eps` is the earned amount at the current stamp, and
+  `advance : D A -> Stamp -> D A` moves to a later stamp.
+- The record of settlements is a CM (`FreeMon Instruction`), and the
+  books are its fold.
+
+## 4. The minimal base signature (R2)
+
+R2: admit only the base types and operations that retainer-lang programs
+need, with each contract an off-chain protocol and the DAO an off-chain
+ZK + FHE + MPC threshold DAO that can amend itself.
+
+Each name has one of three kinds, as in cairn-lang:
+
+| Kind | Meaning |
+|---|---|
+| slot | The program gives the type from formers and kit base data. |
+| defined | The prelude defines it from slots, formers and kit base data. |
+| primitive | Opaque. The kit implements it. Only the listed operations use it. |
+
+Kit base data (all of it, O1): `Scalar` (the field of the group order),
+`Point` (the group), `Digest` (32 bytes), `U256` (amounts). `Nat` stays
+internal to the kernel. There is no `Addr`, `Env`, `msg.sender`, ERC-20
+`token`, `now` or `block`: those are chain data.
+
+### 4.1 Part E: the engagement (from retainer-lang SPEC 5 and 6)
+
+| Name | Kind | Reading |
+|---|---|---|
+| Time | defined | `Nat`, seconds. The denotation is continuous time; a `Stamp` is a sampling (section 5). |
+| Amount | defined | `U256` with the residual `a - b` for `b <= a` (N1). Q-S0-3. |
+| Rate | defined | `segments : FreeMon Segment` and `masses : FreeMon Mass`, as retainer-lang C6. `Segment = (from, until : Time, num : U256, den : NonZero)`. |
+| Window | defined | `(start, end : Time)` with `start <= end`. |
+| Auth | defined | `(instrument : push | pull | stream, paused : Flag)`. |
+| Dispute | defined | `FreeMon Bps`: the firm share of the residual for each verdict, `Bps <= 10000`. A verdict outside the list gives `none` (in retainer-lang it reverts). |
+| Policy | defined | `Rate * Window * Auth * Dispute`. |
+| Engagement | defined | `(client, firm : Point, asset : Digest, scopeHash : Digest, window : Window)`, plus `countersignedAt, cancelledAt : Option Time`. `asset` names the off-chain asset (Q-S0-4). |
+| open, countersign | defined | A Schnorr signature of the client, then of the firm, on the engagement digest. |
+| earned, recognized, unearned, withdrawable | defined | retainer-lang SPEC 6.1, without change: `G` from the segment start, the closed first interval, the open later intervals. |
+| fund, settle, cancel, dispute, close | defined | As retainer-lang, but each one that moves value gives an `Instruction` (4.3) and does not move it. |
+
+### 4.2 Part D: the DAO (cairn-lang Part D plus retainer-lang Gov)
+
+| Name | Kind | Reading |
+|---|---|---|
+| Member | defined | `Point`: one public key. |
+| D | defined | `Nat` below `decisions` (retainer-lang C10). `policyOf : D -> Policy` is a total program definition. |
+| Constitution | defined record | `members : FreeMon Member`; the thresholds `tOpen`, `tAmend`, `tStamp`, `tPay`; the keys `keyOpen`, `keyStamp`, `keyPay : Point`; `rule : Nat`, the position of the choice rule in force in the program list `rules` (Q-S0-6). |
+| PolicyBallot | defined | One-hot over `D`: `decisions` exponential ElGamal ciphertexts under `keyOpen`, a disjunctive Chaum-Pedersen proof that each one is 0 or 1, a proof that their sum is 1, and a bLSAG ring signature over `members`. |
+| Tally | defined | `FreeMon Nat` of length `decisions`, the opened homomorphic sum. This is the orbit quotient of retainer-lang: the counts, never who voted what. |
+| choice | slot | `Tally -> Option D`, a program definition. The compiler makes its table over each tally (retainer-lang C10). |
+| Gov, GovPi | defined | `Gov` = the table of the rule in force; `GovPi = map policyOf . Gov`. |
+| AmendBallot | defined | cairn-lang `Ballot`: `Enc Bool` with its proof and its bLSAG, on a whole new `Constitution`. `decide` = `yes >= tAmend`. |
+| Share, open | primitive | Partial decryption with a DLEQ proof; `tOpen` valid shares combined by Lagrange (MPC). |
+| Deal, Reshare | primitive | cairn-lang `src/front/dkg.c`: Pedersen DKG with Feldman commitments, and reshare when `members` or a threshold changes. No trusted dealer. |
+
+Self-reference: an amendment is a whole `Constitution`, so the DAO can
+amend `tAmend` and `rule` (the rule that turns a tally into a policy).
+Each ballot is decided by the constitution in force when it opens. A chain
+of amendments is a fold over `FreeMon Constitution`. The policy history
+(retainer-lang C12) gets one entry each time `GovPi` gives a new policy.
+retainer-lang keeps `REFUSE_BIFURCATION` (Schelling-Ising) and the
+Arrow-impossibility freeze (no decision: the last policy stays in force,
+or the zero rate if there was none).
+
+### 4.3 Part S: stamps and settlement
+
+| Name | Kind | Reading |
+|---|---|---|
+| Stamp | defined | `(t : Time, prev : Digest, sig)`: a FROST threshold Schnorr signature under `keyStamp` on `(t, prev)`. `t` must be above the `t` of `prev` (law L12). Q-S0-2. |
+| Instruction | defined | `(payee : Point, asset : Digest, amount : U256, at : Stamp)`: the output of `settle`, `cancel` and `dispute`. |
+| PayAuth | primitive | A FROST threshold Schnorr signature under `keyPay` on the instruction digest (cairn-lang `src/front/frost.c`). |
+| Record | defined | `FreeMon Instruction` as a SHA-256 hash chain (cairn-lang Part R: `snoc`, `head`, `verify`, `Inclusion`). An instruction is valid once, at its position. |
+
+The protocol never holds money. A rail outside the language (a bank, a
+chain, a payment processor) pays each instruction that has a valid
+`PayAuth`. The record makes a second payment of the same residual visible:
+`settle` reads `withdrawn` from the record fold, so a replay gives zero.
+
+### 4.4 Enc, ZK and MPC
+
+The readings of cairn-lang PLAN 3.3 hold: `Enc` is the identity cell monad
+behind a sealed eliminator, `bind` is homomorphic evaluation (affine maps
+only, for exponential ElGamal), `decrypt` is a law-only monad morphism
+`Enc -> Id`, `open q c = decrypt c` is the MPC law, and `ZKProof W := || W
+||` (the `squash` cell) is zero knowledge. IND-CPA and proof soundness are
+VALIDATION assumptions.
+
+## 5. Time
+
+retainer-lang: "Continuous time is the denotation; block time is a
+sampling." Off chain there is no block. The reading (Q-S0-2 (a)): the
+sampling is the stamp chain. The `keyStamp` committee signs `(t, prev)`
+when `tStamp` members agree that `t` has passed. Each program reads time
+only as a `Stamp` argument. No program can read a local clock.
+
+- The stamp chain is a CM (`FreeMon Stamp`). The accrual is its dual: the
+  cofree comonad of `Stamp -> -` (a CC), with `eps` = the books now and
+  `advance` = the books at the next stamp. The pairing of the two runs the
+  chain on an engagement.
+- New refusal code `REFUSE_CLOCK`: a program names a chain or host clock
+  word (`now`, `block`, `timestamp`, `clock`). The fix hint names `Stamp`.
+- `close` at `T` uses the stamp for `T` and the stamp before it as `T^-`.
+- Causality (retainer-lang `## Self-reference`): an amendment at stamp
+  `t*` adds a policy history entry in force only after `t*`.
+
+## 6. Laws
+
+Each law is a path that the kernel checks. "VALIDATION" marks a
+computational assumption that no path can prove (docs/VALIDATION.md).
+
+| Law | Statement |
+|---|---|
+| L1 additivity | `earned t2 = earned t1 + earned (t1, t2)` for `t1 <= t2` |
+| L2 zero and order | `earned t = 0` for `t < start`; `t1 <= t2 -> earned t1 <= earned t2` |
+| L3 instruments | push, pull and stream give the same `(earned, recognized, withdrawable)` |
+| L4 books | `recognized = min funded earned`; `withdrawn <= recognized <= funded` after each operation |
+| L5 residual only | `dispute v` changes only the residual; `recognized` before the dispute stays |
+| L6 causality | an amendment at `t*` leaves `earned t` for each `t <= t*` |
+| L7 tally | `open q (tallyEnc bs) = count (map decrypt bs)`, for each slot of `D` |
+| L8 MPC | `open q c = decrypt c` |
+| L9 orbit | the tally of a relabeled ballot profile is the same tally |
+| L10 self-constituting | `GovPi = policyOf . choice` at a constant constitution |
+| L11 amend | `amend (ps ++ qs) = amend qs . amend ps` |
+| L12 stamps | `t (snoc s c) > t (last c)` for each stamp that `snoc` accepts |
+| L13 settle once | `settle` twice at the same stamp gives one instruction of the residual and one of zero |
+| V1 to V5 | VALIDATION: collision resistance of SHA-256; IND-CPA of ElGamal (DDH); soundness and zero knowledge of the Sigma proofs, DLEQ and bLSAG in the ROM; unforgeability of FROST; an honest `tStamp` quorum signs only past times |
+
+## 7. Route
+
+### 7.1 Kernel
+
+S2 ports the cairn-lang kernel at its newest USER commit (S2 step 0
+records the hash), the way cairn-lang ported intent-lang (`git archive
+... | tar -x`, then `make -B check`, because `git archive` sets old
+mtimes). Keep: the Cubical TT checker and evaluator, `REFUSE_CELL`,
+`FreeMon`, `Enc`, `group.h` on secp256k1, SHA-256, the Sigma, ElGamal,
+DLEQ, threshold, bLSAG, FROST and DKG code, Part D and Part R. Remove:
+`REFUSE_TIME` and `OpPos` (accrue-lang has time, through stamps). Do not
+take `.kanon-exec/` or `.kanon-wait/`.
+
+S5 ports the retainer-lang domain (`domain/domain.lang`, the `earned`
+definition, the policy history, the regime checks) as guest code. The
+chain parts go: `Addr` becomes `Point`, `scopeHash` becomes `Digest`, the
+ERC-20 `token` becomes `asset : Digest`, `pay` and `pull` become
+`Instruction` values.
+
+### 7.2 The three targets
+
+One front end (the ported kernel) and three writers that read its output:
+
+| Target | Kit source | Crypto at run time | Use |
+|---|---|---|---|
+| Wasm MVP (primary) | cairn-lang `src/wasm.c` and `src/front/lower.c` at its S8 close, else tcc-wasm | the cairn-lang Wasm prelude (i64 limbs, point add and multiply, SHA-256) | every party: client, firm, members, stamp and pay committees |
+| ES module + JSON | tcc-js `src/js.c`, `src/json.c` | BigInt in a JS prelude | client and firm views, public checks of the record. JS is not constant time, so a program that touches a key share is refused here (`REFUSE_TARGET_SECRET`). |
+| WGSL compute | tcc-webgpu `src/wgsl.c` | u32 limbs | batch work: check many ballot proofs, `earned` over many engagements |
+
+Differential tests: each target runs the same vectors as `langc eval`.
+The kit harnesses stay. No new node, Python or shell harness: new tests
+are guest `.lang` files and C tools.
+
+## 8. Agent adoption (A1 to A6)
+
+The request asks for six items so that agents reach for accrue-lang when
+it fits.
+
+| Item | Deliverable | Gate |
+|---|---|---|
+| A1 | One canonical form for each operation: no aliases, no second syntax. `langc fmt FILE` prints the canonical form. `langc fmt --check` exits 1 when a file is not canonical. | `fmt` is idempotent; `parse (fmt x)` has the same core term as `x`; every example and test file is canonical. |
+| A2 | `langc check --json FILE`: one JSON object with `diagnostics` (code, span, message, `fix`: a concrete edit) and `progress` (`parsed`, `typed`, `laws_discharged`, `laws_total`). Schema in `docs/CHECK-JSON.md`. | Rows in `test/json/` with the expected JSON, byte equal. Each refusal code has a `fix` row. |
+| A3 | `SKILL.md` with five graded examples (G1 to G5). Each example is a file in `examples/skill/`, and SKILL.md quotes it. | The gate checks each example and checks that the SKILL.md block and the file are byte equal. |
+| A4 | `langc mcp`: an MCP server over stdio (JSON-RPC 2.0, one message on each line), in C, built by TinyCC into the same `langc`. Tools: `check`, `fmt`, `eval`, `build` (with a target), `explain` (a refusal code). The MCP spec version is pinned in `docs/MCP.md`. | A C tool `test/mcptool.c` sends `test/mcp/*.in` and compares the replies with `*.out`. |
+| A5 | `AGENTS.md` (how an agent works in this repo, with the gate command) and a README table: when to use accrue-lang, when not to use it, and what to use then. | Review only. |
+| A6 | Token counts: G1 to G5 in accrue-lang, Python and Rust. Report `docs/TOKEN-BASELINE.md` with the tokenizer pin, each count and each file hash (Q-S0-8). | `make tokens`, not in `make check`. |
+
+Graded examples:
+
+| Grade | Example | Uses |
+|---|---|---|
+| G1 | A fixed monthly retainer: open, countersign, fund, `earned` at a stamp, settle | Part E, one stamp key, threshold 1 |
+| G2 | A closed linear stream, cancelled at `t*` | `earned(end) = d`, `cancel`, `unearned` back to the client, L1 |
+| G3 | One encrypted policy vote over two policies | PolicyBallot, tally, `choice`, `GovPi`, L7, L9 |
+| G4 | The rate changes mid-engagement | the policy history, L6 (the past stays) |
+| G5 | The DAO amends `tAmend` and `rule` | self-reference, `amend` as a fold, L11, the freeze regime |
+
+## 9. Tests
+
+The kit layout stays: `test/parse`, `test/check`, `test/eval`, `test/ir`,
+`test/fronttool.c`, `test/gate.sh`. The port adds the cairn-lang tools
+(`test/shatool.c`, `test/secptool.c`, the ElGamal, threshold, Sigma, bLSAG
+and FROST tools) and the retainer-lang domain rows. New: `test/notrap/`
+and `test/notraptool.c` (R0), `test/json/` (A2), `test/mcp/` and
+`test/mcptool.c` (A4), `test/fmt/` (A1). Mutation: each slice that adds a
+refusal or a law kills at least one mutant of it.
+
+## 10. Slices
+
+| Slice | Work | Status |
+|---|---|---|
+| S0 | Seed from tcc-wasm, DESIGN.md verbatim, this plan; gate; seed commit; private repo | DONE |
+| S1 | The USER rules section 12. Record the rulings here. | NEXT |
+| S2 | Port the cairn-lang kernel (7.1). Survey first: SAME, CHANGED, CAIRN-ONLY. | |
+| S3 | R0: N1, N5 in the kernel and eval; `REFUSE_PARTIAL`; checked `U256`, `mulDiv`. | |
+| S4 | Time: `Stamp`, the stamp chain, `REFUSE_CLOCK`; L12. | |
+| S5 | Part E: port the retainer-lang domain (7.1); L1 to L6. | |
+| S6 | Part D: PolicyBallot, Tally, `choice` table, `GovPi`, regimes, AmendBallot, reshare; L7 to L11. | |
+| S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | |
+| S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | |
+| S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | |
+| S10 | WGSL: `wgsl.c`, batch proof check and batch `earned`. | |
+| S11 | A1: canonical forms and `langc fmt`. | |
+| S12 | A2: `langc check --json`. | |
+| S13 | A4: `langc mcp`. | |
+| S14 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table. | |
+| S15 | A6: the token comparison. | |
+| S16 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. | |
+
+## 11. Open items
+
+- O1 The kit base data is `Scalar`, `Point`, `Digest`, `U256`. If a slice
+  needs more, it records why here first.
+- O2 cairn-lang is in its S8 (Wasm). S2 ports its newest USER commit;
+  S8 takes its Wasm writer only after the cairn-lang USER commit of S8.
+- O3 retainer-lang SPEC.md 82 still says EVM output PLANNED (its O-d16-1).
+  accrue-lang takes only the domain, so this does not apply here.
+- O4 The secret marks for `REFUSE_TARGET_SECRET` (S9): the key shares,
+  the nonces and the decryption key. S6 marks them in the types.
+- O5 The test vectors come from the published standards (NIST CAVP for
+  SHA-256, SEC 2 for secp256k1, the FROST RFC 9591 vectors), not from an
+  implementation that the gate would trust.
+- O6 The pinned MCP spec version and the JSON-RPC subset (A4) go in
+  `docs/MCP.md` at S13.
+- O7 The `fix` of each refusal code (A2) is one concrete edit. A code
+  with no edit gives `fix: null` and a reason.
+
+## 12. Questions for the USER (S0)
+
+Each question has a recommendation (rec). S1 records the rulings.
+
+- Q-S0-1 Crypto. (a) rec: keep the cairn-lang rulings: secp256k1,
+  SHA-256, exponential ElGamal, FROST, Pedersen DKG with Feldman
+  commitments. They come with the S2 port. (b) Pick again for
+  accrue-lang.
+- Q-S0-2 Time source. (a) rec: a stamp chain signed by a `tStamp`
+  threshold of the DAO (section 5). (b) The client and the firm co-sign
+  each stamp: no DAO in the time path, but one party can stop accrual by
+  not signing. (c) Operation counts only, as cairn-lang: no per-second
+  rate, so a stream is not possible.
+- Q-S0-3 Amount privacy. (a) rec: amounts are plain `U256`; the client,
+  the firm and the committees see the books. Only the ballots are
+  encrypted. (b) Amounts encrypted under `keyOpen` with range proofs:
+  private books, but each residual needs a ZK range proof and much more
+  code.
+- Q-S0-4 Settlement. (a) rec: the protocol holds no money; each value
+  move is an `Instruction` with a threshold `PayAuth`, appended to the
+  record, and a rail outside the language pays it. (b) The protocol keeps
+  an internal balance for each party and transfers between them; a rail
+  is needed only to enter and leave.
+- Q-S0-5 Ballots for policy. (a) rec: one-hot over `D` (4.2), so the
+  opened tally is the orbit quotient that retainer-lang `Gov` reads. (b)
+  Yes or no on one policy at a time, as cairn-lang: no `choice` over a
+  tally of `D`.
+- Q-S0-6 What the DAO can amend. (a) rec: the whole `Constitution`,
+  `rule` too, so the DAO can change the choice rule from the program list
+  `rules`. (b) The thresholds and the members only; `choice` is fixed at
+  build time.
+- Q-S0-7 Run-time capacity (N3). (a) rec: each run-time list has a
+  capacity in the program (for example `maxSegments := 16`), and static
+  memory. Each party gets the same result. (b) `memory.grow` with a
+  `none` path: no capacity to pick, but two parties with different memory
+  limits can get different results.
+- Q-S0-8 Token comparison (A6). (a) rec: take the cairn-lang rulings: the
+  Anthropic `count_tokens` endpoint for the newest Claude model (model id
+  and date in the report), and the Python and Rust programs run with
+  outputs equal to the accrue-lang output. (b) A pinned offline
+  tokenizer, text only.
