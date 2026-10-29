@@ -18,13 +18,14 @@ SIGMA_TOOL = test/sigmatool.c src/front/u256.c src/front/field.c src/front/secp2
 BALLOT_TOOL = test/ballottool.c src/front/u256.c src/front/field.c src/front/secp256k1.c src/front/blsag.c src/front/elgamal.c src/front/threshold.c src/front/sigma.c src/sha256.c
 SECP_TOOL = test/secptool.c src/front/u256.c src/front/field.c src/front/secp256k1.c
 SHA_TOOL = test/shatool.c src/sha256.c
+U256_TOOL = test/u256tool.c src/front/u256.c
 PATH_TOOL = test/pathtool.c $(filter-out src/front/front.c,$(FRONT))
 RUN_TOOL = test/runtool.c $(FRONT)
 HEADERS = $(wildcard src/*.h src/front/*.h)
 
 .PHONY: build check check-clang clean
 
-build: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/pathtool build/runtool
+build: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/u256tool build/pathtool build/runtool
 
 build/domain.c: domain/domain.lang gen/embed.c
 	mkdir -p build
@@ -73,6 +74,10 @@ build/shatool: $(SHA_TOOL) $(HEADERS)
 	mkdir -p build
 	$(TCC) $(CFLAGS) -o build/shatool $(SHA_TOOL)
 
+build/u256tool: $(U256_TOOL) $(HEADERS)
+	mkdir -p build
+	$(TCC) $(CFLAGS) -o build/u256tool $(U256_TOOL)
+
 build/pathtool: $(PATH_TOOL) $(HEADERS)
 	mkdir -p build
 	$(TCC) $(CFLAGS) -o build/pathtool $(PATH_TOOL)
@@ -92,10 +97,11 @@ check-clang: build/domain.c
 	$(CC) $(CLANG_FLAGS) $(BALLOT_TOOL)
 	$(CC) $(CLANG_FLAGS) $(SECP_TOOL)
 	$(CC) $(CLANG_FLAGS) $(SHA_TOOL)
+	$(CC) $(CLANG_FLAGS) $(U256_TOOL)
 	$(CC) $(CLANG_FLAGS) $(PATH_TOOL)
 	$(CC) $(CLANG_FLAGS) $(RUN_TOOL) build/domain.c
 
-check: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/pathtool build/runtool check-clang
+check: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/u256tool build/pathtool build/runtool check-clang
 	sh test/gate.sh
 	sh test/run.sh
 	sh test/review.sh
@@ -109,6 +115,7 @@ check: build/langc build/fronttool build/blsagtool build/elgamaltool build/thres
 	build/ballottool
 	build/secptool
 	build/shatool
+	build/u256tool
 	build/pathtool
 	build/runtool
 

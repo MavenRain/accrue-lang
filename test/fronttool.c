@@ -148,7 +148,8 @@ static int internal_print_refused(const char *type, const char *body) {
   return ok;
 }
 
-static int zk_trap(const char *type, const char *body) {
+/* An off-curve point gives none from each crypto word (Q-S3-15 (a)). */
+static int zk_none(const char *type, const char *body) {
   char source[2048];
   Arena arena;
   Diag diag;
@@ -158,18 +159,18 @@ static int zk_trap(const char *type, const char *body) {
   const Value *value = NULL;
   snprintf(source, sizeof source,
            "def max : U256 := 115792089237316195423570985008687907853269984665640564039457584007913129639935u\n"
-           "def bad : U256 := u256Add max 1u\n"
+           "def bad : Prod U256 U256 := pair 1u 1u\n"
            "def value : %s := %s", type, body);
   arena_init(&arena, (size_t)1 << 24);
   diag_init(&diag);
-  int ok = lex_source(&arena, "test-zk-trap", source, strlen(source), &tokens, &diag)
-    && parse_source(&arena, "test-zk-trap", ORIGIN_DOMAIN, &tokens, &decls, &diag)
+  int ok = lex_source(&arena, "test-zk-none", source, strlen(source), &tokens, &diag)
+    && parse_source(&arena, "test-zk-none", ORIGIN_DOMAIN, &tokens, &decls, &diag)
     && check_program(&arena, &decls, &machine, &diag, CHECK_KIT);
   if (ok)
     value = def_value(&machine, 2u);
-  ok = ok && value != NULL && value->kind == VAL_TRAP;
+  ok = ok && value != NULL && val_is(value, OP_NONE);
   if (!ok)
-    fprintf(stderr, "FAIL zk nested trap: %s\n", body);
+    fprintf(stderr, "FAIL zk none: %s\n", body);
   arena_release(&arena);
   return ok;
 }
@@ -185,13 +186,14 @@ static int zk_kernel(const char *member_type, const char *member,
            "def M : Type 0 := %s\n"
            "def C : Type 0 := %s\n"
            "def b : ZkBallot C := zkCast M C (%s) (%s)\n"
-           "def complete : Path (Type 0) (zkCheck M C (zkProve b) (%s)) Unit := refl\n",
+           "def complete : Path (Option (Type 0)) (bind (zkProve b) (fun (w : ZkWitness) => zkCheck M C w (%s))) (some Unit) := refl\n",
            member_type, choice_type, member, choice, checked_choice);
   return domain(source, want);
 }
 
 /* Check command output with the independent verifier, and reject unwritable
-   output streams for both successful signatures and signing traps. */
+   output streams for both successful signatures and failed signings (none,
+   Q-S3-16 (a)). */
 static int prove_output(int trap, int broken, const char *poll) {
   char source[256];
   char text[512];
@@ -227,10 +229,9 @@ static int prove_output(int trap, int broken, const char *poll) {
     text[size] = '\0';
     ok = !ferror(out) && feof(out);
     if (trap) {
-      ok = ok && strcmp(text, "trap\n") == 0;
+      ok = ok && strcmp(text, "none\n") == 0;
       rewind(err);
-      ok = ok && fgets(text, sizeof text, err) != NULL
-        && strncmp(text, "langc: EVAL_OVERFLOW: b:", 23u) == 0;
+      ok = ok && fgets(text, sizeof text, err) == NULL;
     } else {
       GroupPoint gen;
       GroupPoint ring;
@@ -341,20 +342,18 @@ int main(void) {
   ok &= domain("family Size := sz0 | szS (szPred : Size)\n"
                "family Pos : Size -> Type 0 := posFirst (firstSize : Size) : Pos (szS firstSize)\n"
                "  | posNext (nextSize : Size) (nextPos : Pos nextSize) : Pos (szS nextSize)\n"
-               "def sameEncoding : Path ZkWitness "
+               "def sameEncoding : Path (Option ZkWitness) "
                "(zkProve (zkCast (Pos (szS (szS (szS sz0)))) (Pos (szS (szS sz0))) "
                "(posNext (szS (szS sz0)) (posNext (szS sz0) (posFirst sz0))) "
                "(posNext (szS sz0) (posFirst sz0)))) "
                "(zkProve (zkCast (Sum Unit (Sum Unit Unit)) (Sum Unit Unit) "
                "(inr (inr unit)) (inr unit))) := refl", NULL);
-  ok &= zk_trap("Prod U256 U256", "zkHp (pair bad 2u)");
-  ok &= zk_trap("U256", "zkDigest (cons (pair bad 2u) nil)");
-  ok &= zk_trap("U256", "zkDigest (cons (flagIf (u256Eq bad 0u) (pair 1u 2u) (pair 1u 2u)) nil)");
-  ok &= zk_trap("U256", "zkDigest (cons (pair 1u 2u) (flagIf (u256Eq bad 0u) nil nil))");
-  ok &= zk_trap("Flag", "zkVerify (cons (pair 1u 2u) nil) 0u 1u (cons bad (cons 1u (cons 1u (cons 2u nil))))");
-  ok &= normal_roundtrip("Prod U256 U256 -> Prod U256 U256", "fun (p : Prod U256 U256) => zkHp p");
-  ok &= normal_roundtrip("List (Prod U256 U256) -> U256", "fun (ring : List (Prod U256 U256)) => zkDigest ring");
-  ok &= normal_roundtrip("List U256 -> Flag", "fun (sig : List U256) => zkVerify (cons (pair 1u 2u) nil) 0u 1u sig");
+  ok &= zk_none("Option (Prod U256 U256)", "zkHp bad");
+  ok &= zk_none("Option U256", "zkDigest (cons bad nil)");
+  ok &= zk_none("Option Flag", "zkVerify (cons bad nil) 0u 1u (cons 1u (cons 1u (cons 1u (cons 2u nil))))");
+  ok &= normal_roundtrip("Prod U256 U256 -> Option (Prod U256 U256)", "fun (p : Prod U256 U256) => zkHp p");
+  ok &= normal_roundtrip("List (Prod U256 U256) -> Option U256", "fun (ring : List (Prod U256 U256)) => zkDigest ring");
+  ok &= normal_roundtrip("List U256 -> Option Flag", "fun (sig : List U256) => zkVerify (cons (pair 1u 2u) nil) 0u 1u sig");
   /* The empty domain (sealed-lang S2, R21) lexes, parses and checks. */
   ok &= domain("", NULL);
   /* Elimination consumes its scrutinee before applying a functional result. */
@@ -473,7 +472,8 @@ int main(void) {
   ok &= domain("family Even := ez | es (oddPrev : Odd) and Odd := os (evenPrev : Even)\n"
                "def one : Path Nat (fold Nat Unit 0 (fun (u : Unit) => 1) (fun (n : Nat) => unit) (es (os ez))) 1 := refl", NULL);
   ok &= domain("family Even := ez | es (oddPrev : Odd) and Odd := os (evenPrev : Even)\n"
-               "def two : Path Nat (fold Nat Nat 0 (fun (u : Nat) => natAdd u 1) (fun (n : Nat) => natAdd n 1) (es (os ez))) 2 := refl", NULL);
+               "def two : Path (Option Nat) (fold (Option Nat) (Option Nat) (some 0) (fun (u : Option Nat) => bind u (fun (a : Nat) => natAdd a 1))"
+               " (fun (n : Option Nat) => bind n (fun (a : Nat) => natAdd a 1)) (es (os ez))) (some 2) := refl", NULL);
   /* block-fold-extra: a block fold with an extra argument before the
      value. Without the arity test the extra argument is never read. */
   ok &= domain("family Even := ez | es (oddPrev : Odd) and Odd := os (evenPrev : Even)\n"
@@ -717,6 +717,13 @@ int main(void) {
      is wrong. */
   ok &= guest("def keep : Sum Unit Unit -> Sum Unit Unit := fun c => c", NULL);
   ok &= guest("def three : Nat := 3", "REFUSE_KIT");
+  /* S3 P5: REFUSE_PARTIAL (Q-S3-1 (a)) in the domain file and in a guest
+     program. No domain.lang is loaded here, so head is a partial name. */
+  ok &= domain("def f : Nat -> Nat := fun x => pred x", "REFUSE_PARTIAL");
+  ok &= domain("def h : List Nat -> Option Nat := fun l => head l", "REFUSE_PARTIAL");
+  ok &= domain("def f : Nat -> Nat := fun x => natAdd x 1", "REFUSE_PARTIAL");
+  ok &= domain("def q : Nat := natDiv 7 0", "REFUSE_PARTIAL");
+  ok &= guest("def f : Sum Unit Unit -> Sum Unit Unit := fun c => tail c", "REFUSE_PARTIAL");
   if (ok) puts("domain regressions: passed");
   return ok ? 0 : 1;
 }

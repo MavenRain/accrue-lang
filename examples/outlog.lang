@@ -8,4 +8,4 @@ def init : State := makeState 0
 -- fields.
 def note : (env : Env) -> (s : State) -> (amount : U256) -> Option (Prod State (List Out)) :=
   fun (env : Env) (s : State) (amount : U256) =>
-    some (pair (makeState (natAdd (notes s) 1)) (cons (emit 1 (cons amount nil)) (cons (emit 2 nil) nil)))
+    bind (natAdd (notes s) 1) (fun (c : Nat) => some (pair (makeState c) (cons (emit 1 (cons amount nil)) (cons (emit 2 nil) nil))))

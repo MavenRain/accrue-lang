@@ -67,9 +67,8 @@ int u256_sub(U256 *out, const U256 *a, const U256 *b) {
   return 1;
 }
 
-int u256_mul(U256 *out, const U256 *a, const U256 *b) {
-  uint32_t r[16] = {0};
-  int over = 0;
+/* The 16 halves of A * B, low half first. R starts at 0. */
+static void mul_halves(uint32_t *r, const U256 *a, const U256 *b) {
   int i;
   int j;
   for (i = 0; i < 8; i++) {
@@ -83,10 +82,24 @@ int u256_mul(U256 *out, const U256 *a, const U256 *b) {
     }
     r[i + 8] = (uint32_t)carry;
   }
+}
+
+int u256_mul(U256 *out, const U256 *a, const U256 *b) {
+  uint32_t r[16] = {0};
+  int over = 0;
+  int i;
+  mul_halves(r, a, b);
   for (i = 8; i < 16; i++)
     over |= r[i] != 0;
   join(out, r);
   return !over;
+}
+
+void u256_mul_wide(U256 *hi, U256 *lo, const U256 *a, const U256 *b) {
+  uint32_t r[16] = {0};
+  mul_halves(r, a, b);
+  join(lo, r);
+  join(hi, r + 8);
 }
 
 /* X = X * 2 + BIT. The top bit goes out. */
@@ -97,14 +110,13 @@ static void shift_in(U256 *x, uint64_t bit) {
   x->limb[0] = (x->limb[0] << 1) | bit;
 }
 
-/* Shift and subtract, one bit of A at a time. When the remainder has its top
-   bit set, the shift takes it past 2^256, so it is larger than B. */
-int u256_div(U256 *out, const U256 *a, const U256 *b) {
+/* OUT = floor((HI * 2^256 + A) / B), with HI less than B. Shift and subtract,
+   one bit of A at a time. When the remainder has its top bit set, the shift
+   takes it past 2^256, so it is larger than B. */
+static void long_div(U256 *out, const U256 *hi, const U256 *a, const U256 *b) {
   U256 q = U256_ZERO;
-  U256 r = U256_ZERO;
+  U256 r = *hi;
   int i;
-  if (u256_cmp(b, &U256_ZERO) == 0)
-    return 0;
   for (i = 255; i >= 0; i--) {
     uint64_t top = r.limb[3] >> 63;
     shift_in(&r, (a->limb[i / 64] >> (i % 64)) & 1u);
@@ -115,6 +127,23 @@ int u256_div(U256 *out, const U256 *a, const U256 *b) {
     }
   }
   *out = q;
+}
+
+int u256_div(U256 *out, const U256 *a, const U256 *b) {
+  if (u256_cmp(b, &U256_ZERO) == 0)
+    return 0;
+  long_div(out, &U256_ZERO, a, b);
+  return 1;
+}
+
+int u256_muldiv(U256 *out, const U256 *a, const U256 *b, const U256 *d) {
+  U256 hi;
+  U256 lo;
+  u256_mul_wide(&hi, &lo, a, b);
+  /* The quotient is less than 2^256 if and only if HI is less than D. */
+  if (u256_cmp(&hi, d) >= 0)
+    return 0;
+  long_div(out, &hi, &lo, d);
   return 1;
 }
 

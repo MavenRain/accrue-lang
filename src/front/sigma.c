@@ -11,7 +11,7 @@ const U256 RAND_NONCE_TAG = {{0x72616e6477u, 0u, 0u, 0u}};
 const U256 ONEHOT_NONCE_TAG = {{0x6f6e65686f7477u, 0u, 0u, 0u}};
 const U256 BALLOT_TAG = {{0x62616c6c6f74u, 0u, 0u, 0u}};
 
-/* A + B modulo 2^256 (u256_add traps on an overflow). OUT can be A or B. */
+/* A + B modulo 2^256 (u256_add gives 0 on an overflow). OUT can be A or B. */
 static void wrap_add(U256 *out, const U256 *a, const U256 *b) {
   uint64_t carry = 0;
   uint64_t s;

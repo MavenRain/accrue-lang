@@ -11,45 +11,52 @@ def g : Prod U256 U256 := pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d
 def k0 : U256 := zkKey 0
 def k1 : U256 := zkKey 1
 def k2 : U256 := zkKey 2
-def p0 : Prod U256 U256 := ecMul g k0
-def p1 : Prod U256 U256 := ecMul g k1
-def p2 : Prod U256 U256 := ecMul g k2
+def p0 : Option (Prod U256 U256) := ecMul g k0
+def p1 : Option (Prod U256 U256) := ecMul g k1
+def p2 : Option (Prod U256 U256) := ecMul g k2
 
 -- H_p of G and of each ring point. A counter row records the accepted counter k of a point: flagYes when H_p.x is x_k.
-def hG : Prod U256 U256 := zkHp g
-def h0 : Prod U256 U256 := zkHp p0
-def h1 : Prod U256 U256 := zkHp p1
-def h2 : Prod U256 U256 := zkHp p2
+def hG : Option (Prod U256 U256) := zkHp g
+def h0 : Option (Prod U256 U256) := bind p0 (fun (a : Prod U256 U256) => zkHp a)
+def h1 : Option (Prod U256 U256) := bind p1 (fun (a : Prod U256 U256) => zkHp a)
+def h2 : Option (Prod U256 U256) := bind p2 (fun (a : Prod U256 U256) => zkHp a)
 
-def ring2 : List (Prod U256 U256) := cons p0 (cons p1 nil)
-def ring3 : List (Prod U256 U256) := cons p0 (cons p1 (cons p2 nil))
-def d2 : U256 := zkDigest ring2
-def d3 : U256 := zkDigest ring3
+def ring2 : Option (List (Prod U256 U256)) := bind p0 (fun (a : Prod U256 U256) => bind p1 (fun (b : Prod U256 U256) => some (cons a (cons b nil))))
+def ring3 : Option (List (Prod U256 U256)) :=
+  bind p0 (fun (a : Prod U256 U256) => bind p1 (fun (b : Prod U256 U256) => bind p2 (fun (q : Prod U256 U256) => some (cons a (cons b (cons q nil))))))
+def d2 : Option U256 := bind ring2 (fun (rg : List (Prod U256 U256)) => zkDigest rg)
+def d3 : Option U256 := bind ring3 (fun (rg : List (Prod U256 U256)) => zkDigest rg)
 
 -- The vectors: member 0 of ring2 casts choice 1 in poll 0; member 2 of ring3 casts choice 1 in poll 0.
-def sig2 : List U256 := zkSign ring2 k0 0u 1u
-def sig3 : List U256 := zkSign ring3 k2 0u 1u
-def ok2 : Flag := zkVerify ring2 0u 1u sig2
-def ok3 : Flag := zkVerify ring3 0u 1u sig3
+def sig2 : Option (List U256) := bind ring2 (fun (rg : List (Prod U256 U256)) => zkSign rg k0 0u 1u)
+def sig3 : Option (List U256) := bind ring3 (fun (rg : List (Prod U256 U256)) => zkSign rg k2 0u 1u)
+def ok2 : Option Flag := bind ring2 (fun (rg : List (Prod U256 U256)) => bind sig2 (fun (sg : List U256) => zkVerify rg 0u 1u sg))
+def ok3 : Option Flag := bind ring3 (fun (rg : List (Prod U256 U256)) => bind sig3 (fun (sg : List U256) => zkVerify rg 0u 1u sg))
 
 -- The other choice, another poll, the ring in another order and the other ring reject.
-def flip2 : Flag := zkVerify ring2 0u 0u sig2
-def poll2 : Flag := zkVerify ring2 1u 1u sig2
-def swap2 : Flag := zkVerify (cons p1 (cons p0 nil)) 0u 1u sig2
-def other2 : Flag := zkVerify ring3 0u 1u sig2
+def flip2 : Option Flag := bind ring2 (fun (rg : List (Prod U256 U256)) => bind sig2 (fun (sg : List U256) => zkVerify rg 0u 0u sg))
+def poll2 : Option Flag := bind ring2 (fun (rg : List (Prod U256 U256)) => bind sig2 (fun (sg : List U256) => zkVerify rg 1u 1u sg))
+def swap2 : Option Flag :=
+  bind p0 (fun (a : Prod U256 U256) => bind p1 (fun (b : Prod U256 U256) => bind sig2 (fun (sg : List U256) => zkVerify (cons b (cons a nil)) 0u 1u sg)))
+def other2 : Option Flag := bind ring3 (fun (rg : List (Prod U256 U256)) => bind sig2 (fun (sg : List U256) => zkVerify rg 0u 1u sg))
 
--- A signer whose point is not in the ring traps (an entry Nat -> Flag, as the trap rows of secp256k1.lang).
-def noSigner : Nat -> Flag := fun (n : Nat) => zkVerify ring2 (toU256 n) 1u (zkSign ring2 k2 (toU256 n) 1u)
+-- A signer whose point is not in the ring gives none (an entry Nat -> Option Flag, as the none rows of secp256k1.lang; S3 P4a).
+def noSigner : Nat -> Option Flag := fun (n : Nat) =>
+  bind ring2 (fun (rg : List (Prod U256 U256)) => bind (zkSign rg k2 (toU256 n) 1u) (fun (sg : List U256) => zkVerify rg (toU256 n) 1u sg))
 
 -- The counter of each H_p row: the entry is flagYes at the accepted counter k and flagNo below it.
 -- G accepts at k = 0 (the witness that the counter starts at 0), P_0 at 1, P_1 at 0, P_2 at 0, 2G at 1. P_0 at k = 0 is flagNo: x_0^3 + 7 is not a square.
-def twoG : Prod U256 U256 := ecMul g 2u
-def hTwoG : Prod U256 U256 := zkHp twoG
-def hTwoGk : Nat -> Flag := fun (n : Nat) => u256Eq (first hTwoG) (hash (hash (first twoG) (second twoG)) (toU256 n))
-def hGk : Nat -> Flag := fun (n : Nat) => u256Eq (first hG) (hash (hash (first g) (second g)) (toU256 n))
-def h0k : Nat -> Flag := fun (n : Nat) => u256Eq (first h0) (hash (hash (first p0) (second p0)) (toU256 n))
-def h1k : Nat -> Flag := fun (n : Nat) => u256Eq (first h1) (hash (hash (first p1) (second p1)) (toU256 n))
-def h2k : Nat -> Flag := fun (n : Nat) => u256Eq (first h2) (hash (hash (first p2) (second p2)) (toU256 n))
+def twoG : Option (Prod U256 U256) := ecMul g 2u
+def hTwoG : Option (Prod U256 U256) := bind twoG (fun (a : Prod U256 U256) => zkHp a)
+def hTwoGk : Nat -> Option Flag := fun (n : Nat) =>
+  bind twoG (fun (t : Prod U256 U256) => map (fun (h : Prod U256 U256) => u256Eq (first h) (hash (hash (first t) (second t)) (toU256 n))) hTwoG)
+def hGk : Nat -> Option Flag := fun (n : Nat) => map (fun (h : Prod U256 U256) => u256Eq (first h) (hash (hash (first g) (second g)) (toU256 n))) hG
+def h0k : Nat -> Option Flag := fun (n : Nat) =>
+  bind p0 (fun (t : Prod U256 U256) => map (fun (h : Prod U256 U256) => u256Eq (first h) (hash (hash (first t) (second t)) (toU256 n))) h0)
+def h1k : Nat -> Option Flag := fun (n : Nat) =>
+  bind p1 (fun (t : Prod U256 U256) => map (fun (h : Prod U256 U256) => u256Eq (first h) (hash (hash (first t) (second t)) (toU256 n))) h1)
+def h2k : Nat -> Option Flag := fun (n : Nat) =>
+  bind p2 (fun (t : Prod U256 U256) => map (fun (h : Prod U256 U256) => u256Eq (first h) (hash (hash (first t) (second t)) (toU256 n))) h2)
 
 -- An independent valid signature as literals: c_1, s_1, s_2, I.x, I.y of member 0 of ring2, poll 0, choice 1.
 def r : U256 := 115792089237316195423570985008687907852837564279074904382605163141518161494337u
@@ -58,11 +65,13 @@ def s1 : U256 := 170174346040372155902346320526083805042924134327202726329414563
 def s2 : U256 := 85565112067564067625636494812462530080185143465882892077915799401020700242144u
 def ix : U256 := 109220283875468085933110326049816503677963310171581756648846100658282875585243u
 def iy : U256 := 62649107215248491392223667952845657563995991637910310846804263416355618607825u
-def lit2 : Flag := zkVerify ring2 0u 1u (cons c1 (cons s1 (cons s2 (cons ix (cons iy nil)))))
+def lit2 : Option Flag := bind ring2 (fun (rg : List (Prod U256 U256)) => zkVerify rg 0u 1u (cons c1 (cons s1 (cons s2 (cons ix (cons iy nil))))))
 -- s_1 = r is out of range: rejected without a chain. I = (0, 0): rejected. Two words for a ring of two: rejected.
-def range2 : Flag := zkVerify ring2 0u 1u (cons c1 (cons r (cons s2 (cons ix (cons iy nil)))))
-def zero2 : Flag := zkVerify ring2 0u 1u (cons c1 (cons s1 (cons s2 (cons 0u (cons 0u nil)))))
-def short2 : Flag := zkVerify ring2 0u 1u (cons c1 (cons s1 nil))
--- I = (1, n) is off the curve at n = 1: a trap, as the 0x07 revert. curveG: I = n G is on the curve but is not the key image: rejected (Q-S4-9 (b)).
-def curve2 : Nat -> Flag := fun (n : Nat) => zkVerify ring2 0u 1u (cons c1 (cons s1 (cons s2 (cons 1u (cons (toU256 n) nil)))))
-def curveG : Nat -> Flag := fun (n : Nat) => zkVerify ring2 0u 1u (cons c1 (cons s1 (cons s2 (cons (first (ecMul g (toU256 n))) (cons (second (ecMul g (toU256 n))) nil)))))
+def range2 : Option Flag := bind ring2 (fun (rg : List (Prod U256 U256)) => zkVerify rg 0u 1u (cons c1 (cons r (cons s2 (cons ix (cons iy nil))))))
+def zero2 : Option Flag := bind ring2 (fun (rg : List (Prod U256 U256)) => zkVerify rg 0u 1u (cons c1 (cons s1 (cons s2 (cons 0u (cons 0u nil))))))
+def short2 : Option Flag := bind ring2 (fun (rg : List (Prod U256 U256)) => zkVerify rg 0u 1u (cons c1 (cons s1 nil)))
+-- I = (1, n) is off the curve at n = 1: none (S3 P4a), as the 0x07 revert. curveG: I = n G is on the curve but is not the key image: rejected (Q-S4-9 (b)).
+def curve2 : Nat -> Option Flag := fun (n : Nat) =>
+  bind ring2 (fun (rg : List (Prod U256 U256)) => zkVerify rg 0u 1u (cons c1 (cons s1 (cons s2 (cons 1u (cons (toU256 n) nil))))))
+def curveG : Nat -> Option Flag := fun (n : Nat) => bind ring2 (fun (rg : List (Prod U256 U256)) =>
+  bind (ecMul g (toU256 n)) (fun (q : Prod U256 U256) => zkVerify rg 0u 1u (cons c1 (cons s1 (cons s2 (cons (first q) (cons (second q) nil)))))))

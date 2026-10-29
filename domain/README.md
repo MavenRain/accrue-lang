@@ -18,6 +18,10 @@ prelude, then the program.
 - The kit prelude in `src/front/front.c` adds the kit families, for
   example `Env` and `Out`. A guest program cannot declare them
   (`REFUSE_KIT`).
+- A program and `domain/domain.lang` cannot use a partial kit name (for example
+  `div` or `sub`), or the `Option` result of a checked kit word where a
+  plain value is wanted (`REFUSE_PARTIAL`, Q-S3-1, Q-S3-21). Take the
+  `Option` apart with `option` or `bind`.
 
 ## Declaration forms
 

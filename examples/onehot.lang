@@ -8,8 +8,9 @@
 -- z PK = B + e (C2 - m G). slotOk checks the OR proof that slot j encrypts 0
 -- or 1: e is the hash chain from onehotTag ("onehot") over ctx, j, PK, C1,
 -- C2, A0, B0, A1 and B1, then e0 + e1 = e modulo 2^256 and the two DLEQ
--- branches (C2 for the bit 0, C2 - G for the bit 1). sumX and sumY give the
--- pointwise sum of two ciphertext points (the C of randOk).
+-- branches (C2 for the bit 0, C2 - G for the bit 1). sumX and sumY give some
+-- of each coordinate of the sum of two ciphertext points (the C of randOk),
+-- or none off the curve (S3 P4a). A none point in a check gives flagNo.
 state State := makeState (cast : Nat)
 
 def init : State := makeState 0
@@ -28,9 +29,11 @@ def maxWord : U256 := 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 def pointEq : (p q : Prod U256 U256) -> Flag :=
   fun (p q : Prod U256 U256) => flagIf (u256Eq (first p) (first q)) (u256Eq (second p) (second q)) flagNo
 
--- z P = A + e Q: 2 ecMul, 1 ecAdd.
+-- z P = A + e Q: 2 ecMul, 1 ecAdd. A none point gives flagNo (S3 P4a).
 def holds : (p a q : Prod U256 U256) -> (z e : U256) -> Flag :=
-  fun (p a q : Prod U256 U256) (z e : U256) => pointEq (ecMul p z) (ecAdd a (ecMul q e))
+  fun (p a q : Prod U256 U256) (z e : U256) =>
+    option flagNo (fun (l : Prod U256 U256) => option flagNo (fun (r : Prod U256 U256) => pointEq l r)
+      (bind (ecMul q e) (fun (t : Prod U256 U256) => ecAdd a t))) (ecMul p z)
 
 def randChallenge : (ctx pkx pky c1x c1y c2x c2y m ax ay bx by : U256) -> U256 :=
   fun (ctx pkx pky c1x c1y c2x c2y m ax ay bx by : U256) =>
@@ -43,21 +46,24 @@ def orChallenge : (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y
 def randWith : (pkx pky c1x c1y c2x c2y m ax ay bx by z e : U256) -> Flag :=
   fun (pkx pky c1x c1y c2x c2y m ax ay bx by z e : U256) =>
     flagIf (holds gen (pair ax ay) (pair c1x c1y) z e)
-      (holds (pair pkx pky) (pair bx by) (ecAdd (pair c2x c2y) (ecMul negG m)) z e)
+      (option flagNo (fun (q : Prod U256 U256) => holds (pair pkx pky) (pair bx by) q z e)
+        (bind (ecMul negG m) (fun (t : Prod U256 U256) => ecAdd (pair c2x c2y) t)))
       flagNo
 
 def rand : (ctx pkx pky c1x c1y c2x c2y m ax ay bx by z : U256) -> Flag :=
   fun (ctx pkx pky c1x c1y c2x c2y m ax ay bx by z : U256) =>
     randWith pkx pky c1x c1y c2x c2y m ax ay bx by z (randChallenge ctx pkx pky c1x c1y c2x c2y m ax ay bx by)
 
--- e0 + e1 = e modulo 2^256, as the host split. u256Add traps on an overflow
--- and about one honest split in two wraps, so the check uses no add: e1 =
--- e - e0 when e0 <= e, else e1 - 1 = maxWord - (e0 - e) with e1 >= 1. Each
--- u256Sub of a taken branch is exact.
+-- e0 + e1 = e modulo 2^256, as the host split. u256Add gives none on an
+-- overflow and about one honest split in two wraps, so the check uses no
+-- add: e1 = e - e0 when e0 <= e, else e1 - 1 = maxWord - (e0 - e) with
+-- e1 >= 1. Each u256Sub of a taken branch is some; a none gives flagNo.
 def splitOk : (e e0 e1 : U256) -> Flag :=
   fun (e e0 e1 : U256) =>
-    flagIf (u256Le e0 e) (u256Eq (u256Sub e e0) e1)
-      (flagIf (u256Le 1u e1) (u256Eq (u256Sub e1 1u) (u256Sub maxWord (u256Sub e0 e))) flagNo)
+    flagIf (u256Le e0 e) (option flagNo (fun (d : U256) => u256Eq d e1) (u256Sub e e0))
+      (flagIf (u256Le 1u e1)
+        (option flagNo (fun (f : Flag) => f) (bind (u256Sub e1 1u) (fun (d : U256) => map (fun (w : U256) => u256Eq d w) (bind (u256Sub e0 e) (fun (v : U256) => u256Sub maxWord v)))))
+        flagNo)
 
 def slotWith : (pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 e : U256) -> Flag :=
   fun (pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 e : U256) =>
@@ -65,7 +71,7 @@ def slotWith : (pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0
       (flagIf (holds gen (pair a0x a0y) (pair c1x c1y) z0 e0)
         (flagIf (holds (pair pkx pky) (pair b0x b0y) (pair c2x c2y) z0 e0)
           (flagIf (holds gen (pair a1x a1y) (pair c1x c1y) z1 e1)
-            (holds (pair pkx pky) (pair b1x b1y) (ecAdd (pair c2x c2y) negG) z1 e1)
+            (option flagNo (fun (q : Prod U256 U256) => holds (pair pkx pky) (pair b1x b1y) q z1 e1) (ecAdd (pair c2x c2y) negG))
             flagNo)
           flagNo)
         flagNo)
@@ -90,12 +96,12 @@ def slotOk : (env : Env) -> (s : State) -> (ctx j pkx pky c1x c1y c2x c2y a0x a0
 def splitView : (env : Env) -> (s : State) -> (e e0 e1 : U256) -> Flag :=
   fun (env : Env) (s : State) (e e0 e1 : U256) => splitOk e e0 e1
 
--- The sum of two ciphertext points: 1 ecAdd.
-def sumX : (env : Env) -> (s : State) -> (ux uy vx vy : U256) -> U256 :=
-  fun (env : Env) (s : State) (ux uy vx vy : U256) => first (ecAdd (pair ux uy) (pair vx vy))
+-- The sum of two ciphertext points: 1 ecAdd; some of the coordinate, or none off the curve (S3 P4a).
+def sumX : (env : Env) -> (s : State) -> (ux uy vx vy : U256) -> Option U256 :=
+  fun (env : Env) (s : State) (ux uy vx vy : U256) => bind (ecAdd (pair ux uy) (pair vx vy)) (fun (q : Prod U256 U256) => some (first q))
 
-def sumY : (env : Env) -> (s : State) -> (ux uy vx vy : U256) -> U256 :=
-  fun (env : Env) (s : State) (ux uy vx vy : U256) => second (ecAdd (pair ux uy) (pair vx vy))
+def sumY : (env : Env) -> (s : State) -> (ux uy vx vy : U256) -> Option U256 :=
+  fun (env : Env) (s : State) (ux uy vx vy : U256) => bind (ecAdd (pair ux uy) (pair vx vy)) (fun (q : Prod U256 U256) => some (second q))
 
 -- The host words (closed: the evaluator computes the curve ops and hashes).
 def wctx : U256 := 0x6fbd7ba72d1c4d30e158af9bb5f1d9faa2bde76173ad243e2927537d04a3531au

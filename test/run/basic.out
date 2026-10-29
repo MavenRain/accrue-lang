@@ -1,7 +1,7 @@
 1 deposit ok
   event Deposited 0x00000000000000000000000000000000000000bb 5u
 2 withdraw revert
-3 deposit trap
+3 deposit revert
 4 withdraw ok
   event Withdrawn 0x00000000000000000000000000000000000000aa 2u
 5 balance = 3u

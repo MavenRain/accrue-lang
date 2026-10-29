@@ -7,7 +7,7 @@ lines are the lowering to the IR.
 
 DONE means: `langc check` accepts the former, `langc eval` computes it,
 and `langc build` lowers it to Wasm when its value is first-order at run
-time. Types and universes erase on Wasm. Proof contents erase, while their trap flags remain.
+time. Types and universes erase on Wasm. Proof contents erase. `src/front/lower.c` is out of the build until S8. The S8 writer has no trap flag (rule N4 in `docs/PLAN.md`, Q-S3-18).
 
 | ID | Former | Status | Where | Evidence |
 |---|---|---|---|---|

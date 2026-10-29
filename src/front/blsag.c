@@ -188,11 +188,11 @@ BlsagVerdict blsag_verify(const GroupPoint *ring, uint32_t n, const U256 *poll, 
   uint32_t counter = 0;
   uint32_t i;
   if (n == 0 || n > BLSAG_RING_MAX)
-    return BLSAG_TRAP;
+    return BLSAG_NONE;
   if (word_zero(&sig[1u + n]) && word_zero(&sig[2u + n]))
     return BLSAG_REJECT;
   if (!group_from_words(&img, &sig[1u + n], &sig[2u + n]))
-    return BLSAG_TRAP;
+    return BLSAG_NONE;
   modulus_word(&r, &GROUP_N);
   for (i = 0; i < n; i++) {
     if (u256_cmp(&sig[1u + i], &r) >= 0)
@@ -202,7 +202,7 @@ BlsagVerdict blsag_verify(const GroupPoint *ring, uint32_t n, const U256 *poll, 
   c = sig[0];
   for (i = 0; i < n; i++) {
     if (!blsag_hash_point(&h, &counter, &ring[i]))
-      return BLSAG_TRAP;
+      return BLSAG_NONE;
     link(&c, &d, poll, choice, &img, &ring[i], &h, &sig[1u + i], &c);
   }
   return u256_cmp(&c, &sig[0]) == 0 ? BLSAG_ACCEPT : BLSAG_REJECT;

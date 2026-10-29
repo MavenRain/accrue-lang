@@ -27,7 +27,7 @@ extern const U256 BLSAG_TAG;
 typedef enum {
   BLSAG_REJECT,
   BLSAG_ACCEPT,
-  BLSAG_TRAP /* the ring size is bad, the key image is off the curve or H_p found no point */
+  BLSAG_NONE /* the ring size is bad, the key image is off the curve or H_p found no point */
 } BlsagVerdict;
 
 /* X mod n for any word (one subtraction at most, as 2^256 < 2 n). */

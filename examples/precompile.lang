@@ -9,31 +9,31 @@ def init : State := makeState nil
 def sign : (env : Env) -> (s : State) -> (x : U256) -> Option (Prod State (List Out)) :=
   fun (env : Env) (s : State) (x : U256) => some (pair (makeState (cons x (sigs s))) nil)
 
--- ecAdd: the two coordinates of the sum of (ax, ay) and (bx, by).
-def addX : (env : Env) -> (s : State) -> (ax ay bx by : U256) -> U256 :=
-  fun (env : Env) (s : State) (ax ay bx by : U256) => first (ecAdd (pair ax ay) (pair bx by))
+-- ecAdd: some of each coordinate of the sum of (ax, ay) and (bx, by), or none off the curve (S3 P4a).
+def addX : (env : Env) -> (s : State) -> (ax ay bx by : U256) -> Option U256 :=
+  fun (env : Env) (s : State) (ax ay bx by : U256) => bind (ecAdd (pair ax ay) (pair bx by)) (fun (q : Prod U256 U256) => some (first q))
 
-def addY : (env : Env) -> (s : State) -> (ax ay bx by : U256) -> U256 :=
-  fun (env : Env) (s : State) (ax ay bx by : U256) => second (ecAdd (pair ax ay) (pair bx by))
+def addY : (env : Env) -> (s : State) -> (ax ay bx by : U256) -> Option U256 :=
+  fun (env : Env) (s : State) (ax ay bx by : U256) => bind (ecAdd (pair ax ay) (pair bx by)) (fun (q : Prod U256 U256) => some (second q))
 
--- ecMul: the two coordinates of k times (ax, ay).
-def mulX : (env : Env) -> (s : State) -> (ax ay k : U256) -> U256 :=
-  fun (env : Env) (s : State) (ax ay k : U256) => first (ecMul (pair ax ay) k)
+-- ecMul: some of each coordinate of k times (ax, ay), or none off the curve (S3 P4a).
+def mulX : (env : Env) -> (s : State) -> (ax ay k : U256) -> Option U256 :=
+  fun (env : Env) (s : State) (ax ay k : U256) => bind (ecMul (pair ax ay) k) (fun (q : Prod U256 U256) => some (first q))
 
-def mulY : (env : Env) -> (s : State) -> (ax ay k : U256) -> U256 :=
-  fun (env : Env) (s : State) (ax ay k : U256) => second (ecMul (pair ax ay) k)
+def mulY : (env : Env) -> (s : State) -> (ax ay k : U256) -> Option U256 :=
+  fun (env : Env) (s : State) (ax ay k : U256) => bind (ecMul (pair ax ay) k) (fun (q : Prod U256 U256) => some (second q))
 
--- (1, 1) is not on the curve: the precompile fails and the call reverts (R18). The y of the second point is an argument, so the curve op is open and the lowerer emits the call (S8 B1 folds a closed one to the host trap).
-def addBad : (env : Env) -> (s : State) -> (y : U256) -> U256 :=
-  fun (env : Env) (s : State) (y : U256) => first (ecAdd (pair 1u 1u) (pair 1u y))
+-- (1, 1) is not on the curve, so `ecAdd` gives `none` (Q-S3-7). The y of the second point is an argument, so the curve op is open.
+def addBad : (env : Env) -> (s : State) -> (y : U256) -> Option U256 :=
+  fun (env : Env) (s : State) (y : U256) => bind (ecAdd (pair 1u 1u) (pair 1u y)) (fun (q : Prod U256 U256) => some (first q))
 
 def hashv : (env : Env) -> (s : State) -> (a b : U256) -> U256 :=
   fun (env : Env) (s : State) (a b : U256) => hash a b
 
 -- leaf i: the parent index of leaf i plus its side bit (natDiv and natMod of one Nat).
-def leaf : (i : Nat) -> Nat := fun (i : Nat) => natAdd (natDiv i 2) (natMod i 2)
+def leaf : (i : Nat) -> Option Nat := fun (i : Nat) => natAdd (natDiv i 2) (natMod i 2)
 
-def leafStep : (env : Env) -> (s : State) -> (i : Nat) -> Nat :=
+def leafStep : (env : Env) -> (s : State) -> (i : Nat) -> Option Nat :=
   fun (env : Env) (s : State) (i : Nat) => leaf i
 
 def addrWord : (env : Env) -> (s : State) -> (a : Addr) -> U256 :=
@@ -42,6 +42,6 @@ def addrWord : (env : Env) -> (s : State) -> (a : Addr) -> U256 :=
 -- Closed terms for `langc eval`: hash computes (SHA-256 of 64 zero bytes), the closed ecAdd computes, addrToU256 computes.
 def hashZero : U256 := hash 0u 0u
 
-def twoG : Prod U256 U256 := ecAdd (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u) (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u)
+def twoG : Option (Prod U256 U256) := ecAdd (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u) (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u)
 
 def ownerWord : U256 := addrToU256 0x00000000000000000000000000000000000000aa

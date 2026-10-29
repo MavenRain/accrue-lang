@@ -13,30 +13,30 @@ event Withdrawn (payee : Addr) (amount : U256)
 def init : State := makeState 0x00000000000000000000000000000000000000aa 0u 0u 0
 
 -- Entry: add the amount to held and log the caller and the amount (event Deposited).
+-- Revert (none) when u256Add gives none (an overflow).
 def deposit : (env : Env) -> (s : State) -> (amount : U256) -> Option (Prod State (List Out)) :=
   fun (env : Env) (s : State) (amount : U256) =>
-    some (pair (makeState (owner s) (u256Add (held s) amount) (earned s) (cursor s))
-      (cons (Deposited (caller env) amount) nil))
+    bind (u256Add (held s) amount) (fun (h : U256) => some (pair (makeState (owner s) h (earned s) (cursor s))
+      (cons (Deposited (caller env) amount) nil)))
 
 -- Entry: move the amount from held to earned and log the owner and the amount (event Withdrawn).
--- Revert (none) when the amount is above held.
+-- Revert (none) when the amount is above held: then u256Sub gives none.
 def withdraw : (env : Env) -> (s : State) -> (amount : U256) -> Option (Prod State (List Out)) :=
   fun (env : Env) (s : State) (amount : U256) =>
-    flagIf (u256Le amount (held s))
-      (some (pair (makeState (owner s) (u256Sub (held s) amount) (u256Add (earned s) amount) (cursor s))
-        (cons (Withdrawn (owner s) amount) nil)))
-      none
+    bind (u256Sub (held s) amount) (fun (h : U256) => bind (u256Add (earned s) amount) (fun (e : U256) =>
+      some (pair (makeState (owner s) h e (cursor s)) (cons (Withdrawn (owner s) amount) nil))))
 
 -- Entry with no arguments: count the stamp (cursor + 1) and log held and earned (event Stamped).
 def stamp : (env : Env) -> (s : State) -> Option (Prod State (List Out)) :=
   fun (env : Env) (s : State) =>
-    some (pair (makeState (owner s) (held s) (earned s) (natAdd (cursor s) 1))
-      (cons (Stamped (held s) (earned s)) nil))
+    bind (natAdd (cursor s) 1) (fun (c : Nat) => some (pair (makeState (owner s) (held s) (earned s) c)
+      (cons (Stamped (held s) (earned s)) nil)))
 
 -- Helper (no Env): add to the history field earned.
-def checkpoint : State -> U256 -> State :=
-  fun (s : State) (x : U256) => makeState (owner s) (held s) (u256Add (earned s) x) (cursor s)
-def checked : State := checkpoint init 7u
+def checkpoint : State -> U256 -> Option State :=
+  fun (s : State) (x : U256) => bind (u256Add (earned s) x) (fun (e : U256) => some (makeState (owner s) (held s) e (cursor s)))
+-- checked has the type State, thus it can refer to init (rule D-9). A none gives init.
+def checked : State := option init (fun (t : State) => t) (checkpoint init 7u)
 
 -- View.
 def balance : (env : Env) -> (s : State) -> U256 := fun (env : Env) (s : State) => held s

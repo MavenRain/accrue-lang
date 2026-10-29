@@ -2,7 +2,7 @@
 -- nil on the empty List, then three cons writes (one word, two words, one word). The view paidSum is the sum;
 -- the view weighted folds the elements as a base-2 polynomial from the last element to the head; settle writes the sum to tally.
 -- settleWith 5u writes 5 plus the sum to tally (a fold over cons 5u on the field); paidSum shows the List did not change.
--- The view over is the max word at tally 0 (now 99) and traps at tally 25 (now 113): a view that traps (O-c4-3).
+-- The view over is the max word at tally 0 (now 99) and is none at tally 25 (now 113): a view that gives none (O-c4-3).
 0x00000000000000000000000000000000000000bb over
 0x00000000000000000000000000000000000000bb wipe
 0x00000000000000000000000000000000000000bb paidSum

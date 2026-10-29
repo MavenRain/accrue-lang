@@ -8,4 +8,4 @@ def act : Group -> (Member -> Choice) -> Member -> Choice :=
 def outcomeSet : isSet Outcome := fun (x : Outcome) (y : Outcome) (p : Path Outcome x y) (q : Path Outcome x y) => fun (i : I) => fun (j : I) => squash0 Unit x y p q i j
 def b : Ballot_priv := castPrivate (inr unit) (inr unit)
 def t : Tally := orbitProj (fun (m : Member) => inl unit)
-def flipped : Path (Type 0) (verifyZK (proveZK b) (inl unit) t) Unit := refl
+def flipped : Path (Option (Type 0)) (bind (proveZK b) (fun (x : ZKWitness) => verifyZK x (inl unit) t)) (some Unit) := refl

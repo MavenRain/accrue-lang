@@ -2,11 +2,8 @@
 
    The checker (front/check.c) writes core terms. Evaluation is normalization
    by evaluation: each value is a normal form. A neutral value (VAL_VAR,
-   VAL_APP, VAL_STUCK) is stuck on a variable. A trap (an overflow or a division by 0) is a
-   value too. It goes up through each strict position (an arithmetic operation, the
-   scrutinee of an eliminator, the function of an application) and nowhere
-   else. So the evaluator and the residual program agree: a trap that no
-   strict position reads does not stop the program. */
+   VAL_APP, VAL_STUCK) is stuck on a variable. No value is a trap: an
+   operation that can overflow or divide by 0 gives an Option value (S3). */
 #ifndef LANG_FRONT_CORE_H
 #define LANG_FRONT_CORE_H
 
@@ -62,6 +59,7 @@ typedef enum {
   OP_FLAG_IF,
   OP_U256_ADD,
   OP_U256_SUB,
+  OP_U256_MUL,
   OP_U256_LE,
   OP_U256_EQ,
   OP_TO_U256,
@@ -99,6 +97,7 @@ typedef enum {
   OP_NAT_IS_SET,  /* natIsSet: the trusted isSet Nat (S5), stuck */
   OP_U256_IS_SET, /* u256IsSet: the trusted isSet U256 (S5), stuck */
   OP_FLAG_IS_SET, /* flagIsSet: the trusted isSet Flag (S5), stuck */
+  OP_OPT_NAT_IS_SET, /* optNatIsSet: the trusted isSet (Option Nat) (S3), stuck */
   OP_INTERVAL, /* the sort I: never a type, only the type of an interval term */
   OP_TRANSP,   /* transp L phi a: L a line (a path value in U), phi a face */
   OP_SYSTEM,   /* a system: key0, branch0, key1, branch1, ...; each branch a PLAM */
@@ -109,7 +108,13 @@ typedef enum {
   OP_FIN_CASE, /* finAll case: k, body0, ..., body(n-1); body j at the literal j */
   OP_GLUE,     /* Glue A phi sys: a type; sys as in OP_HCOMP, each branch pack T e */
   OP_GLUE_ELEM, /* glue: phi, sys, a; sys as in OP_HCOMP, each branch t */
-  OP_UNGLUE    /* unglue: A, phi, sys, g; stuck when no rule applies */
+  OP_UNGLUE,   /* unglue: A, phi, sys, g; stuck when no rule applies */
+  /* S3 (Q-S3-4, Q-S3-5): NonZero A for A Nat or U256. A value of NonZero A
+     is a value of A that is not 0: the type carries the fact. */
+  OP_NONZERO,       /* NonZero A: a type */
+  OP_NONZERO_OF,    /* nonZero x: some x, or none when x is 0 */
+  OP_NONZERO_VALUE, /* nonZeroValue x: the base value; stuck on an open x */
+  OP_MUL_DIV        /* mulDiv a b d: floor(a * b / d), none when it does not fit */
 } Op;
 
 /* The instance of pure, map, bind and filter (formers F5 and F8). */
@@ -124,7 +129,6 @@ typedef enum {
   CORE_GLOBAL, /* index: definition number */
   CORE_NAT,    /* nat */
   CORE_WORD,   /* word; nat is WORD_U256 or WORD_ADDR */
-  CORE_TRAP,   /* an overflow or a division by 0; only quote writes it */
   CORE_UNIV,   /* Type nat */
   CORE_LAM,    /* fun name => b; a retains an explicit annotation for checks */
   CORE_PI,     /* (name : a) -> b */
@@ -162,7 +166,6 @@ struct Core {
 typedef enum {
   VAL_NAT,
   VAL_WORD, /* nat is WORD_U256 or WORD_ADDR */
-  VAL_TRAP,
   VAL_UNIV,
   VAL_LAM,
   VAL_PI,
@@ -345,7 +348,6 @@ typedef struct {
   uint32_t ctor_cap;
   unsigned depth;
   uint64_t fuel;
-  int overflowed;
   int has_state;          /* the program declares the state (slice K3a) */
   uint32_t state_family; /* the state family, when has_state is 1 */
   uint32_t fresh; /* the count of fresh levels for the Kan head test */
@@ -370,8 +372,9 @@ const Value *val_word(Machine *m, uint64_t sort, const U256 *word);
    id POLL (S8 B2c). OK sets CHOICE to the constructor index of c as a word,
    SIG[0] to SIG[N + 2] to c_1, s_1 to s_n, I.x and I.y, and N to the ring
    size. OPEN: B is not a canonical ballot, the member type is not finite,
-   or m or c has no constructor index. TRAP: the ring or the signing fails. */
-typedef enum { ZK_WITNESS_OK, ZK_WITNESS_OPEN, ZK_WITNESS_TRAP } ZkWitnessVerdict;
+   or m or c has no constructor index. NONE: the ring or the signing fails
+   (S3, Q-S3-16 (a)). */
+typedef enum { ZK_WITNESS_OK, ZK_WITNESS_OPEN, ZK_WITNESS_NONE } ZkWitnessVerdict;
 ZkWitnessVerdict zk_witness(Machine *m, const Value *b, const U256 *poll, U256 *choice, U256 *sig, uint32_t *n);
 /* The constructor index of the closed value V in the finite type T (unit 0,
    inl and inr by cardinality, Fin, Pos). Returns 0 on an open value. Shared

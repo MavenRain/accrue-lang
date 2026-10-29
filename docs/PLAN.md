@@ -16,7 +16,10 @@ recommendation.
 Status: S0 DONE (seed 92349c9). S1 DONE: the USER took each
 recommendation of section 12 (section 1). S2 DONE: the kernel is ported
 at cairn-lang 0743108, the tags are renamed, the time parts are removed.
-Next: S3 (R0 no trap, section 2).
+S3 DONE: the kernel is total. Each partial operation gives an `Option`
+or takes a `NonZero` divisor, `REFUSE_PARTIAL` refuses a partial use,
+and no value is a trap (section 2, Q-S3-1 to Q-S3-21).
+Next: S4 (time: `Stamp`, the stamp chain, `REFUSE_CLOCK`, L12; section 5).
 
 ## 1. Rulings
 
@@ -28,6 +31,27 @@ Next: S3 (R0 no trap, section 2).
 | 2026-10-27 | S1, verbatim: "take recommendations". So each S0 question takes (a): Q-S0-1 the cairn-lang crypto (secp256k1, SHA-256, exponential ElGamal, FROST, Pedersen DKG with Feldman commitments); Q-S0-2 a stamp chain signed by a `tStamp` threshold of the DAO; Q-S0-3 plain `U256` amounts, only the ballots encrypted; Q-S0-4 the protocol holds no money, and each value move is an `Instruction` with a threshold `PayAuth` on the record; Q-S0-5 one-hot policy ballots over `D`; Q-S0-6 the DAO amends the whole `Constitution`, `rule` too; Q-S0-7 a capacity for each run-time list, and static memory; Q-S0-8 the Anthropic `count_tokens` endpoint, and the Python and Rust programs run with outputs equal to the accrue-lang output. | USER, S1 |
 | 2026-10-27 | Q-S2-1, verbatim: "(a) Port, then rename (Recommended)". S2 ports the cairn-lang bytes first and runs the gate. Then it renames the domain tags from cairn to accrue and makes the test vectors again with the same tools. | USER, S2 |
 | 2026-10-27 | Q-S2-2, verbatim: "(a) Remove in S2 (Recommended)". S2 removes `REFUSE_TIME` and `OpPos`. A guest writes `Count` for a position. | USER, S2 |
+| 2026-10-28 | Q-S3-1, verbatim: "(a) All programs, two sites (Recommended)". `REFUSE_PARTIAL` applies to kit, domain and guest programs at two sites: (1) a name with no total kit word (`div`, `mod`, `sub`, `mul`, `head`, `tail`, `pred`), (2) the `Option` result of a checked word where its payload type is wanted. The hint names the total form, or `option` and `bind`. | USER, S3 |
+| 2026-10-28 | Q-S3-2, verbatim: "(a) Option in place (Recommended)". `u256Add` and a new `u256Mul` return `Option U256` (`none` above 2^256 - 1). No wrapping or trapping form stays. | USER, S3 |
+| 2026-10-28 | Q-S3-3, verbatim: "(a) Option now, proof later (Recommended)". `natSub` and `u256Sub` return an `Option` (`none` when b > a). The floor-at-0 form goes. The residual with a proof argument waits (O8). | USER, S3 |
+| 2026-10-28 | Q-S3-4, verbatim: "(b) NonZero divisor type". A kit type `NonZero` and `nonZero`, which returns an `Option`. `natDiv` and `natMod` take a `NonZero` divisor and stay total. | USER, S3 |
+| 2026-10-28 | Q-S3-5, verbatim: "(a) In S3, NonZero over U256 (Recommended)". `mulDiv : U256 -> U256 -> NonZero U256 -> Option U256` = floor(a * b / d) with an exact 512-bit product, `none` only at a quotient above 2^256 - 1. `NonZero` takes its base type (`NonZero Nat`, `NonZero U256`); `nonZero` makes either one; `nonZeroValue` gives the base value back. A C tool tests 512-bit rows. | USER, S3 |
+| 2026-10-28 | Q-S3-6, verbatim: "(a) Option in place (Recommended)". `natAdd` returns `Option Nat` (`none` above 2^64 - 1). Eval keeps no 2^64 - 1 stop. Each use takes the `Option` apart with `option` or `bind`. | USER, S3 |
+| 2026-10-28 | Q-S3-7, verbatim: "(b) All in S3". S3 removes all 14 trap sites and `VAL_TRAP`. The crypto words (`ecAdd`, `ecMul`, the zk ring, `zkHp`, `zkSign`, the bLSAG hash, the bLSAG and ZK witness traps, `zkCheck`) return an `Option` now and can change again in S6. | USER, S3 |
+| 2026-10-28 | Q-S3-8, verbatim: "(a) Checker takes a non-0 literal (Recommended)". Where a `NonZero` is wanted, a `Nat` or `U256` literal other than 0 checks as a `NonZero`. A literal 0 there is `REFUSE_PARTIAL` with the hint `nonZero`. A run-time value uses `nonZero`. | USER, S3 |
+| 2026-10-28 | Q-S3-9, verbatim: "(a) Option entries (Recommended)". An entry can have the result type `Option Nat` or `Option Flag`. `langc eval` prints the payload or `none` (EVAL rows `=> none`). A `langc run` step reverts on `none`. `ratio` and `remainder` return `Option Nat` again. | USER, S3 |
+| 2026-10-28 | Q-S3-10 (a). A view can return an `Option` of a view type. `langc run` prints `= none` or the payload, as in Q-S3-9. | USER, S3 |
+| 2026-10-28 | Q-S3-11 (a). A new trusted constant `optNatIsSet : isSet (Option Nat)` (`docs/VALIDATION.md`). Not (b) `Prod Nat Flag`: (b) loses the refl law `l2` of `examples/record.lang`. | USER, S3 |
+| 2026-10-28 | Q-S3-12 (a). Drop `zk_unroll`. An open `zkVerify` stays one stuck application. `src/front/lower.c` has no ec, hash or zk case, so no writer here emits the 6n precompile calls. | USER, S3 |
+| 2026-10-28 | Q-S3-13 (a). `zkVerify` gives `Option Flag`: `none` on a bad ring and on the old bLSAG trap case (Q-S3-20). `flagNo` stays for a wrong length or a rejected signature. | USER, S3 |
+| 2026-10-28 | Q-S3-14 (b). `zkCheck` gives `Option (Type 0)`: `none` on a bad member ring and on the old bLSAG trap case, `some unit` on accept. A reject stays the stuck (neutral) `zkCheck` application. | USER, S3 |
+| 2026-10-28 | Q-S3-15 (a). The `zk_trap` rows of `test/fronttool.c` become `zk_none`. The bad point is `pair 1u 1u` (not on the curve). `zkHp`, `zkDigest` and `zkVerify` on it give `none`. The 2 rows inside `flagIf` go. | USER, S3 |
+| 2026-10-28 | Q-S3-16 (a). `langc prove` on a ZK witness with no result prints `none` and exits 0, with no `EVAL_OVERFLOW` line. `ZK_WITNESS_TRAP` becomes `ZK_WITNESS_NONE`. | USER, S3 |
+| 2026-10-28 | Q-S3-17 (a). The legacy trap names get new names: `addTrap` and `eqTrap` become `addNone` and `eqNone`; `upTrap`, `trapHead`, `trapSum`, `filterTrap` and `bindTrap` become `upMax`, `headMax`, `sumMax`, `filterMax` and `bindMax`. | USER, S3 |
+| 2026-10-29 | Q-S3-18, verbatim: "(a) Defer to S8 (Recommended)". S3 makes no IR code edit. Section 11 (O9) keeps the N4 rule for the S8 writer. The entry ABI of an `Option` result is an open S8 question. | USER, S3 |
+| 2026-10-29 | Q-S3-19, verbatim: "(a) Keep for S8 (Recommended)". S3 makes no edit in `test/ir`. The Q-S3-17 names do not apply there. | USER, S3 |
+| 2026-10-29 | Q-S3-20, verbatim: "(a) Rename to BLSAG_NONE (Recommended)". `BLSAG_TRAP` becomes `BLSAG_NONE`. | USER, S3 |
+| 2026-10-29 | Q-S3-21, verbatim: "(a) Kit words only (Recommended)". `REFUSE_PARTIAL` site 2 covers only the checked words of the `BUILTINS` table (an `Option` result, internal, not an `isSet` rule). A guest program cannot name a kit word (`REFUSE_KIT` comes first). A domain definition with an `Option` result where its payload is wanted (`opSucc n` where a `Count` is wanted) stays `TYPE_MISMATCH`. | USER, S3 |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -44,7 +68,7 @@ knows (a bad signature, a residual below zero, a full list) is a value:
 
 | Rule | Statement | Where |
 |---|---|---|
-| N1 | Each partial operation has an `Option` result or a refinement argument. Subtraction is the residual `a - b` with a proof `b <= a`, or `sub? : U256 -> U256 -> Option U256`. Division takes a `NonZero` divisor. Addition and multiplication of `U256` are checked (`Option`). `mulDiv a b c` = `floor(a * b / c)` with a 512-bit product, `none` only when the result does not fit. | kernel types, eval, each writer |
+| N1 | Each partial operation has an `Option` result or a refinement argument. `natAdd`, `natSub`, `u256Add`, `u256Sub` and `u256Mul` return an `Option` (Q-S3-2, Q-S3-3, Q-S3-6). The residual `a - b` with a proof `b <= a` waits for a dependent eliminator (O8). Division takes a `NonZero` divisor (Q-S3-4, Q-S3-8). `mulDiv a b d` = `floor(a * b / d)` with a 512-bit product and `d : NonZero U256`, `none` only when the result does not fit (Q-S3-5). The crypto words return an `Option` on a bad input (Q-S3-7). | kernel types, eval, each writer |
 | N2 | No recursion at run time, no run-time closure, no run-time tree fold (the kit HOST-LIMITs). So no target can exhaust its stack. | kit, `REFUSE_REC` |
 | N3 | Each run-time list has a capacity that the program fixes (Q-S0-7). An operation that would pass the capacity gives `none`. Memory is static: no `memory.grow`, so each party runs in the same memory and gets the same result. | lowering, Wasm writer |
 | N4 | The writers emit no trap form. Wasm: no `unreachable`, each `div` and `rem` has a divisor that the type proves is not zero, each load and store is inside the static memory. ES: no `throw`, no BigInt division by zero. WGSL: no division by zero (WGSL defines it, but its value is not the eval value). | writers, `test/notrap/` |
@@ -285,8 +309,8 @@ refusal or a law kills at least one mutant of it.
 | S0 | Seed from tcc-wasm, DESIGN.md verbatim, this plan; gate; seed commit; private repo | DONE |
 | S1 | The USER rules section 12. Record the rulings here. | DONE |
 | S2 | Port the cairn-lang kernel (7.1). Survey first: SAME, CHANGED, CAIRN-ONLY. | DONE |
-| S3 | R0: N1, N5 in the kernel and eval; `REFUSE_PARTIAL`; checked `U256`, `mulDiv`. | NEXT |
-| S4 | Time: `Stamp`, the stamp chain, `REFUSE_CLOCK`; L12. | |
+| S3 | R0: N1, N5 in the kernel and eval; `REFUSE_PARTIAL`; checked `U256`, `mulDiv`. | DONE |
+| S4 | Time: `Stamp`, the stamp chain, `REFUSE_CLOCK`; L12. | NEXT |
 | S5 | Part E: port the retainer-lang domain (7.1); L1 to L6. | |
 | S6 | Part D: PolicyBallot, Tally, `choice` table, `GovPi`, regimes, AmendBallot, reshare; L7 to L11. | |
 | S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | |
@@ -318,6 +342,16 @@ refusal or a law kills at least one mutant of it.
   `docs/MCP.md` at S13.
 - O7 The `fix` of each refusal code (A2) is one concrete edit. A code
   with no edit gives `fix: null` and a reason.
+- O8 The residual `a - b` with a proof `b <= a` (Q-S3-3). `flagIf` is
+  not dependent, so only refl on closed values can make the proof now. A
+  dependent `Flag` eliminator comes first. S5 needs it for L4.
+- O9 Rule N4 for the S8 writer (Q-S3-18): no trap flag, no
+  `IR_STMT_TRAP` and no Wasm `unreachable`. How an entry with an
+  `Option` result gives `none` to the host (the entry ABI) is an open S8
+  question. `src/front/lower.c`, `src/ir.h` and `src/wasm.c` are out of
+  the build until S8. `lower.c` does not compile: it names `OP_NAT_MUL`,
+  which S2 removed. `test/ir` stays for S8 (Q-S3-19), and the gate does
+  not run it.
 
 ## 12. Questions for the USER (S0)
 

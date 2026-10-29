@@ -1,0 +1,2 @@
+-- REFUSE_PARTIAL (site 3): the literal 0u is not a NonZero U256.
+def q : Option U256 := mulDiv 6u 7u 0u

@@ -22,6 +22,7 @@ hash-type.lang
 hcomp-cap.lang
 hcomp-universe-cap.lang
 history-alias-option.lang
+history-bind-other.lang
 history-closed.lang
 history-existential-closed.lang
 history-existential-init.lang
@@ -99,3 +100,8 @@ time-clock.lang
 time-epoch.lang
 schnorr-type.lang
 append-swap.lang
+partial-name-kit.lang
+partial-option-kit.lang
+partial-option-arg-kit.lang
+partial-zero-kit.lang
+partial-zero-word-kit.lang

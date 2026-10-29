@@ -12,5 +12,5 @@
 12 settle ok
 13 settleWith ok
 14 paidSum = 20u
-15 over trap
+15 over = none
 state makeState 25u (cons 3u (cons 9u (cons 1u (cons 7u nil))))

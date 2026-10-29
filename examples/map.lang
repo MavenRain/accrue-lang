@@ -24,7 +24,7 @@ def init : State := makeState mapEmpty 0
 -- Entry: set the book at the id, and count the op (cursor + 1).
 def setBook : (env : Env) -> (s : State) -> (id : Nat) -> (amount : U256) -> Option (Prod State (List Out)) :=
   fun (env : Env) (s : State) (id : Nat) (amount : U256) =>
-    some (pair (makeState (mapSet (books s) id amount) (natAdd (cursor s) 1)) nil)
+    bind (natAdd (cursor s) 1) (fun (c : Nat) => some (pair (makeState (mapSet (books s) id amount) c) nil))
 
 -- View: the book at the id.
 def book : (env : Env) -> (s : State) -> (id : Nat) -> U256 :=

@@ -16,12 +16,18 @@ typedef struct {
   uint64_t limb[4];
 } U256;
 
-/* Each operation returns 1, or 0 for a trap. OUT can be A or B. */
-int u256_add(U256 *out, const U256 *a, const U256 *b); /* traps on an overflow */
-int u256_sub(U256 *out, const U256 *a, const U256 *b); /* stops at 0, no trap */
-int u256_mul(U256 *out, const U256 *a, const U256 *b); /* traps on an overflow */
-int u256_div(U256 *out, const U256 *a, const U256 *b); /* floors, traps on 0 */
-int u256_min(U256 *out, const U256 *a, const U256 *b); /* no trap */
+/* Each operation returns 1, or 0 when it has no result. OUT can be A or B. */
+int u256_add(U256 *out, const U256 *a, const U256 *b); /* 0 on an overflow */
+int u256_sub(U256 *out, const U256 *a, const U256 *b); /* stops at 0, returns 1 */
+int u256_mul(U256 *out, const U256 *a, const U256 *b); /* 0 on an overflow */
+int u256_div(U256 *out, const U256 *a, const U256 *b); /* floors, 0 when B is 0 */
+int u256_min(U256 *out, const U256 *a, const U256 *b); /* returns 1 */
+/* The exact 512-bit product: HI * 2^256 + LO = A * B. */
+void u256_mul_wide(U256 *hi, U256 *lo, const U256 *a, const U256 *b);
+/* OUT = floor(A * B / D), from the exact product. D is not 0 (the caller
+   checks it; for D = 0 the result is 0). Returns 0 when the quotient is
+   2^256 or more. */
+int u256_muldiv(U256 *out, const U256 *a, const U256 *b, const U256 *d);
 /* -1, 0 or 1. */
 int u256_cmp(const U256 *a, const U256 *b);
 void u256_from_u64(U256 *out, uint64_t n);

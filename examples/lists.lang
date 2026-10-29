@@ -8,24 +8,24 @@ def pushOne : (env : Env) -> (s : State) -> (x : U256) -> Option (Prod State (Li
   fun (env : Env) (s : State) (x : U256) => some (pair (makeState (tally s) (cons x (paid s))) nil)
 
 def pushTwo : (env : Env) -> (s : State) -> (x : U256) -> Option (Prod State (List Out)) :=
-  fun (env : Env) (s : State) (x : U256) => some (pair (makeState (u256Add (tally s) x) (cons x (cons 1u (paid s)))) nil)
+  fun (env : Env) (s : State) (x : U256) => bind (u256Add (tally s) x) (fun (t : U256) => some (pair (makeState t (cons x (cons 1u (paid s)))) nil))
 
 def wipe : (env : Env) -> (s : State) -> Option (Prod State (List Out)) :=
   fun (env : Env) (s : State) => some (pair (makeState (tally s) nil) nil)
 
 def settle : (env : Env) -> (s : State) -> Option (Prod State (List Out)) :=
-  fun (env : Env) (s : State) => some (pair (makeState (fold (fun (x : U256) (acc : U256) => u256Add x acc) 0u (paid s)) (paid s)) nil)
+  fun (env : Env) (s : State) => bind (fold (fun (x : U256) (acc : Option U256) => bind acc (fun (a : U256) => u256Add x a)) (some 0u) (paid s)) (fun (t : U256) => some (pair (makeState t (paid s)) nil))
 
--- A fold over a cons chain on the field: eval gives u256Add x (fold f 0u (paid s)) (O-c13-1). The List does not change.
+-- A fold over a cons chain on the field: eval gives bind (fold f (some 0u) (paid s)) (fun a => u256Add x a) (O-c13-1). The List does not change.
 def settleWith : (env : Env) -> (s : State) -> (x : U256) -> Option (Prod State (List Out)) :=
-  fun (env : Env) (s : State) (x : U256) => some (pair (makeState (fold (fun (y : U256) (acc : U256) => u256Add y acc) 0u (cons x (paid s))) (paid s)) nil)
+  fun (env : Env) (s : State) (x : U256) => bind (fold (fun (y : U256) (acc : Option U256) => bind acc (fun (a : U256) => u256Add y a)) (some 0u) (cons x (paid s))) (fun (t : U256) => some (pair (makeState t (paid s)) nil))
 
-def paidSum : (env : Env) -> (s : State) -> U256 :=
-  fun (env : Env) (s : State) => fold (fun (x : U256) (acc : U256) => u256Add x acc) 0u (paid s)
+def paidSum : (env : Env) -> (s : State) -> Option U256 :=
+  fun (env : Env) (s : State) => fold (fun (x : U256) (acc : Option U256) => bind acc (fun (a : U256) => u256Add x a)) (some 0u) (paid s)
 
-def weighted : (env : Env) -> (s : State) -> U256 :=
-  fun (env : Env) (s : State) => fold (fun (x : U256) (acc : U256) => u256Add x (u256Add acc acc)) 0u (paid s)
+def weighted : (env : Env) -> (s : State) -> Option U256 :=
+  fun (env : Env) (s : State) => fold (fun (x : U256) (acc : Option U256) => bind acc (fun (a : U256) => bind (u256Add a a) (fun (d : U256) => u256Add x d))) (some 0u) (paid s)
 
--- A view that traps (O-c4-3): u256Add traps above 2^256-1, thus over is the max word at tally 0 and traps at a tally above 0.
-def over : (env : Env) -> (s : State) -> U256 :=
+-- A view that gives none (O-c4-3): u256Add gives none above 2^256-1, thus over is the max word at tally 0 and none at a tally above 0.
+def over : (env : Env) -> (s : State) -> Option U256 :=
   fun (env : Env) (s : State) => u256Add (tally s) 115792089237316195423570985008687907853269984665640564039457584007913129639935u

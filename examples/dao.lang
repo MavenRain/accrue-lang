@@ -182,9 +182,9 @@ def charterOne : Charter := adopt genesis (ratify genesis sz0)
 def historyOne : Outcome := history charterOne splitTally
 def historyOneIs : Path Outcome historyOne tallied := refl
 def b0 : Ballot_priv := castPrivate (inl unit) (inr unit)
-def w0 : ZKWitness := proveZK b0
+def w0 : Option ZKWitness := proveZK b0
 def c0 : Choice := project b0
-def complete : Path (Type 0) (verifyZK w0 c0 splitTally) Unit := refl
+def complete : Path (Option (Type 0)) (bind w0 (fun (x : ZKWitness) => verifyZK x c0 splitTally)) (some Unit) := refl
 
 -- The S9 B2 differential (test/contract/diff.txt): each menu entry on the canonical config of each histogram (allA,
 -- split and allB, the writer order) and on the member swap of it. The host and the EVM rows give the same words.

@@ -208,9 +208,11 @@ def maxWord : U256 := 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 def pointEq : (p q : Prod U256 U256) -> Flag :=
   fun (p q : Prod U256 U256) => flagIf (u256Eq (first p) (first q)) (u256Eq (second p) (second q)) flagNo
 
--- z P = A + e Q: 2 ecMul, 1 ecAdd.
+-- z P = A + e Q: 2 ecMul, 1 ecAdd. A none point gives flagNo (S3 P4a).
 def holds : (p a q : Prod U256 U256) -> (z e : U256) -> Flag :=
-  fun (p a q : Prod U256 U256) (z e : U256) => pointEq (ecMul p z) (ecAdd a (ecMul q e))
+  fun (p a q : Prod U256 U256) (z e : U256) =>
+    option flagNo (fun (l : Prod U256 U256) => option flagNo (fun (r : Prod U256 U256) => pointEq l r)
+      (bind (ecMul q e) (fun (t : Prod U256 U256) => ecAdd a t))) (ecMul p z)
 
 def randChallenge : (ctx pkx pky c1x c1y c2x c2y m ax ay bx by : U256) -> U256 :=
   fun (ctx pkx pky c1x c1y c2x c2y m ax ay bx by : U256) =>
@@ -223,21 +225,24 @@ def orChallenge : (ctx j pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y
 def randWith : (pkx pky c1x c1y c2x c2y m ax ay bx by z e : U256) -> Flag :=
   fun (pkx pky c1x c1y c2x c2y m ax ay bx by z e : U256) =>
     flagIf (holds gen (pair ax ay) (pair c1x c1y) z e)
-      (holds (pair pkx pky) (pair bx by) (ecAdd (pair c2x c2y) (ecMul negG m)) z e)
+      (option flagNo (fun (q : Prod U256 U256) => holds (pair pkx pky) (pair bx by) q z e)
+        (bind (ecMul negG m) (fun (t : Prod U256 U256) => ecAdd (pair c2x c2y) t)))
       flagNo
 
 def rand : (ctx pkx pky c1x c1y c2x c2y m ax ay bx by z : U256) -> Flag :=
   fun (ctx pkx pky c1x c1y c2x c2y m ax ay bx by z : U256) =>
     randWith pkx pky c1x c1y c2x c2y m ax ay bx by z (randChallenge ctx pkx pky c1x c1y c2x c2y m ax ay bx by)
 
--- e0 + e1 = e modulo 2^256, as the host split. u256Add traps on an overflow
--- and about one honest split in two wraps, so the check uses no add: e1 =
--- e - e0 when e0 <= e, else e1 - 1 = maxWord - (e0 - e) with e1 >= 1. Each
--- u256Sub of a taken branch is exact.
+-- e0 + e1 = e modulo 2^256, as the host split. u256Add gives none on an
+-- overflow and about one honest split in two wraps, so the check uses no
+-- add: e1 = e - e0 when e0 <= e, else e1 - 1 = maxWord - (e0 - e) with
+-- e1 >= 1. Each u256Sub of a taken branch is some; a none gives flagNo.
 def splitOk : (e e0 e1 : U256) -> Flag :=
   fun (e e0 e1 : U256) =>
-    flagIf (u256Le e0 e) (u256Eq (u256Sub e e0) e1)
-      (flagIf (u256Le 1u e1) (u256Eq (u256Sub e1 1u) (u256Sub maxWord (u256Sub e0 e))) flagNo)
+    flagIf (u256Le e0 e) (option flagNo (fun (d : U256) => u256Eq d e1) (u256Sub e e0))
+      (flagIf (u256Le 1u e1)
+        (option flagNo (fun (f : Flag) => f) (bind (u256Sub e1 1u) (fun (d : U256) => map (fun (w : U256) => u256Eq d w) (bind (u256Sub e0 e) (fun (v : U256) => u256Sub maxWord v)))))
+        flagNo)
 
 def slotWith : (pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 e : U256) -> Flag :=
   fun (pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 e : U256) =>
@@ -245,7 +250,7 @@ def slotWith : (pkx pky c1x c1y c2x c2y a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0
       (flagIf (holds gen (pair a0x a0y) (pair c1x c1y) z0 e0)
         (flagIf (holds (pair pkx pky) (pair b0x b0y) (pair c2x c2y) z0 e0)
           (flagIf (holds gen (pair a1x a1y) (pair c1x c1y) z1 e1)
-            (holds (pair pkx pky) (pair b1x b1y) (ecAdd (pair c2x c2y) negG) z1 e1)
+            (option flagNo (fun (q : Prod U256 U256) => holds (pair pkx pky) (pair b1x b1y) q z1 e1) (ecAdd (pair c2x c2y) negG))
             flagNo)
           flagNo)
         flagNo)
@@ -262,8 +267,8 @@ def challenge : (pkx pky cx cy dx dy ax ay bx by : U256) -> U256 :=
 
 def dleqWith : (pkx pky cx cy dx dy ax ay bx by z e : U256) -> Flag :=
   fun (pkx pky cx cy dx dy ax ay bx by z e : U256) =>
-    flagIf (pointEq (ecMul (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u) z) (ecAdd (pair ax ay) (ecMul (pair pkx pky) e)))
-      (pointEq (ecMul (pair cx cy) z) (ecAdd (pair bx by) (ecMul (pair dx dy) e)))
+    flagIf (holds gen (pair ax ay) (pair pkx pky) z e)
+      (holds (pair cx cy) (pair bx by) (pair dx dy) z e)
       flagNo
 
 def dleq : (pkx pky cx cy dx dy ax ay bx by z : U256) -> Flag :=
@@ -271,14 +276,16 @@ def dleq : (pkx pky cx cy dx dy ax ay bx by z : U256) -> Flag :=
     dleqWith pkx pky cx cy dx dy ax ay bx by z (challenge pkx pky cx cy dx dy ax ay bx by)
 
 def opens : (ux uy vx vy n : U256) -> Flag :=
-  fun (ux uy vx vy n : U256) => pointEq (pair ux uy) (ecAdd (ecMul (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u) n) (pair vx vy))
+  fun (ux uy vx vy n : U256) => option flagNo (fun (q : Prod U256 U256) => pointEq (pair ux uy) q)
+    (bind (ecMul (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u) n) (fun (t : Prod U256 U256) => ecAdd t (pair vx vy)))
 
 def ctxOf : (ix iy : U256) -> U256 :=
   fun (ix iy : U256) => hash (hash (hash ballotTag ix) iy) poll
 
-def sumWith : (ctx : U256) -> (c1 c2 : Prod U256 U256) -> (ax ay bx by z : U256) -> Flag :=
-  fun (ctx : U256) (c1 c2 : Prod U256 U256) (ax ay bx by z : U256) =>
-    rand ctx pkx pky (first c1) (second c1) (first c2) (second c2) 1u ax ay bx by z
+def sumWith : (ctx : U256) -> (c1 c2 : Option (Prod U256 U256)) -> (ax ay bx by z : U256) -> Flag :=
+  fun (ctx : U256) (c1 c2 : Option (Prod U256 U256)) (ax ay bx by z : U256) =>
+    option flagNo (fun (p : Prod U256 U256) => option flagNo (fun (q : Prod U256 U256) =>
+      rand ctx pkx pky (first p) (second p) (first q) (second q) 1u ax ay bx by z) c2) c1
 
 def digestOf : (u1x u1y u2x u2y v1x v1y v2x v2y : U256) -> U256 :=
   fun (u1x u1y u2x u2y v1x v1y v2x v2y : U256) =>
@@ -286,12 +293,13 @@ def digestOf : (u1x u1y u2x u2y v1x v1y v2x v2y : U256) -> U256 :=
 
 def sigOk : (u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 ix iy : U256) -> Flag :=
   fun (u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 ix iy : U256) =>
-    zkVerify ring poll (digestOf u1x u1y u2x u2y v1x v1y v2x v2y) (cons c1 (cons s1 (cons s2 (cons s3 (cons ix (cons iy nil))))))
+    option flagNo (fun (f : Flag) => f)
+      (zkVerify ring poll (digestOf u1x u1y u2x u2y v1x v1y v2x v2y) (cons c1 (cons s1 (cons s2 (cons s3 (cons ix (cons iy nil)))))))
 
 -- The ctx of a key image: 3 hash.
 
-def sum3 : (p q r : Prod U256 U256) -> Prod U256 U256 :=
-  fun (p q r : Prod U256 U256) => ecAdd (ecAdd p q) r
+def sum3 : (p q r : Prod U256 U256) -> Option (Prod U256 U256) :=
+  fun (p q r : Prod U256 U256) => bind (ecAdd p q) (fun (t : Prod U256 U256) => ecAdd t r)
 
 def openSum : (c1 c2 : Prod U256 U256) -> (cx cy ex ey d1x d1y a1x a1y b1x b1y z1 d2x d2y a2x a2y b2x b2y z2 m : U256) -> Flag :=
   fun (c1 c2 : Prod U256 U256) (cx cy ex ey d1x d1y a1x a1y b1x b1y z1 d2x d2y a2x a2y b2x b2y z2 m : U256) =>
@@ -299,7 +307,9 @@ def openSum : (c1 c2 : Prod U256 U256) -> (cx cy ex ey d1x d1y a1x a1y b1x b1y z
       (flagIf (pointEq c2 (pair ex ey))
         (flagIf (dleq k1x k1y cx cy d1x d1y a1x a1y b1x b1y z1)
           (flagIf (dleq k2x k2y cx cy d2x d2y a2x a2y b2x b2y z2)
-            (pointEq (pair ex ey) (ecAdd (ecMul gen m) (ecAdd (ecMul (pair d1x d1y) l1) (ecMul (pair d2x d2y) l2))))
+            (option flagNo (fun (q : Prod U256 U256) => pointEq (pair ex ey) q)
+              (bind (ecMul gen m) (fun (u : Prod U256 U256) => bind (ecMul (pair d1x d1y) l1) (fun (v : Prod U256 U256) =>
+                bind (ecMul (pair d2x d2y) l2) (fun (w : Prod U256 U256) => bind (ecAdd v w) (fun (t : Prod U256 U256) => ecAdd u t))))))
             flagNo)
           flagNo)
         flagNo)
@@ -309,11 +319,11 @@ def openSum : (c1 c2 : Prod U256 U256) -> (cx cy ex ey d1x d1y a1x a1y b1x b1y z
 -- The nullifier of a key image and the first pend index of slot j (4 j).
 def nullOf : (ix iy : U256) -> U256 :=
   fun (ix iy : U256) => hash (hash ix iy) poll
-def slotBase : (j : U256) -> U256 :=
-  fun (j : U256) => u256Add (u256Add j j) (u256Add j j)
+def slotBase : (j : U256) -> Option U256 :=
+  fun (j : U256) => bind (u256Add j j) (fun (d : U256) => u256Add d d)
 -- The kept point at pend index k and k + 1 of N.
-def kept : (p : Map U256 U256) -> (n k : U256) -> Prod U256 U256 :=
-  fun (p : Map U256 U256) (n k : U256) => pair (mapGet p (hash n k)) (mapGet p (hash n (u256Add k 1u)))
+def kept : (p : Map U256 U256) -> (n k : U256) -> Option (Prod U256 U256) :=
+  fun (p : Map U256 U256) (n k : U256) => map (fun (k1 : U256) => pair (mapGet p (hash n k)) (mapGet p (hash n k1))) (u256Add k 1u)
 
 -- Entry castSig (14 words): N not used, the ring signature, then the 8 words to pend and the stage of N reset.
 def castSig : (env : Env) -> (s : State) -> (ix iy u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 : U256) -> Option (Prod State (List Out)) :=
@@ -321,13 +331,13 @@ def castSig : (env : Env) -> (s : State) -> (ix iy u1x u1y u2x u2y v1x v1y v2x v
     flagIf (mapGet (used s) (nullOf ix iy))
       none
       (flagIf (sigOk u1x u1y u2x u2y v1x v1y v2x v2y c1 s1 s2 s3 ix iy)
-        (some (pair (makeState (used s)
+        (bind (u256Add (seq s) 1u) (fun (q : U256) => some (pair (makeState (used s)
           (mapSet (mapSet (mapSet (mapSet (mapSet (mapSet (mapSet (mapSet (pend s)
             (hash (nullOf ix iy) 0u) u1x) (hash (nullOf ix iy) 1u) u1y) (hash (nullOf ix iy) 2u) u2x) (hash (nullOf ix iy) 3u) u2y)
             (hash (nullOf ix iy) 4u) v1x) (hash (nullOf ix iy) 5u) v1y) (hash (nullOf ix iy) 6u) v2x) (hash (nullOf ix iy) 7u) v2y)
           (mapSet (mapSet (mapSet (stage s) (nullOf ix iy) 1u) (hash (nullOf ix iy) 0u) 0u) (hash (nullOf ix iy) 1u) 0u)
           (t0ax s) (t0ay s) (t0bx s) (t0by s) (t1ax s) (t1ay s) (t1bx s) (t1by s)
-          (casts s) (castEnd s) (proposal s) (window s) (enacted s) (keys s) (fills s) (u256Add (seq s) 1u)) nil))
+          (casts s) (castEnd s) (proposal s) (window s) (enacted s) (keys s) (fills s) q) nil)))
         none)
 
 -- Entry castSlot (15 words): N has a castSig, j is 0 or 1, the OR proof of slot j on the kept words, then the flag of slot j.
@@ -335,23 +345,27 @@ def castSlot : (env : Env) -> (s : State) -> (ix iy j a0x a0y b0x b0y a1x a1y b1
   fun (env : Env) (s : State) (ix iy j a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1 : U256) =>
     flagIf (u256Eq (mapGet (stage s) (nullOf ix iy)) 1u)
       (flagIf (u256Le j 1u)
-        (flagIf (slot (ctxOf ix iy) j pkx pky
-              (first (kept (pend s) (nullOf ix iy) (slotBase j))) (second (kept (pend s) (nullOf ix iy) (slotBase j)))
-              (first (kept (pend s) (nullOf ix iy) (u256Add (slotBase j) 2u))) (second (kept (pend s) (nullOf ix iy) (u256Add (slotBase j) 2u)))
-              a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1)
-          (some (pair (makeState (used s) (pend s) (mapSet (stage s) (hash (nullOf ix iy) j) 1u)
-            (t0ax s) (t0ay s) (t0bx s) (t0by s) (t1ax s) (t1ay s) (t1bx s) (t1by s)
-            (casts s) (castEnd s) (proposal s) (window s) (enacted s) (keys s) (fills s) (u256Add (seq s) 1u)) nil))
-          none)
+        (bind (slotBase j) (fun (b : U256) => bind (u256Add b 2u) (fun (b2 : U256) =>
+          bind (kept (pend s) (nullOf ix iy) b) (fun (qa : Prod U256 U256) => bind (kept (pend s) (nullOf ix iy) b2) (fun (qb : Prod U256 U256) =>
+            flagIf (slot (ctxOf ix iy) j pkx pky (first qa) (second qa) (first qb) (second qb)
+                a0x a0y b0x b0y a1x a1y b1x b1y e0 e1 z0 z1)
+              (bind (u256Add (seq s) 1u) (fun (q : U256) => some (pair (makeState (used s) (pend s) (mapSet (stage s) (hash (nullOf ix iy) j) 1u)
+                (t0ax s) (t0ay s) (t0bx s) (t0by s) (t1ax s) (t1ay s) (t1bx s) (t1by s)
+                (casts s) (castEnd s) (proposal s) (window s) (enacted s) (keys s) (fills s) q) nil)))
+              none)))))
         none)
       none
 
 -- The state after a seal: N used, the slot points added to T0 and T1 (a0 b0 slot 0 c1 c2, a1 b1 slot 1), casts + 1.
-def afterSeal : (s : State) -> (n : U256) -> (a0 b0 a1 b1 : Prod U256 U256) -> State :=
-  fun (s : State) (n : U256) (a0 b0 a1 b1 : Prod U256 U256) =>
-    makeState (mapSet (used s) n flagYes) (pend s) (stage s)
-      (first a0) (second a0) (first b0) (second b0) (first a1) (second a1) (first b1) (second b1)
-      (u256Add (casts s) 1u) (castEnd s) (proposal s) (window s) (enacted s) (keys s) (fills s) (u256Add (seq s) 1u)
+-- A none point (off the curve) gives none (S3 P4a).
+def afterSeal : (s : State) -> (n : U256) -> (a0 b0 a1 b1 : Option (Prod U256 U256)) -> Option State :=
+  fun (s : State) (n : U256) (a0 b0 a1 b1 : Option (Prod U256 U256)) =>
+    bind a0 (fun (p0 : Prod U256 U256) => bind b0 (fun (r0 : Prod U256 U256) =>
+    bind a1 (fun (p1 : Prod U256 U256) => bind b1 (fun (r1 : Prod U256 U256) =>
+    bind (u256Add (casts s) 1u) (fun (c : U256) => bind (u256Add (seq s) 1u) (fun (q : U256) =>
+      some (makeState (mapSet (used s) n flagYes) (pend s) (stage s)
+        (first p0) (second p0) (first r0) (second r0) (first p1) (second p1) (first r1) (second r1)
+        c (castEnd s) (proposal s) (window s) (enacted s) (keys s) (fills s) q)))))))
 
 -- Entry castSeal (7 words): N not used, both slot flags, seq <= castEnd, the sum proof on the kept slots, then the tally add.
 def castSeal : (env : Env) -> (s : State) -> (ix iy ax ay bx by z : U256) -> Option (Prod State (List Out)) :=
@@ -362,14 +376,14 @@ def castSeal : (env : Env) -> (s : State) -> (ix iy ax ay bx by z : U256) -> Opt
         (flagIf (u256Eq (mapGet (stage s) (hash (nullOf ix iy) 0u)) 1u)
           (flagIf (u256Eq (mapGet (stage s) (hash (nullOf ix iy) 1u)) 1u)
             (flagIf (u256Le (seq s) (castEnd s))
-              (flagIf (sumWith (ctxOf ix iy) (ecAdd (kept (pend s) (nullOf ix iy) 0u) (kept (pend s) (nullOf ix iy) 4u))
-                    (ecAdd (kept (pend s) (nullOf ix iy) 2u) (kept (pend s) (nullOf ix iy) 6u)) ax ay bx by z)
-                (some (pair (afterSeal s (nullOf ix iy)
-                  (ecAdd (pair (t0ax s) (t0ay s)) (kept (pend s) (nullOf ix iy) 0u))
-                  (ecAdd (pair (t0bx s) (t0by s)) (kept (pend s) (nullOf ix iy) 2u))
-                  (ecAdd (pair (t1ax s) (t1ay s)) (kept (pend s) (nullOf ix iy) 4u))
-                  (ecAdd (pair (t1bx s) (t1by s)) (kept (pend s) (nullOf ix iy) 6u))) nil))
-                none)
+              (bind (kept (pend s) (nullOf ix iy) 0u) (fun (q0 : Prod U256 U256) => bind (kept (pend s) (nullOf ix iy) 2u) (fun (q2 : Prod U256 U256) =>
+                bind (kept (pend s) (nullOf ix iy) 4u) (fun (q4 : Prod U256 U256) => bind (kept (pend s) (nullOf ix iy) 6u) (fun (q6 : Prod U256 U256) =>
+                  flagIf (sumWith (ctxOf ix iy) (ecAdd q0 q4) (ecAdd q2 q6) ax ay bx by z)
+                    (bind (afterSeal s (nullOf ix iy)
+                        (ecAdd (pair (t0ax s) (t0ay s)) q0) (ecAdd (pair (t0bx s) (t0by s)) q2)
+                        (ecAdd (pair (t1ax s) (t1ay s)) q4) (ecAdd (pair (t1bx s) (t1by s)) q6))
+                      (fun (t : State) => some (pair t nil)))
+                    none)))))
               none)
             none)
           none)
@@ -378,8 +392,8 @@ def castSeal : (env : Env) -> (s : State) -> (ix iy ax ay bx by z : U256) -> Opt
 -- The reactor contract (examples/reactor.lang, S10R): its entry transfer sets its window when the caller is
 -- this DAO (Q-S11-2 (a)). The window after enactKit: the proposal when yes = m > no = casts - m.
 def reactor : Addr := 0x0000000000000000000000000072656163746f72
-def nextWindow : (s : State) -> (m : U256) -> U256 :=
-  fun (s : State) (m : U256) => flagIf (u256Le m (u256Sub (casts s) m)) (window s) (proposal s)
+def nextWindow : (s : State) -> (m : U256) -> Option U256 :=
+  fun (s : State) (m : U256) => map (fun (rest : U256) => flagIf (u256Le m rest) (window s) (proposal s)) (u256Sub (casts s) m)
 
 -- The event of enactKit (S5 O15): the reactor and the new window.
 event Enacted (target : Addr) (window : U256)
@@ -396,10 +410,11 @@ def enactKit : (env : Env) -> (s : State) -> (d1x d1y a1x a1y b1x b1y z1 d2x d2y
         (flagIf (u256Le m (casts s))
           (flagIf (openSum (pair (t0ax s) (t0ay s)) (pair (t0bx s) (t0by s)) (t0ax s) (t0ay s) (t0bx s) (t0by s)
                 d1x d1y a1x a1y b1x b1y z1 d2x d2y a2x a2y b2x b2y z2 m)
-            (some (pair (makeState (used s) (pend s) (stage s)
-              (t0ax s) (t0ay s) (t0bx s) (t0by s) (t1ax s) (t1ay s) (t1bx s) (t1by s)
-              (casts s) (castEnd s) (proposal s) (nextWindow s m)
-              flagYes (keys s) (fills s) (u256Add (seq s) 1u)) (cons (Enacted reactor (nextWindow s m)) nil)))
+            (bind (nextWindow s m) (fun (w : U256) => bind (u256Add (seq s) 1u) (fun (q : U256) =>
+              some (pair (makeState (used s) (pend s) (stage s)
+                (t0ax s) (t0ay s) (t0bx s) (t0by s) (t1ax s) (t1ay s) (t1bx s) (t1by s)
+                (casts s) (castEnd s) (proposal s) w
+                flagYes (keys s) (fills s) q) (cons (Enacted reactor w) nil)))))
             none)
           none))
 
@@ -412,12 +427,11 @@ def windowNow : (env : Env) -> (s : State) -> U256 :=
   fun (env : Env) (s : State) => window s
 def castCount : (env : Env) -> (s : State) -> U256 :=
   fun (env : Env) (s : State) => casts s
-def stageOf : (env : Env) -> (s : State) -> (ix iy : U256) -> U256 :=
+def stageOf : (env : Env) -> (s : State) -> (ix iy : U256) -> Option U256 :=
   fun (env : Env) (s : State) (ix iy : U256) =>
-    u256Add (mapGet (stage s) (nullOf ix iy))
-      (u256Add (u256Add (mapGet (stage s) (hash (nullOf ix iy) 0u)) (mapGet (stage s) (hash (nullOf ix iy) 0u)))
-        (u256Add (u256Add (mapGet (stage s) (hash (nullOf ix iy) 1u)) (mapGet (stage s) (hash (nullOf ix iy) 1u)))
-          (u256Add (mapGet (stage s) (hash (nullOf ix iy) 1u)) (mapGet (stage s) (hash (nullOf ix iy) 1u)))))
+    bind (u256Add (mapGet (stage s) (hash (nullOf ix iy) 0u)) (mapGet (stage s) (hash (nullOf ix iy) 0u))) (fun (b2 : U256) =>
+      bind (u256Add (mapGet (stage s) (hash (nullOf ix iy) 1u)) (mapGet (stage s) (hash (nullOf ix iy) 1u))) (fun (c2 : U256) =>
+        bind (u256Add c2 c2) (fun (c4 : U256) => bind (u256Add b2 c4) (fun (r : U256) => u256Add (mapGet (stage s) (nullOf ix iy)) r))))
 
 -- Eval rows (test/eval/expect.txt): the 3 casts (ops 1 to 12), one more op (reslot), then enactKit at seq 13 > castEnd.
 def e0 : Env := makeEnv 0x00000000000000000000000000000000000000aa
@@ -443,8 +457,8 @@ def reslot : (s : State) -> Option (Prod State (List Out)) :=
 def v2late : Option (Prod State (List Out)) := bind v2 (fun (r : (Prod State (List Out))) => reslot (first r))
 def openWith : (m : U256) -> (env : Env) -> (s : State) -> Option (Prod State (List Out)) :=
   fun (m : U256) (env : Env) (s : State) => enactKit env s tyd1x tyd1y tya1x tya1y tyb1x tyb1y tyz1 tyd2x tyd2y tya2x tya2y tyb2x tyb2y tyz2 m
-def stageSig : Option U256 := map (fun (r : Prod State (List Out)) => stageOf e0 (first r) b0ix b0iy) v0sig
-def stageSlots : Option U256 := map (fun (r : Prod State (List Out)) => stageOf e0 (first r) b0ix b0iy) v0slots
+def stageSig : Option U256 := bind v0sig (fun (r : Prod State (List Out)) => stageOf e0 (first r) b0ix b0iy)
+def stageSlots : Option U256 := bind v0slots (fun (r : Prod State (List Out)) => stageOf e0 (first r) b0ix b0iy)
 def tallyHost : Option Flag := map (fun (r : Prod State (List Out)) =>
   flagIf (u256Eq (tallyWord e0 (first r) 0u) tyc1x) (flagIf (u256Eq (tallyWord e0 (first r) 1u) tyc1y)
     (flagIf (u256Eq (tallyWord e0 (first r) 2u) tyc2x) (u256Eq (tallyWord e0 (first r) 3u) tyc2y) flagNo) flagNo) flagNo) v2

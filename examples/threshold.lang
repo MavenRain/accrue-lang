@@ -22,10 +22,19 @@ def challenge : (pkx pky cx cy dx dy ax ay bx by : U256) -> U256 :=
 def pointEq : (p q : Prod U256 U256) -> Flag :=
   fun (p q : Prod U256 U256) => flagIf (u256Eq (first p) (first q)) (u256Eq (second p) (second q)) flagNo
 
+-- The generator G of secp256k1.
+def gen : Prod U256 U256 := pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u
+
+-- z P = A + e Q: 2 ecMul, 1 ecAdd. A none point gives flagNo (S3 P4a).
+def holds : (p a q : Prod U256 U256) -> (z e : U256) -> Flag :=
+  fun (p a q : Prod U256 U256) (z e : U256) =>
+    option flagNo (fun (l : Prod U256 U256) => option flagNo (fun (r : Prod U256 U256) => pointEq l r)
+      (bind (ecMul q e) (fun (t : Prod U256 U256) => ecAdd a t))) (ecMul p z)
+
 def dleqWith : (pkx pky cx cy dx dy ax ay bx by z e : U256) -> Flag :=
   fun (pkx pky cx cy dx dy ax ay bx by z e : U256) =>
-    flagIf (pointEq (ecMul (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u) z) (ecAdd (pair ax ay) (ecMul (pair pkx pky) e)))
-      (pointEq (ecMul (pair cx cy) z) (ecAdd (pair bx by) (ecMul (pair dx dy) e)))
+    flagIf (holds gen (pair ax ay) (pair pkx pky) z e)
+      (holds (pair cx cy) (pair bx by) (pair dx dy) z e)
       flagNo
 
 def dleq : (pkx pky cx cy dx dy ax ay bx by z : U256) -> Flag :=
@@ -33,18 +42,21 @@ def dleq : (pkx pky cx cy dx dy ax ay bx by z : U256) -> Flag :=
     dleqWith pkx pky cx cy dx dy ax ay bx by z (challenge pkx pky cx cy dx dy ax ay bx by)
 
 def opens : (ux uy vx vy n : U256) -> Flag :=
-  fun (ux uy vx vy n : U256) => pointEq (pair ux uy) (ecAdd (ecMul (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u) n) (pair vx vy))
+  fun (ux uy vx vy n : U256) => option flagNo (fun (q : Prod U256 U256) => pointEq (pair ux uy) q)
+    (bind (ecMul (pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u) n) (fun (t : Prod U256 U256) => ecAdd t (pair vx vy)))
 
 -- One DLEQ proof: 4 ecMul, 2 ecAdd, 10 hash.
 def dleqOk : (env : Env) -> (s : State) -> (pkx pky cx cy dx dy ax ay bx by z : U256) -> Flag :=
   fun (env : Env) (s : State) (pkx pky cx cy dx dy ax ay bx by z : U256) => dleq pkx pky cx cy dx dy ax ay bx by z
 
 -- K = l1 D1 + l2 D2: 2 ecMul, 1 ecAdd.
-def combineX : (env : Env) -> (s : State) -> (ux uy l vx vy k : U256) -> U256 :=
-  fun (env : Env) (s : State) (ux uy l vx vy k : U256) => first (ecAdd (ecMul (pair ux uy) l) (ecMul (pair vx vy) k))
+def combineX : (env : Env) -> (s : State) -> (ux uy l vx vy k : U256) -> Option U256 :=
+  fun (env : Env) (s : State) (ux uy l vx vy k : U256) => bind (ecMul (pair ux uy) l) (fun (a : Prod U256 U256) =>
+    bind (ecMul (pair vx vy) k) (fun (b : Prod U256 U256) => bind (ecAdd a b) (fun (q : Prod U256 U256) => some (first q))))
 
-def combineY : (env : Env) -> (s : State) -> (ux uy l vx vy k : U256) -> U256 :=
-  fun (env : Env) (s : State) (ux uy l vx vy k : U256) => second (ecAdd (ecMul (pair ux uy) l) (ecMul (pair vx vy) k))
+def combineY : (env : Env) -> (s : State) -> (ux uy l vx vy k : U256) -> Option U256 :=
+  fun (env : Env) (s : State) (ux uy l vx vy k : U256) => bind (ecMul (pair ux uy) l) (fun (a : Prod U256 U256) =>
+    bind (ecMul (pair vx vy) k) (fun (b : Prod U256 U256) => bind (ecAdd a b) (fun (q : Prod U256 U256) => some (second q))))
 
 -- C2 = m G + K: 1 ecMul, 1 ecAdd.
 def openOk : (env : Env) -> (s : State) -> (ux uy vx vy n : U256) -> Flag :=

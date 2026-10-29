@@ -27,6 +27,7 @@ def appBad : Option Record := append pol badA 42u r0
 def appHead : Option Record := append pol goodA 42u r1
 def appEntry : Option Record := append pol goodA 43u r0
 def appOpen : Option Record := append polO goodA 42u r0
-def lenAfter : Option Flag := map (fun (x : Record) => natEq (len Entry x) (natAdd (len Entry r0) 1)) (append pol goodA 42u r0)
+def lenAfter : Option Flag := bind (append pol goodA 42u r0) (fun (x : Record) => bind (len Entry x) (fun (n : Count) =>
+  map (fun (k : Count) => natEq n k) (bind (len Entry r0) opSucc)))
 def headAfter : Option Flag := map (fun (x : Record) => u256Eq (head x) (H3 tagAppend (head r0) 42u)) (append pol goodA 42u r0)
 def app34 : Option Record := append pol a34 42u r0

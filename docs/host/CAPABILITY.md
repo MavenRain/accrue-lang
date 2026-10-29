@@ -26,26 +26,26 @@ on 2026-10-08 on AArch64 Darwin.
 
 - `Nat` is an unsigned 64-bit integer. The lexer refuses a literal larger
   than 18446744073709551615 (`test/parse/nat-range.lang`).
-- `natAdd` and `natMul` trap on overflow. `natSub` stops at 0. A trap is
-  lazy: it stops a computation only when the computation needs it.
-  `README.md` gives the rule and the reason.
+- `natAdd` gives `none` on an overflow past 2^64 - 1. `natSub` gives
+  `none` when the second argument is larger than the first. Both give
+  `Option Nat`. There is no `natMul`.
+- A partial name (for example `div`, `mod` or `sub`) gives
+  `REFUSE_PARTIAL`, and the hint names the total form. The `Option`
+  result of a checked kit word where a plain value is wanted also gives
+  `REFUSE_PARTIAL`: use `option` or `bind`. The literal 0 where a
+  `NonZero` is wanted also gives `REFUSE_PARTIAL`: use `nonZero`
+  (Q-S3-1, Q-S3-8, Q-S3-21).
 - There is no text type. The lexer refuses `"` (`test/parse/string.lang`).
-- On Wasm, each value is a word and a trap flag. Only the entry result
-  is strict.
+- The Wasm writer (`src/wasm.c`, `src/front/lower.c`, `src/ir.h`) is out
+  of the build until S8. S8 replaces it. Rule N4 in `docs/PLAN.md`: a
+  writer emits no trap form.
 
-## Overflow tests on Wasm
+## Overflow tests
 
-- `ADD_CARRY` is `a + b < a`, modulo 2^64 (`src/wasm.c:178`).
-- `MUL_CARRY` is `b > (2^64 - 1) / max(a, 1)` with `i64.div_u`
-  (`src/wasm.c:181`). The Wasm MVP has no 128-bit product. The test is
-  exact: for a > 0, a * b <= 2^64 - 1 if and only if
-  b <= floor((2^64 - 1) / a). For a = 0 the product is 0, and the test
-  gives 0 for each b.
-- `SUB` is `select(a - b, 0, a >= b)`.
-- The differential grid holds the edge values (`test/grid.awk:8`). Node
-  and `langc eval` agree: `scale 4294967296 4294967296` is `trap`,
-  `scale 4294967295 4294967297` is 18446744073709551615, and
-  `addPrice 18446744073709551615 1` is `trap`.
+- `langc eval` gives `none` on an overflow:
+  `entries addPrice 18446744073709551615 1 => none`
+  (`test/eval/expect.txt`). The Wasm overflow tests come with the S8
+  writer.
 
 ## Limits
 
@@ -60,11 +60,11 @@ on 2026-10-08 on AArch64 Darwin.
   entries with no loop.
 - All memory of `langc` comes from one arena with a limit of 1 GiB
   (`src/main.c:11`). A run that reaches it stops with `OOM`.
-  `langc eval test/ir/spine.lang foldOnes 4294967296` stops with `OOM`.
-- The Wasm memory has a maximum of 16384 pages, which is 1 GiB
-  (`src/wasm.c:27`). The allocator traps when `memory.grow` fails.
-- The Wasm writer stops at a statement nesting of 2000 (`src/wasm.c:28`).
-  The IR printer stops at 4000 (`src/front/lower.c:17`).
+  `test/ir/spine.lang` stays for S8 (Q-S3-19), and the gate does not run
+  it. `langc check` refuses it with `REFUSE_CELL`, because a guest
+  program cannot use `List`. `eval_spines` in `test/runtool.c` runs its
+  eval cases in `Option` form.
+- The S8 writer sets the Wasm memory and nesting limits.
 - A loop over a list spine has a fuel of 2^63 steps
   (`src/front/lower.c:688`). The heap limit stops the loop first.
 - Source files are at most 1 MiB (`src/front/front.h:7`).
@@ -85,8 +85,8 @@ refuses them with a HOST-LIMIT code. These are not defects.
 
 - `REFUSE_RUNTIME_CLOSURE` (`src/front/lower.c:503`): a function value
   must exist at run time, for example as the result of a `fold`. The IR
-  has no closures. `test/ir/closure.lang` is the gate case.
+  has no closures. `test/ir/closure.lang` keeps the case for S8 (Q-S3-19).
 - `REFUSE_RUNTIME_TREE` (`src/front/lower.c:990`): a `fold` walks a value
   of a family with two or more recursive fields, and the value exists
   only at run time. A loop walks one spine. A tree needs recursion or an
-  explicit stack. `test/ir/tree.lang` is the gate case.
+  explicit stack. `test/ir/tree.lang` keeps the case for S8 (Q-S3-19).

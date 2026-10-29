@@ -122,7 +122,11 @@ typedef enum {
   RULE_ZK_PROVE,   /* zkProve b */
   RULE_ZK_PROJECT, /* zkProject C b */
   RULE_ZK_CHECK,   /* zkCheck M C w c */
-  RULE_IS_SET      /* S5: natIsSet, u256IsSet, flagIsSet */
+  RULE_IS_SET,     /* S5: natIsSet, u256IsSet, flagIsSet; S3: optNatIsSet */
+  RULE_NONZERO,    /* S3: NonZero A */
+  RULE_NONZERO_OF, /* nonZero x */
+  RULE_NONZERO_VALUE, /* nonZeroValue x */
+  RULE_DIV         /* natDiv, natMod, mulDiv: a NonZero divisor */
 } Rule;
 
 typedef struct {
@@ -186,12 +190,13 @@ static const Builtin BUILTINS[] = {
   {"Glue", 3, RULE_GLUE, OP_GLUE, OP_NAT, 0, VIS_GUEST},
   {"glue", 2, RULE_GLUE_ELEM, OP_GLUE_ELEM, OP_NAT, 0, VIS_GUEST},
   {"unglue", 1, RULE_UNGLUE, OP_UNGLUE, OP_NAT, 0, VIS_GUEST},
-  {"natAdd", 2, RULE_NAT2, OP_NAT_ADD, OP_NAT, 0, VIS_INTERNAL},
-  {"natSub", 2, RULE_NAT2, OP_NAT_SUB, OP_NAT, 0, VIS_INTERNAL},
+  {"natAdd", 2, RULE_NAT2, OP_NAT_ADD, OP_OPTION, 0, VIS_INTERNAL},
+  {"natSub", 2, RULE_NAT2, OP_NAT_SUB, OP_OPTION, 0, VIS_INTERNAL},
   {"natEq", 2, RULE_NAT2, OP_NAT_EQ, OP_FLAG, 0, VIS_INTERNAL},
   {"natLe", 2, RULE_NAT2, OP_NAT_LE, OP_FLAG, 0, VIS_INTERNAL},
-  {"u256Add", 2, RULE_U256_2, OP_U256_ADD, OP_U256, 0, VIS_INTERNAL},
-  {"u256Sub", 2, RULE_U256_2, OP_U256_SUB, OP_U256, 0, VIS_INTERNAL},
+  {"u256Add", 2, RULE_U256_2, OP_U256_ADD, OP_OPTION, 0, VIS_INTERNAL},
+  {"u256Sub", 2, RULE_U256_2, OP_U256_SUB, OP_OPTION, 0, VIS_INTERNAL},
+  {"u256Mul", 2, RULE_U256_2, OP_U256_MUL, OP_OPTION, 0, VIS_INTERNAL},
   {"u256Le", 2, RULE_U256_2, OP_U256_LE, OP_FLAG, 0, VIS_INTERNAL},
   {"u256Eq", 2, RULE_U256_2, OP_U256_EQ, OP_FLAG, 0, VIS_INTERNAL},
   {"toU256", 1, RULE_TO_U256, OP_TO_U256, OP_U256, 0, VIS_INTERNAL},
@@ -201,27 +206,32 @@ static const Builtin BUILTINS[] = {
   {"mapEmpty", 0, RULE_EMPTY, OP_KMAP_OF, OP_KMAP, 0, VIS_INTERNAL},
   {"mapGet", 2, RULE_KMAP_GET, OP_KMAP_GET, OP_KMAP, 0, VIS_INTERNAL},
   {"mapSet", 3, RULE_KMAP_SET, OP_KMAP_SET, OP_KMAP, 0, VIS_INTERNAL},
-  {"natDiv", 2, RULE_NAT2, OP_NAT_DIV, OP_NAT, 0, VIS_INTERNAL},
-  {"natMod", 2, RULE_NAT2, OP_NAT_MOD, OP_NAT, 0, VIS_INTERNAL},
+  {"natDiv", 2, RULE_DIV, OP_NAT_DIV, OP_NAT, 0, VIS_INTERNAL},
+  {"natMod", 2, RULE_DIV, OP_NAT_MOD, OP_NAT, 0, VIS_INTERNAL},
+  {"NonZero", 1, RULE_NONZERO, OP_NONZERO, OP_NAT, 0, VIS_INTERNAL},
+  {"nonZero", 1, RULE_NONZERO_OF, OP_NONZERO_OF, OP_OPTION, 0, VIS_INTERNAL},
+  {"nonZeroValue", 1, RULE_NONZERO_VALUE, OP_NONZERO_VALUE, OP_NAT, 0, VIS_INTERNAL},
+  {"mulDiv", 3, RULE_DIV, OP_MUL_DIV, OP_OPTION, 0, VIS_INTERNAL},
   {"hash", 2, RULE_U256_2, OP_HASH, OP_U256, 0, VIS_INTERNAL},
-  {"ecAdd", 2, RULE_FIXED, OP_EC_ADD, OP_PROD, 0, VIS_INTERNAL},
-  {"ecMul", 2, RULE_FIXED, OP_EC_MUL, OP_PROD, 0, VIS_INTERNAL},
+  {"ecAdd", 2, RULE_FIXED, OP_EC_ADD, OP_OPTION, 0, VIS_INTERNAL},
+  {"ecMul", 2, RULE_FIXED, OP_EC_MUL, OP_OPTION, 0, VIS_INTERNAL},
   {"addrToU256", 1, RULE_ADDR2, OP_ADDR_TO_U256, OP_U256, 0, VIS_INTERNAL},
-  {"zkHp", 1, RULE_FIXED, OP_ZK_HP, OP_PROD, 0, VIS_INTERNAL},
+  {"zkHp", 1, RULE_FIXED, OP_ZK_HP, OP_OPTION, 0, VIS_INTERNAL},
   {"zkKey", 1, RULE_FIXED, OP_ZK_KEY, OP_U256, 0, VIS_INTERNAL},
-  {"zkDigest", 1, RULE_FIXED, OP_ZK_DIGEST, OP_U256, 0, VIS_INTERNAL},
-  {"zkSign", 4, RULE_FIXED, OP_ZK_SIGN, OP_LIST, 0, VIS_INTERNAL},
-  {"zkVerify", 4, RULE_FIXED, OP_ZK_VERIFY, OP_FLAG, 0, VIS_INTERNAL},
+  {"zkDigest", 1, RULE_FIXED, OP_ZK_DIGEST, OP_OPTION, 0, VIS_INTERNAL},
+  {"zkSign", 4, RULE_FIXED, OP_ZK_SIGN, OP_OPTION, 0, VIS_INTERNAL},
+  {"zkVerify", 4, RULE_FIXED, OP_ZK_VERIFY, OP_OPTION, 0, VIS_INTERNAL},
   {"schnorrOk", 5, RULE_FIXED, OP_SCHNORR_OK, OP_FLAG, 0, VIS_INTERNAL},
   {"ZkBallot", 1, RULE_TYPE1, OP_ZK_BALLOT, OP_NAT, 0, VIS_INTERNAL},
   {"ZkWitness", 0, RULE_TYPE0, OP_ZK_WITNESS, OP_NAT, 0, VIS_INTERNAL},
   {"zkCast", 4, RULE_ZK_CAST, OP_ZK_CAST, OP_ZK_BALLOT, 0, VIS_INTERNAL},
-  {"zkProve", 1, RULE_ZK_PROVE, OP_ZK_PROVE, OP_ZK_WITNESS, 0, VIS_INTERNAL},
+  {"zkProve", 1, RULE_ZK_PROVE, OP_ZK_PROVE, OP_OPTION, 0, VIS_INTERNAL},
   {"zkProject", 2, RULE_ZK_PROJECT, OP_ZK_PROJECT, OP_NAT, 0, VIS_INTERNAL},
-  {"zkCheck", 4, RULE_ZK_CHECK, OP_ZK_CHECK, OP_NAT, 0, VIS_INTERNAL},
+  {"zkCheck", 4, RULE_ZK_CHECK, OP_ZK_CHECK, OP_OPTION, 0, VIS_INTERNAL},
   {"natIsSet", 0, RULE_IS_SET, OP_NAT_IS_SET, OP_NAT, 0, VIS_INTERNAL},
   {"u256IsSet", 0, RULE_IS_SET, OP_U256_IS_SET, OP_U256, 0, VIS_INTERNAL},
-  {"flagIsSet", 0, RULE_IS_SET, OP_FLAG_IS_SET, OP_FLAG, 0, VIS_INTERNAL}
+  {"flagIsSet", 0, RULE_IS_SET, OP_FLAG_IS_SET, OP_FLAG, 0, VIS_INTERNAL},
+  {"optNatIsSet", 0, RULE_IS_SET, OP_OPT_NAT_IS_SET, OP_OPTION, 0, VIS_INTERNAL}
 };
 
 #define BUILTIN_COUNT ((uint32_t)(sizeof BUILTINS / sizeof BUILTINS[0]))
@@ -572,6 +582,20 @@ static const Core *finish(Checker *c, const Core *k, const Value *hint, const Va
     return NULL;
   *type = hint != NULL ? hint : *type;
   return k;
+}
+
+/* REFUSE_PARTIAL site 2 (S3, USER rulings Q-S3-1 (a) and Q-S3-21 (a)): a
+   checked kit word gives an Option, and the term is where its payload
+   type is wanted. A guest program cannot name a kit word (REFUSE_KIT
+   comes first). 1 when the term is not this case. */
+static int partial_result_ok(Checker *c, const Head *h, const Value *found, const Value *want) {
+  if (h->kind != HEAD_BUILTIN || h->builtin->vis != VIS_INTERNAL || h->builtin->result != OP_OPTION || h->builtin->rule == RULE_IS_SET)
+    return 1;
+  if (found == NULL || want == NULL || !val_is(found, OP_OPTION) || val_is(want, OP_OPTION))
+    return 1;
+  if (!conv_values(c->m, c->level, found->args[0], want))
+    return 1;
+  return FAIL(c, "REFUSE_PARTIAL", "%s gives an Option, not a value of type %s: take it apart with option or bind", h->builtin->name, show(c, want));
 }
 
 /* 1 when T is Option A, List A or Sum E A. *ELEM is A. */
@@ -2169,13 +2193,14 @@ static const Core *rule_unglue(Call *k) {
 }
 
 /* natAdd, u256Add, addrEq, toU256 and the like: each argument has the type
-   former ARG. */
+   former ARG. A row result OP_OPTION (natAdd, natSub: S3, Q-S3-2; u256Add,
+   u256Sub, u256Mul: S3 P3b) gives the result type Option ARG. */
 static const Core *rule_prim(Call *k, Op arg) {
   Checker *c = k->c;
   const Value *t = tyop(c, arg, 0, NULL, NULL, NULL);
   const Core *x = check(c, k->args[0], t);
   const Core *y = x == NULL || k->b->arity < 2u ? NULL : check(c, k->args[1], t);
-  k->type = tyop(c, k->b->result, 0, NULL, NULL, NULL);
+  k->type = k->b->result == OP_OPTION ? tyop(c, OP_OPTION, 1, t, NULL, NULL) : tyop(c, k->b->result, 0, NULL, NULL, NULL);
   return k->b->arity < 2u ? op3(c, k->b->op, 0, 1, x, NULL, NULL) : op3(c, k->b->op, 0, 2, x, y, NULL);
 }
 
@@ -2183,28 +2208,29 @@ static uint32_t find_family(const Machine *m, const char *name);
 
 /* The curve ops (S2, R17), the zk ops (S8 B2a) and schnorrOk (S7 B3): fixed signatures over
    U256, Nat, a point Prod U256 U256, a ring List of points and a word list
-   List U256. The result is the row result; OP_PROD in the row means a point
-   and OP_LIST means List U256. */
+   List U256. The result is the RES shape of the row, or an Option of it
+   when the kit row result is OP_OPTION (S3 P4a, Q-S3-7, Q-S3-13). */
 static const Core *rule_fixed(Call *k) {
-  enum { SHAPE_U256, SHAPE_NAT, SHAPE_POINT, SHAPE_RING, SHAPE_WORDS };
+  enum { SHAPE_U256, SHAPE_NAT, SHAPE_POINT, SHAPE_RING, SHAPE_WORDS, SHAPE_FLAG };
   static const struct {
     Op op;
     unsigned char arg[5];
+    unsigned char res;
   } ROWS[] = {
-    {OP_EC_ADD, {SHAPE_POINT, SHAPE_POINT, SHAPE_U256, SHAPE_U256}},
-    {OP_EC_MUL, {SHAPE_POINT, SHAPE_U256, SHAPE_U256, SHAPE_U256}},
-    {OP_ZK_HP, {SHAPE_POINT, SHAPE_U256, SHAPE_U256, SHAPE_U256}},
-    {OP_ZK_KEY, {SHAPE_NAT, SHAPE_U256, SHAPE_U256, SHAPE_U256}},
-    {OP_ZK_DIGEST, {SHAPE_RING, SHAPE_U256, SHAPE_U256, SHAPE_U256}},
-    {OP_ZK_SIGN, {SHAPE_RING, SHAPE_U256, SHAPE_U256, SHAPE_U256}},
-    {OP_ZK_VERIFY, {SHAPE_RING, SHAPE_U256, SHAPE_U256, SHAPE_WORDS}},
-    {OP_SCHNORR_OK, {SHAPE_U256, SHAPE_U256, SHAPE_U256, SHAPE_U256, SHAPE_U256}},
+    {OP_EC_ADD, {SHAPE_POINT, SHAPE_POINT, SHAPE_U256, SHAPE_U256}, SHAPE_POINT},
+    {OP_EC_MUL, {SHAPE_POINT, SHAPE_U256, SHAPE_U256, SHAPE_U256}, SHAPE_POINT},
+    {OP_ZK_HP, {SHAPE_POINT, SHAPE_U256, SHAPE_U256, SHAPE_U256}, SHAPE_POINT},
+    {OP_ZK_KEY, {SHAPE_NAT, SHAPE_U256, SHAPE_U256, SHAPE_U256}, SHAPE_U256},
+    {OP_ZK_DIGEST, {SHAPE_RING, SHAPE_U256, SHAPE_U256, SHAPE_U256}, SHAPE_U256},
+    {OP_ZK_SIGN, {SHAPE_RING, SHAPE_U256, SHAPE_U256, SHAPE_U256}, SHAPE_WORDS},
+    {OP_ZK_VERIFY, {SHAPE_RING, SHAPE_U256, SHAPE_U256, SHAPE_WORDS}, SHAPE_FLAG},
+    {OP_SCHNORR_OK, {SHAPE_U256, SHAPE_U256, SHAPE_U256, SHAPE_U256, SHAPE_U256}, SHAPE_FLAG},
   };
   Checker *c = k->c;
   const Value *u = tyop(c, OP_U256, 0, NULL, NULL, NULL);
   const Value *point = tyop(c, OP_PROD, 2, u, u, NULL);
   const Value *words = tyop(c, OP_LIST, 1, u, NULL, NULL);
-  const Value *shape[5] = {u, nat_type(c), point, tyop(c, OP_LIST, 1, point, NULL, NULL), words};
+  const Value *shape[6] = {u, nat_type(c), point, tyop(c, OP_LIST, 1, point, NULL, NULL), words, flag_type(c)};
   const Core *args[5] = {NULL, NULL, NULL, NULL, NULL};
   size_t row = 0;
   while (row < sizeof ROWS / sizeof ROWS[0] && ROWS[row].op != k->b->op) row++;
@@ -2213,7 +2239,7 @@ static const Core *rule_fixed(Call *k) {
     args[i] = check(c, k->args[i], shape[ROWS[row].arg[i]]);
     if (args[i] == NULL) return NULL;
   }
-  k->type = k->b->result == OP_PROD ? point : k->b->result == OP_LIST ? words : tyop(c, k->b->result, 0, NULL, NULL, NULL);
+  k->type = k->b->result == OP_OPTION ? tyop(c, OP_OPTION, 1, shape[ROWS[row].res], NULL, NULL) : shape[ROWS[row].res];
   return core_op(c, k->b->op, 0, 0, args, k->b->arity);
 }
 
@@ -2234,7 +2260,7 @@ static const Core *rule_zk_cast(Call *k) {
   return core_op(c, OP_ZK_CAST, 0, 0, args, 4u);
 }
 
-/* zkProve b: b : ZkBallot C for some C; a ZkWitness. */
+/* zkProve b: b : ZkBallot C for some C; an Option ZkWitness (S3 P4a). */
 static const Core *rule_zk_prove(Call *k) {
   Checker *c = k->c;
   const Core *args[1] = {NULL};
@@ -2244,7 +2270,7 @@ static const Core *rule_zk_prove(Call *k) {
     return NULL;
   if (!val_is(type, OP_ZK_BALLOT) || type->argc != 1u)
     return nul(FAIL(c, "TYPE_MISMATCH", "zkProve needs a ballot of type ZkBallot C, found %s", show(c, type)));
-  k->type = tyop(c, OP_ZK_WITNESS, 0, NULL, NULL, NULL);
+  k->type = tyop(c, OP_OPTION, 1, tyop(c, OP_ZK_WITNESS, 0, NULL, NULL, NULL), NULL, NULL);
   return core_op(c, OP_ZK_PROVE, 0, 0, args, 1u);
 }
 
@@ -2262,8 +2288,9 @@ static const Core *rule_zk_project(Call *k) {
   return core_op(c, OP_ZK_PROJECT, 0, 0, args, 2u);
 }
 
-/* zkCheck M C w c: M and C in Type 0, w : ZkWitness, c : C; a type in
-   Type 0 (Unit on a host pass, neutral otherwise). */
+/* zkCheck M C w c: M and C in Type 0, w : ZkWitness, c : C; an Option of
+   a type in Type 0 (some Unit on a host pass, none on a bad ring or key
+   image, neutral otherwise; S3 P4a, Q-S3-14 (b)). */
 static const Core *rule_zk_check(Call *k) {
   Checker *c = k->c;
   const Core *args[4] = {NULL, NULL, NULL, NULL};
@@ -2275,7 +2302,7 @@ static const Core *rule_zk_check(Call *k) {
   args[3] = check(c, k->args[3], here(c, args[1]));
   if (args[2] == NULL || args[3] == NULL)
     return NULL;
-  k->type = val_univ(c->m, 0);
+  k->type = tyop(c, OP_OPTION, 1, val_univ(c->m, 0), NULL, NULL);
   return core_op(c, OP_ZK_CHECK, 0, 0, args, 4u);
 }
 
@@ -2296,6 +2323,62 @@ static const Core *rule_fin_op(Call *k) {
   const Core *y = x == NULL || k->b->arity < 3u ? NULL : check(c, k->args[2], fin);
   k->type = fin;
   return op3(c, k->b->op, 0, k->b->arity, n, x, y);
+}
+
+/* The base types of NonZero (S3, Q-S3-5). */
+static int nonzero_base(const Value *t) {
+  return val_is(t, OP_NAT) || val_is(t, OP_U256);
+}
+
+/* NonZero A (S3, Q-S3-4, Q-S3-5): A is Nat or U256, NonZero A : Type 0. */
+static const Core *rule_nonzero(Call *k) {
+  const Core *t = rule_type1(k);
+  const Value *v = here(k->c, t);
+  if (v == NULL)
+    return NULL;
+  if (!nonzero_base(v->args[0]))
+    return nul(FAIL(k->c, "TYPE_MISMATCH", "NonZero takes Nat or U256, found %s", show(k->c, v->args[0])));
+  return t;
+}
+
+/* nonZero x: x : A with A Nat or U256, the result Option (NonZero A). */
+static const Core *rule_nonzero_of(Call *k) {
+  Checker *c = k->c;
+  const Value *a = val_is(k->hint, OP_OPTION) && val_is(k->hint->args[0], OP_NONZERO) ? k->hint->args[0]->args[0] : NULL;
+  const Core *x = a != NULL ? check(c, k->args[0], a) : infer(c, k->args[0], &a);
+  if (x == NULL)
+    return NULL;
+  if (!nonzero_base(a))
+    return nul(FAIL(c, "TYPE_MISMATCH", "nonZero needs a Nat or a U256, found a term of type %s", show(c, a)));
+  k->type = tyop(c, OP_OPTION, 1, tyop(c, OP_NONZERO, 1, a, NULL, NULL), NULL, NULL);
+  return op3(c, OP_NONZERO_OF, 0, 1, x, NULL, NULL);
+}
+
+/* nonZeroValue x: x : NonZero A, the result A. */
+static const Core *rule_nonzero_value(Call *k) {
+  Checker *c = k->c;
+  const Value *t = nonzero_base(k->hint) ? tyop(c, OP_NONZERO, 1, k->hint, NULL, NULL) : NULL;
+  const Core *x = t != NULL ? check(c, k->args[0], t) : infer(c, k->args[0], &t);
+  if (x == NULL)
+    return NULL;
+  if (!val_is(t, OP_NONZERO))
+    return nul(FAIL(c, "TYPE_MISMATCH", "nonZeroValue needs a term of a type NonZero A, found a term of type %s", show(c, t)));
+  k->type = t->args[0];
+  return op3(c, OP_NONZERO_VALUE, 0, 1, x, NULL, NULL);
+}
+
+/* natDiv a d and natMod a d (Q-S3-4): d : NonZero Nat, the result Nat.
+   mulDiv a b d (Q-S3-5): a b : U256, d : NonZero U256, the result
+   Option U256. The divisor type makes each one total. */
+static const Core *rule_div(Call *k) {
+  Checker *c = k->c;
+  int wide = k->b->op == OP_MUL_DIV;
+  const Value *base = tyop(c, wide ? OP_U256 : OP_NAT, 0, NULL, NULL, NULL);
+  const Core *x = check(c, k->args[0], base);
+  const Core *y = x == NULL || !wide ? x : check(c, k->args[1], base);
+  const Core *d = y == NULL ? NULL : check(c, k->args[wide ? 2u : 1u], tyop(c, OP_NONZERO, 1, base, NULL, NULL));
+  k->type = wide ? tyop(c, OP_OPTION, 1, base, NULL, NULL) : base;
+  return wide ? op3(c, k->b->op, 0, 3, x, y, d) : op3(c, k->b->op, 0, 2, x, d, NULL);
 }
 
 /* flagIf b yes no */
@@ -2350,10 +2433,14 @@ static const Core *kmap_access(Call *k, int set) {
 /* natIsSet, u256IsSet, flagIsSet (S5, Q-S5-6 (b)): the trusted constant
    (x y : C) -> (p q : Path C x y) -> Path (Path C x y) p q.
    Build its type without consulting domain definitions: the name isSet
-   must not let domain text change a kernel axiom. The core stays opaque. */
+   must not let domain text change a kernel axiom. The core stays opaque.
+   optNatIsSet (S3, Q-S3-11 (a)): the row result OP_OPTION gives the
+   carrier Option Nat. */
 static const Core *rule_is_set(Call *k) {
   Checker *c = k->c;
-  const Core *carrier = op3(c, k->b->result, 0, 0, NULL, NULL, NULL);
+  const Core *carrier = k->b->result == OP_OPTION
+    ? op3(c, OP_OPTION, 0, 1, op3(c, OP_NAT, 0, 0, NULL, NULL, NULL), NULL, NULL)
+    : op3(c, k->b->result, 0, 0, NULL, NULL, NULL);
   const Core *p_type = core_ends(c, CORE_PATHP, "_", NULL, carrier,
     core_index(c, CORE_VAR, 1), core_index(c, CORE_VAR, 0));
   const Core *q_type = core_ends(c, CORE_PATHP, "_", NULL, carrier,
@@ -2476,6 +2563,14 @@ static const Core *rule(Call *k) {
     return rule_zk_check(k);
   case RULE_IS_SET:
     return rule_is_set(k);
+  case RULE_NONZERO:
+    return rule_nonzero(k);
+  case RULE_NONZERO_OF:
+    return rule_nonzero_of(k);
+  case RULE_NONZERO_VALUE:
+    return rule_nonzero_value(k);
+  case RULE_DIV:
+    return rule_div(k);
   }
   return NULL;
 }
@@ -2618,21 +2713,55 @@ static int find_known(Checker *c, const char *name, Head *h) {
   return 0;
 }
 
-/* An unknown name. When it names this declaration or a later one, the use
-   is recursion (rule R3). */
-static int unknown_name(Checker *c, const char *name) {
-  size_t i;
-  for (i = c->decl_index; i < c->decls->count; i++) {
-    if (strcmp(c->decls->items[i].name, name) == 0)
-      return FAIL(c, "REFUSE_REC", "%s is this definition or a later one; a definition can use only earlier ones (rule R3)", name);
-  }
-  return FAIL(c, "NAME_UNKNOWN", "unknown name %s", name);
-}
-
 /* A program declaration in guest mode (orbit-lang S3). The domain file and
    the contract prelude are the trusted scope: no kit refusal there. */
 static int guest(const Checker *c) {
   return c->mode == CHECK_GUEST && c->decls->items[c->decl_index].origin == ORIGIN_PROGRAM;
+}
+
+/* A partial name (S3, USER ruling Q-S3-1 (a), site 1): the kit has no
+   total word with this name. KIT is the hint for the kit mode and the
+   domain file. GUEST is the hint for a guest program. */
+typedef struct {
+  const char *name;
+  const char *kit;
+  const char *guest;
+} PartialName;
+
+static const PartialName PARTIAL_NAMES[] = {
+  {"div", "use natDiv x d, with d : NonZero Nat from nonZero; for U256, use mulDiv", "domain/domain.lang has no division for a guest program"},
+  {"mod", "use natMod x d, with d : NonZero Nat from nonZero", "domain/domain.lang has no remainder for a guest program"},
+  {"sub", "use natSub or u256Sub, which give an Option; take it apart with option or bind", "domain/domain.lang has no subtraction for a guest program; foundAt gives n - 1 as an Option"},
+  {"mul", "use u256Mul, which gives an Option, or mulDiv; take it apart with option or bind", "domain/domain.lang has no product for a guest program"},
+  {"head", "use fold (fun x acc => some x) none on the list, which gives an Option", "use head of domain/domain.lang on a Record"},
+  {"tail", "use fold on the list into an Option; the kit has no tail word", "use recDrop of domain/domain.lang on a Record"},
+  {"pred", "use natSub x 1, which gives an Option Nat", "use foundAt of domain/domain.lang, which gives an Option; take it apart with option or bind"}
+};
+
+#define PARTIAL_NAME_COUNT ((uint32_t)(sizeof PARTIAL_NAMES / sizeof PARTIAL_NAMES[0]))
+
+/* The hint for a partial name, or NULL. */
+static const char *partial_hint(const Checker *c, const char *name) {
+  uint32_t i;
+  for (i = 0; i < PARTIAL_NAME_COUNT; i++) {
+    if (strcmp(PARTIAL_NAMES[i].name, name) == 0)
+      return guest(c) ? PARTIAL_NAMES[i].guest : PARTIAL_NAMES[i].kit;
+  }
+  return NULL;
+}
+
+/* An unknown name. When it names this declaration or a later one, the use
+   is recursion (rule R3). Else a partial name gives REFUSE_PARTIAL. */
+static int unknown_name(Checker *c, const char *name) {
+  size_t i;
+  const char *hint = partial_hint(c, name);
+  for (i = c->decl_index; i < c->decls->count; i++) {
+    if (strcmp(c->decls->items[i].name, name) == 0)
+      return FAIL(c, "REFUSE_REC", "%s is this definition or a later one; a definition can use only earlier ones (rule R3)", name);
+  }
+  if (hint != NULL)
+    return FAIL(c, "REFUSE_PARTIAL", "%s is a partial name: %s", name, hint);
+  return FAIL(c, "NAME_UNKNOWN", "unknown name %s", name);
 }
 
 static int kit_refused(Checker *c, const char *what) {
@@ -2828,6 +2957,8 @@ static const Core *apply_known(Checker *c, const Term *whole, const Head *h, con
   k.outer = hint;
   k.used = arity;
   core = known_core(&k, h);
+  if (core != NULL && argc == k.used && !partial_result_ok(c, h, k.type, hint))
+    return NULL;
   return apply_rest(c, core, k.type, args + k.used, argc - k.used, hint, type);
 }
 
@@ -3030,11 +3161,25 @@ static const Core *elab_inner(Checker *c, const Term *t, const Value *hint, cons
       *type = hint;
       return core_leaf(c, CORE_NAT, t->nat);
     }
+    if (val_is(hint, OP_NONZERO) && val_is(hint->args[0], OP_NAT)) {
+      if (t->nat == 0u)
+        return nul(FAIL(c, "REFUSE_PARTIAL", "the literal 0 is not a value of NonZero Nat: use nonZero, which gives an Option"));
+      *type = hint;
+      return core_leaf(c, CORE_NAT, t->nat);
+    }
     *type = nat_type(c);
     return finish(c, core_leaf(c, CORE_NAT, t->nat), hint, type);
   case TERM_WORD:
     if (!literal_ok(c, "a word literal"))
       return NULL;
+    if (val_is(hint, OP_NONZERO) && val_is(hint->args[0], OP_U256) && t->nat == WORD_U256) {
+      U256 zero;
+      u256_from_u64(&zero, 0);
+      if (u256_cmp(t->word, &zero) == 0)
+        return nul(FAIL(c, "REFUSE_PARTIAL", "the literal 0u is not a value of NonZero U256: use nonZero, which gives an Option"));
+      *type = hint;
+      return core_word(c, t->nat, t->word);
+    }
     *type = tyop(c, t->nat == WORD_ADDR ? OP_ADDR : OP_U256, 0, NULL, NULL, NULL);
     return finish(c, core_word(c, t->nat, t->word), hint, type);
   case TERM_LAM:
@@ -3798,12 +3943,29 @@ static int check_family(Checker *c, const Decl *d) {
   return d->origin != ORIGIN_PROGRAM && count == 1u && strcmp(d->name, "Out") == 0 ? check_events(c, first) : 1;
 }
 
+/* A bind variable of rule D-9 (S3 P3b, Q-P3b-1 (a)): in
+   bind ADD (fun v => b), the variable v has the de Bruijn level LEVEL in b. */
+typedef struct HistBind {
+  uint32_t level;
+  const Core *add;
+  const struct HistBind *next;
+} HistBind;
+
+static const HistBind *hist_bind(const HistBind *b, uint32_t level) {
+  return b == NULL || b->level == level ? b : hist_bind(b->next, level);
+}
+
 /* Rule D-9 (slice K3c). The argument A of the history field K of the state
-   constructor CTOR is `F t` or `ADD (F t) e`, with F the projection of the
+   constructor CTOR is `F t`, `ADD (F t) e`, or the variable v of
+   bind (ADD (F t) e) (fun v => ...) (S3 P3b), with F the projection of the
    field. ADD is natAdd or u256Add. The type of the field selects one of
-   the two, so this function does not compare them. */
-static int history_arg_ok(uint32_t ctor, uint32_t k, const Core *a) {
+   the two, so this function does not compare them. DEPTH is the count of
+   binders above A; BINDS lists the bind variables. */
+static int history_arg_ok(uint32_t ctor, uint32_t k, const Core *a, uint32_t depth, const HistBind *binds) {
   const Core *x = a->kind == CORE_OP && (a->op == OP_U256_ADD || a->op == OP_NAT_ADD) && a->argc == 2u ? a->args[0] : a;
+  const HistBind *b = a->kind == CORE_VAR && a->index < depth ? hist_bind(binds, depth - 1u - a->index) : NULL;
+  if (b != NULL)
+    return history_arg_ok(ctor, k, b->add, 0, NULL);
   return x->kind == CORE_OP && x->op == OP_PROJ && x->inst == ctor && x->field == k;
 }
 
@@ -3840,7 +4002,6 @@ static int mentions_state(Machine *m, uint32_t level, const Value *v) {
   switch (v->kind) {
   case VAL_NAT:
   case VAL_WORD:
-  case VAL_TRAP:
   case VAL_UNIV:
     return 0;
   case VAL_PI:
@@ -3876,9 +4037,11 @@ static int mentions_state(Machine *m, uint32_t level, const Value *v) {
    field. Each use of the state constructor has all of its arguments and
    keeps or adds to each history field. TYPED is 1 when State occurs in the
    type of the definition: then T cannot refer to a definition that the rule
-   does not check (history_root). */
-static int history_ok(Checker *c, const Core *t, int typed) {
+   does not check (history_root). DEPTH and BINDS are as history_arg_ok
+   (S3 P3b); the type of a path type opens with no bind variables. */
+static int history_ok(Checker *c, const Core *t, int typed, uint32_t depth, const HistBind *binds) {
   const Machine *m = c->m;
+  HistBind node;
   uint32_t i;
   if (t == NULL || !m->has_state)
     return 1;
@@ -3886,7 +4049,6 @@ static int history_ok(Checker *c, const Core *t, int typed) {
   case CORE_VAR:
   case CORE_NAT:
   case CORE_WORD:
-  case CORE_TRAP:
   case CORE_UNIV:
   case CORE_IZERO:
   case CORE_IONE:
@@ -3898,15 +4060,17 @@ static int history_ok(Checker *c, const Core *t, int typed) {
   case CORE_LAM:
   case CORE_PI:
   case CORE_SIGMA:
-  case CORE_APP:
   case CORE_PLAM:
+    return history_ok(c, t->a, typed, depth, binds) && history_ok(c, t->b, typed, depth + 1u, binds);
+  case CORE_APP:
   case CORE_INEG:
   case CORE_IMEET:
   case CORE_IJOIN:
-    return history_ok(c, t->a, typed) && history_ok(c, t->b, typed);
+    return history_ok(c, t->a, typed, depth, binds) && history_ok(c, t->b, typed, depth, binds);
   case CORE_PATHP:
+    return history_ok(c, t->a, typed, depth, NULL) && history_ok(c, t->b, typed, depth + 1u, binds) && history_ok(c, t->args[0], typed, depth, binds) && history_ok(c, t->args[1], typed, depth, binds);
   case CORE_PAPP:
-    return history_ok(c, t->a, typed) && history_ok(c, t->b, typed) && history_ok(c, t->args[0], typed) && history_ok(c, t->args[1], typed);
+    return history_ok(c, t->a, typed, depth, binds) && history_ok(c, t->b, typed, depth, binds) && history_ok(c, t->args[0], typed, depth, binds) && history_ok(c, t->args[1], typed, depth, binds);
   case CORE_OP:
     break;
   }
@@ -3915,12 +4079,18 @@ static int history_ok(Checker *c, const Core *t, int typed) {
     if (t->argc < ci->field_count)
       return FAIL(c, "REFUSE_HISTORY_WRITE", "%s must have all of its arguments (rule D-9)", ci->name);
     for (i = 0; i < ci->field_count; i++) {
-      if (ci->fields[i].history && !history_arg_ok(t->inst, i, t->args[t->argc - ci->field_count + i]))
-        return FAIL(c, "REFUSE_HISTORY_WRITE", "the history field %s must be (%s t) or ADD (%s t) e, with ADD u256Add or natAdd (rule D-9)", ci->fields[i].name, ci->fields[i].name, ci->fields[i].name);
+      if (ci->fields[i].history && !history_arg_ok(t->inst, i, t->args[t->argc - ci->field_count + i], depth, binds))
+        return FAIL(c, "REFUSE_HISTORY_WRITE", "the history field %s must be (%s t), ADD (%s t) e, or the variable of bind (ADD (%s t) e), with ADD u256Add or natAdd (rule D-9)", ci->fields[i].name, ci->fields[i].name, ci->fields[i].name, ci->fields[i].name);
     }
   }
+  if (t->op == OP_BIND && t->argc == 2u && t->args[0] != NULL && t->args[0]->kind == CORE_OP && (t->args[0]->op == OP_U256_ADD || t->args[0]->op == OP_NAT_ADD) && t->args[0]->argc == 2u && t->args[1] != NULL && t->args[1]->kind == CORE_LAM) {
+    node.level = depth;
+    node.add = t->args[0];
+    node.next = binds;
+    return history_ok(c, t->args[0], typed, depth, binds) && history_ok(c, t->args[1]->a, typed, depth, binds) && history_ok(c, t->args[1]->b, typed, depth + 1u, &node);
+  }
   for (i = 0; i < t->argc; i++) {
-    if (!history_ok(c, t->args[i], typed))
+    if (!history_ok(c, t->args[i], typed, depth, binds))
       return 0;
   }
   return 1;
@@ -4119,7 +4289,6 @@ static int law_uses(const Machine *m, uint32_t trunc, uint32_t zk, const Core *t
   case CORE_VAR:
   case CORE_NAT:
   case CORE_WORD:
-  case CORE_TRAP:
   case CORE_UNIV:
   case CORE_IZERO:
   case CORE_IONE:
@@ -4174,7 +4343,7 @@ static int check_def_body(Checker *c, const Decl *d, const Value *tv, const Core
   int law;
   if (body == NULL || !check_sig(c, d, tv))
     return 0;
-  if (has_history(m) && strcmp(d->name, "init") != 0 && !is_family(tv, m->state_family) && !history_ok(c, body, mentions_state(m, c->level, tv)))
+  if (has_history(m) && strcmp(d->name, "init") != 0 && !is_family(tv, m->state_family) && !history_ok(c, body, mentions_state(m, c->level, tv), 0, NULL))
     return 0;
   /* Rule O7 (S5): the domain marks its law defs; a program def is law-only
      when its type or its body uses a law-only name. Kit mode sets the flag
@@ -4715,6 +4884,9 @@ int entry_of(Machine *m, const Value *type, Entry *out) {
     t = closure_apply(m, t, val_var(m, out->param_count));
     out->param_count++;
   }
+  /* An Option result prints its payload or none (Q-S3-9). */
+  out->result_option = val_is(t, OP_OPTION);
+  t = out->result_option ? t->args[0] : t;
   out->result_flag = val_is(t, OP_FLAG);
   return val_is(t, OP_NAT) || val_is(t, OP_FLAG);
 }
@@ -4808,15 +4980,17 @@ static int print_result(Machine *m, const char *name, const Value *v, FILE *out,
   case VAL_NAT:
     fprintf(out, "%llu\n", (unsigned long long)v->nat);
     return 0;
-  case VAL_TRAP:
-    fputs("trap\n", out);
-    fprintf(err, "langc: EVAL_OVERFLOW: %s: an operation trapped: a Nat or U256 overflow, or a U256 division by 0\n", name);
-    return 0;
   case VAL_OP:
     if (val_is(v, OP_FLAG_YES) || val_is(v, OP_FLAG_NO)) {
       fprintf(out, "%d\n", val_is(v, OP_FLAG_YES));
       return 0;
     }
+    if (val_is(v, OP_NONE)) {
+      fputs("none\n", out);
+      return 0;
+    }
+    if (val_is(v, OP_SOME))
+      return print_result(m, name, v->args[0], out, err);
     break;
   case VAL_WORD:
   case VAL_UNIV:
@@ -4915,8 +5089,8 @@ int prove_command(Machine *m, const char *name, const char *poll, FILE *out, FIL
   case ZK_WITNESS_OPEN:
     diag_fail(m->diag, "PROVE_OPEN", name, "the member or the choice of the ballot is open");
     return 1;
-  case ZK_WITNESS_TRAP:
-    fputs("trap\n", out);
+  case ZK_WITNESS_NONE:
+    fputs("none\n", out);
     break;
   case ZK_WITNESS_OK:
     word_text(WORD_U256, &choice, buf, sizeof buf);
@@ -4931,8 +5105,7 @@ int prove_command(Machine *m, const char *name, const char *poll, FILE *out, FIL
     diag_fail(m->diag, "IO_WRITE", name, "cannot write proof output");
     return 2;
   }
-  if (verdict == ZK_WITNESS_TRAP)
-    fprintf(err, "langc: EVAL_OVERFLOW: %s: an operation trapped: a Nat or U256 overflow, or a U256 division by 0\n", name);
+  (void)err; /* a none proof writes no stderr line (Q-S3-16 (a)) */
   return 0;
 }
 
@@ -4977,7 +5150,8 @@ static int arg_type(const Value *t, ArgType *out) {
 }
 
 /* Entry: (env : Env) -> (s : State) -> ARGS -> Option (Prod State (List Out)).
-   View: the same parameters, with a Nat, Flag, U256 or Addr result. Each
+   View: the same parameters, with a Nat, Flag, U256 or Addr result, or an
+   Option of one (S3, Q-S3-10 (a)). Each
    argument is a Nat, Flag, U256 or Addr. All other definitions are helpers. */
 static Role role_of(Machine *m, const Run *r, const Value *type, RunCall *call) {
   const Value *t = type;
@@ -4995,23 +5169,12 @@ static Role role_of(Machine *m, const Run *r, const Value *type, RunCall *call) 
     t = closure_apply(m, t, val_var(m, call->param_count + 2u));
     call->param_count++;
   }
-  if (arg_type(t, &kind))
+  if (arg_type(t, &kind) || (val_is(t, OP_OPTION) && arg_type(t->args[0], &kind)))
     return ROLE_VIEW;
   p = val_is(t, OP_OPTION) ? t->args[0] : NULL;
   if (val_is(p, OP_PROD) && is_family(p->args[0], m->state_family) && val_is(p->args[1], OP_LIST) && is_family(p->args[1]->args[0], r->out))
     return ROLE_ENTRY;
   return ROLE_HELPER;
-}
-
-static int has_trap(const Value *v) {
-  uint32_t i;
-  if (v != NULL && v->kind == VAL_TRAP)
-    return 1;
-  for (i = 0; v != NULL && v->kind == VAL_OP && i < v->argc; i++) {
-    if (has_trap(v->args[i]))
-      return 1;
-  }
-  return 0;
 }
 
 static int print_value(Machine *m, const Value *v, char *buf) {
@@ -5067,8 +5230,8 @@ static void run_append(const Machine *m, Run *r, const Value *o, FILE *out) {
   print_digest(out, "  entry", &e);
 }
 
-/* One call `CALLER NAME ARGS...` (D-6 to D-8). A trap is a revert: the
-   state does not change. Returns 0, 1, or 2 after EVAL_ARGS. */
+/* One call `CALLER NAME ARGS...` (D-6 to D-8). A none result is a revert:
+   the state does not change. Returns 0, 1, or 2 after EVAL_ARGS. */
 static int run_call(Machine *m, Run *r, uint32_t line, char *const *word, uint32_t count, FILE *out) {
   const Value *args[ENTRY_PARAMS_MAX];
   U256 *caller = arena_alloc(m->arena, sizeof *caller);
@@ -5104,12 +5267,8 @@ static int run_call(Machine *m, Run *r, uint32_t line, char *const *word, uint32
   if (v == NULL)
     return 1;
   r->calls++;
-  if (has_trap(v)) {
-    fprintf(out, "%u %s trap\n", r->calls, name);
-    return 0;
-  }
   if (role == ROLE_VIEW) {
-    if (!print_value(m, v, r->buf))
+    if (!print_value(m, val_is(v, OP_SOME) ? v->args[0] : v, r->buf))
       return 1;
     fprintf(out, "%u %s = %s\n", r->calls, name, r->buf);
     return 0;
@@ -5172,8 +5331,6 @@ int run_command(Machine *m, const char *path, const char *text, size_t len, FILE
   r.state = def_value(m, init);
   if (r.state == NULL)
     return 1;
-  if (has_trap(r.state))
-    return diag_fail(m->diag, "RUN_INIT", "init", "the start state traps") + 1;
   while (status == 0 && pos < len) {
     size_t end = pos;
     char *copy;

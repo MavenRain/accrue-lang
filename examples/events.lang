@@ -10,7 +10,7 @@ def init : State := makeState 0u
 -- Entry: add the amount to the total, and emit both events.
 def deposit : (env : Env) -> (s : State) -> (amount : U256) -> Option (Prod State (List Out)) :=
   fun (env : Env) (s : State) (amount : U256) =>
-    some (pair (makeState (u256Add (deposited s) amount)) (cons Opened (cons (Paid (caller env) amount) nil)))
+    bind (u256Add (deposited s) amount) (fun (d : U256) => some (pair (makeState d) (cons Opened (cons (Paid (caller env) amount) nil))))
 
 -- Event values.
 def eOpened : Out := Opened

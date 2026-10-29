@@ -699,6 +699,28 @@ static int nat_bin(Low *l, Buf *b, const Value *v, IrOp op, int carry, Operand *
   return atoms(l, b, ex_bin(l, op, x.w, y.w), f, out);
 }
 
+/* natAdd and natSub (S3, Q-S3-2): an Option Nat block. natAdd gives none
+   on a carry; natSub gives none when the second word is more than the
+   first. The trap flag of the arguments stays on the result. */
+static int nat_checked(Low *l, Buf *b, const Value *v, IrOp op, Operand *out) {
+  Operand x;
+  Operand y;
+  Operand w;
+  Operand s;
+  Operand z;
+  Slot res = slot_new(l);
+  Buf some = buf_under(b);
+  Buf none = buf_under(b);
+  if (!lower(l, b, v->args[0], &x) || !lower(l, b, v->args[1], &y))
+    return 0;
+  w = operand(ex_bin(l, op, x.w, y.w), ex_or(l, x.f, y.f));
+  *out = operand(slot_get(l, res).w, w.f);
+  return block_ops(l, &some, 1, &w, 1, &s) && store(l, &some, res, s) && block_ops(l, &none, 0, NULL, 0, &z) &&
+         store(l, &none, res, z) &&
+         (op == IR_OP_ADD ? if_flag(l, b, ex_bin(l, IR_OP_ADD_CARRY, x.w, y.w), &none, &some)
+                          : if_flag(l, b, ex_bin(l, IR_OP_LE, y.w, x.w), &some, &none));
+}
+
 /* Field K of the block X, behind the guard on the flag of X. */
 static int field_of(Low *l, Buf *b, const Value *xv, uint32_t k, Operand *out) {
   Operand x;
@@ -1230,9 +1252,9 @@ static int lower_stuck(Low *l, Buf *b, const Value *v, Operand *out) {
   case OP_TRANSPORT:
     return transport(l, b, v, out);
   case OP_NAT_ADD:
-    return nat_bin(l, b, v, IR_OP_ADD, 1, out);
+    return nat_checked(l, b, v, IR_OP_ADD, out);
   case OP_NAT_SUB:
-    return nat_bin(l, b, v, IR_OP_SUB, 0, out);
+    return nat_checked(l, b, v, IR_OP_SUB, out);
   case OP_NAT_MUL:
     return nat_bin(l, b, v, IR_OP_MUL, 1, out);
   case OP_NAT_EQ:
@@ -1249,8 +1271,6 @@ static int lower_value(Low *l, Buf *b, const Value *v, Operand *out) {
   switch (v->kind) {
   case VAL_NAT:
     return give(l, out, v->nat, 0);
-  case VAL_TRAP:
-    return give(l, out, 0, 1);
   case VAL_UNIV:
   case VAL_PI:
   case VAL_SIGMA:
@@ -1334,7 +1354,8 @@ int lower_program(Machine *m, IrProgram *prog) {
     return diag_fail(m->diag, "OOM", m->def, "out of memory");
   for (i = 0; i < m->def_count; i++) {
     m->fuel = EVAL_FUEL_STEPS;
-    entry = m->defs[i].origin == ORIGIN_PROGRAM && entry_of(m, m->defs[i].type, &e);
+    /* The wasm ABI has no Option result yet (Q-S3-9): such an entry is not lowered. */
+    entry = m->defs[i].origin == ORIGIN_PROGRAM && entry_of(m, m->defs[i].type, &e) && !e.result_option;
     if (entry && !lower_entry(m, i, &e, &funcs[n]))
       return 0;
     n += entry ? 1u : 0u;

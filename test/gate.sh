@@ -62,14 +62,13 @@ echo "kit-only refusals: $kit_only checked"
 
 # A refl refusal shows both normal forms.
 build/langc $(kit test/check/kit.txt bad-refl.lang) check test/check/bad-refl.lang 2>"$tmp/err" >/dev/null || true
-if ! rg -q -F 'the path at i1 is 1201, but the type needs 1200' "$tmp/err"; then
+if ! rg -q -F 'the path at i1 is some 1201, but the type needs some 1200' "$tmp/err"; then
   echo "FAIL bad-refl.lang: the message does not show both normal forms"
   fail=$((fail + 1))
 fi
 
 # Each line of test/eval/expect.txt is `FILE NAME [ARGS] => OUTPUT`. `langc eval`
-# must exit 0 and print OUTPUT. A trap also prints `langc: EVAL_OVERFLOW: NAME: ...`
-# on stderr.
+# must exit 0 and print OUTPUT.
 evals=0
 while IFS= read -r line; do
   want=${line#* => }
@@ -80,11 +79,9 @@ while IFS= read -r line; do
   status=0
   got=$(build/langc $(kit examples/kit.txt "$file.lang") eval "examples/$file.lang" "$name" "$@" 2>"$tmp/err") || status=$?
   first=$(head -n 1 "$tmp/err")
-  want_err=""
-  [ "$want" = "trap" ] && want_err="langc: EVAL_OVERFLOW: $name: "
   evals=$((evals + 1))
   case "$status|$got|$first" in
-    "0|$want|$want_err"*) ;;
+    "0|$want|"*) ;;
     *) echo "FAIL eval $file $name: want $want, got exit $status: $got $first"; fail=$((fail + 1)) ;;
   esac
 done <test/eval/expect.txt

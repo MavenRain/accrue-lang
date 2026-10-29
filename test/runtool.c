@@ -51,30 +51,30 @@ static int run_fuel(int cached_init) {
 /* Preserve the interpreter cases formerly coupled to the Wasm gate. */
 static int eval_spines(void) {
   const char *program =
-    "def lazy : Nat -> Nat := fun n => first (fold (fun (p : Prod Nat Nat) => pair (natAdd (first p) 1) (natAdd (second p) 18446744073709551615)) (pair 0 2) n)\n"
+    "def lazy : Nat -> Option Nat := fun n => first (fold (fun (p : Prod (Option Nat) (Option Nat)) => pair (bind (first p) (fun (a : Nat) => natAdd a 1)) (bind (second p) (fun (b : Nat) => natAdd b 18446744073709551615))) (pair (some 0) (some 2)) n)\n"
     "def noNats : List Nat := nil\n"
-    "def upFrom : Nat -> List Nat := fun n => unfold (fun k => some (pair k (natAdd k 1))) n 1\n"
-    "def upTrap : Nat -> List Nat := fun n => unfold (fun k => flagIf (natEq k 3) (some (fold (fun (p : Prod Nat Nat) => p) (pair 0 0) (natAdd 18446744073709551615 1))) (some (pair k (natAdd k 1)))) n 1\n"
-    "def foldOnes : Nat -> Nat := fun n => fold (fun x acc => natAdd x acc) 0 (fold (fun (acc : List Nat) => cons 2 acc) noNats n)\n"
-    "def mapUp : Nat -> Nat := fun n => fold (fun x acc => natAdd x acc) 0 (map (fun (x : Nat) => natAdd x (natAdd x x)) (upFrom n))\n"
-    "def bindUp : Nat -> Nat := fun n => fold (fun x acc => natAdd x acc) 0 (bind (upFrom n) (fun (x : Nat) => cons x (cons 10 noNats)))\n"
-    "def filterUp : Nat -> Nat := fun n => fold (fun x acc => natAdd x acc) 0 (filter (fun x => natLe x 2) (upFrom n))\n"
-    "def trapHead : Nat -> Nat := fun n => fold (fun x acc => x) 0 (upTrap n)\n"
-    "def trapSum : Nat -> Nat := fun n => fold (fun x acc => natAdd x acc) 0 (upTrap n)\n"
-    "def filterTrap : Nat -> Nat := fun n => fold (fun x acc => natAdd x acc) 0 (filter (fun x => flagIf (natEq x 3) (natEq (natAdd 18446744073709551615 1) 0) (natLe x 5)) (upFrom n))\n"
-    "def bindTrap : Nat -> Nat := fun n => fold (fun x acc => x) 0 (bind (upFrom n) (fun (x : Nat) => flagIf (natEq x 2) (fold (fun (xs : List Nat) => xs) noNats (natAdd 18446744073709551615 1)) (cons x noNats)))\n";
+    "def upFrom : Nat -> List Nat := fun n => unfold (fun k => map (fun (j : Nat) => pair k j) (natAdd k 1)) n 1\n"
+    "def upMax : Nat -> List Nat := fun n => unfold (fun k => flagIf (natEq k 3) (some (pair 18446744073709551615 4)) (map (fun (j : Nat) => pair k j) (natAdd k 1))) n 1\n"
+    "def foldOnes : Nat -> Option Nat := fun n => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (fold (fun (acc : List Nat) => cons 2 acc) noNats n)\n"
+    "def mapUp : Nat -> Option Nat := fun n => fold (fun (x : Option Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => bind x (fun (b : Nat) => natAdd b a))) (some 0) (map (fun (x : Nat) => bind (natAdd x x) (fun (d : Nat) => natAdd x d)) (upFrom n))\n"
+    "def bindUp : Nat -> Option Nat := fun n => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (bind (upFrom n) (fun (x : Nat) => cons x (cons 10 noNats)))\n"
+    "def filterUp : Nat -> Option Nat := fun n => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun x => natLe x 2) (upFrom n))\n"
+    "def headMax : Nat -> Nat := fun n => fold (fun x acc => x) 0 (upMax n)\n"
+    "def sumMax : Nat -> Option Nat := fun n => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (upMax n)\n"
+    "def filterMax : Nat -> Option Nat := fun n => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun x => natLe 1 x) (upMax n))\n"
+    "def bindMax : Nat -> Nat := fun n => fold (fun x acc => x) 0 (bind (upFrom n) (fun (x : Nat) => flagIf (natEq x 2) (cons 18446744073709551615 noNats) (cons x noNats)))\n";
   static const struct { const char *name; const char *arg; const char *want; } rows[] = {
     {"lazy", "3", "3\n"},
     {"foldOnes", "3", "6\n"},
     {"mapUp", "3", "18\n"},
     {"bindUp", "3", "36\n"},
     {"filterUp", "5", "3\n"},
-    {"trapHead", "5", "1\n"},
-    {"trapSum", "5", "trap\n"},
-    {"trapSum", "2", "3\n"},
-    {"filterTrap", "2", "3\n"},
-    {"filterTrap", "5", "trap\n"},
-    {"bindTrap", "5", "1\n"}
+    {"headMax", "5", "1\n"},
+    {"sumMax", "5", "none\n"},
+    {"sumMax", "2", "3\n"},
+    {"filterMax", "2", "3\n"},
+    {"filterMax", "5", "none\n"},
+    {"bindMax", "5", "1\n"}
   };
   Arena arena;
   Diag diag;
@@ -104,7 +104,7 @@ static int eval_spines(void) {
     fread(got, 1, sizeof got - 1u, out);
     fread(error, 1, sizeof error - 1u, err);
     ok = ok && !ferror(out) && !ferror(err) && strcmp(got, rows[i].want) == 0
-      && (strcmp(got, "trap\n") == 0 ? strncmp(error, "langc: EVAL_OVERFLOW:", 21u) == 0 : error[0] == '\0');
+      && error[0] == '\0';
     if (!ok) fprintf(stderr, "FAIL eval %s %s: wanted %s, got %s", rows[i].name, rows[i].arg, rows[i].want, got);
     fclose(out);
     fclose(err);

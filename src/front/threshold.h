@@ -15,7 +15,8 @@
    The challenge e is the hash chain of the guest `hash a b` (SHA-256 of
    the 64 big endian bytes of a and b) from DLEQ_TAG over the ten point
    words, as a raw word: the view dleqOk of examples/threshold.lang computes
-   the same chain on the chain (ecMul, ecAdd, hash and u256Eq only). */
+   the same chain on the chain (ecMul, ecAdd, hash and u256Eq only; ecMul
+   and ecAdd give Option points, and a none point gives flagNo). */
 #ifndef LANG_FRONT_THRESHOLD_H
 #define LANG_FRONT_THRESHOLD_H
 

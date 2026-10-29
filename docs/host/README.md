@@ -67,6 +67,7 @@ The compiler enforces these rules:
 
 | Rule | Code | The compiler refuses |
 |---|---|---|
+| R0 | `REFUSE_PARTIAL` | a partial name (for example `div`, `mod` or `sub`), the `Option` result of a checked kit word where a plain value is wanted, or the literal 0 where a `NonZero` is wanted |
 | R1 | `REFUSE_DATA` | a `family` declaration in a program |
 | R2 | `REFUSE_AXIOM` | an `axiom` declaration |
 | R3 | `REFUSE_REC` | `def rec`, or a definition that refers to itself or to a later definition |
@@ -84,8 +85,8 @@ build/langc build PROG -o OUT [--runtime]
 
 - `check` prints `ok`, or refuses the program.
 - `eval` prints the normal form of `NAME`. Each argument is a decimal
-  number. When an entry traps, `eval` prints `trap` on stdout and an
-  `EVAL_OVERFLOW` line on stderr, and the exit status is 0.
+  number. For an Option result, `eval` prints the payload of `some`, or
+  `none` (S3, Q-S3-9).
 - `ir` prints the first-order IR. It has one `func` for each entry.
 - `abi` prints the name of each entry, one for each line.
 - `build` writes the Wasm module to `OUT`. On this target, `--runtime`
@@ -102,14 +103,15 @@ An entry is a top-level program definition whose declared type is `Nat`,
 `Nat` or `Flag` result. `build` exports each entry by its name. Each
 parameter and the result is an `i64`. Other definitions are not exported.
 
-`Nat` is an unsigned 64-bit integer. `natAdd` and `natMul` trap on an
-overflow past 2^64 - 1. `natSub` stops at 0. `Flag` is 0 or 1.
+`Nat` is an unsigned 64-bit integer. `natAdd` gives `none` on an
+overflow past 2^64 - 1, and `natSub` gives `none` when the second
+argument is larger than the first. `Flag` is 0 or 1.
 
 ## Compilation
 
 Compilation is partial evaluation. The compiler normalizes the body of
 each entry with the parameters as free variables. Types and universes erase.
-Proof contents erase, while their trap flags remain. A lambda stays only as the direct function argument of
+Proof contents erase. A lambda stays only as the direct function argument of
 `fold`, `unfold`, `map`, `bind`, `filter`, `either` or `option`. The
 lowering puts its body into a loop or a branch. The lowering refuses two
 programs with a HOST-LIMIT code (see `docs/CAPABILITY.md`):
@@ -117,39 +119,18 @@ programs with a HOST-LIMIT code (see `docs/CAPABILITY.md`):
 - `REFUSE_RUNTIME_CLOSURE`: a function value must exist at run time.
 - `REFUSE_RUNTIME_TREE`: a fold walks a tree that exists only at run time.
 
-## Lazy traps
+## No trap form
 
-A trap is lazy. It stops a computation only when the computation needs
-the value. `langc eval` and the Wasm module agree on this rule. The
-lowering gives each value a word and a trap flag. A heap field keeps its
-word and its flag. The entry result is the only strict point: when its
-flag is set, the entry executes `unreachable`.
-
-The lowering lowers a value one time in a block. The blocks in that
-block use the same result, but the two arms of a branch do not share
-results.
-
-Strict traps are not correct here. Normalization at compile time drops
-terms that are not read, for example `first (pair a b)` gives `a`. The
-evaluator also computes both arms of `flagIf`. A strict trap would fire
-in a term that the program does not use.
-
-Decision record: the kit builder (Claude) made this decision. The
-repository owner has not ruled on it.
+A partial operation gives an `Option`: `none` where it has no result.
+`langc eval` prints `none`, and a `langc run` step reverts on `none`
+(Q-S3-9). The Wasm writer (`src/wasm.c`, `src/front/lower.c`,
+`src/ir.h`) is out of the build until S8, and S8 replaces it. Rule N4
+in `docs/PLAN.md`: a writer emits no trap form. S8 rules how an entry
+with an `Option` result gives `none` to the host (Q-S3-18).
 
 ## Wasm layout
 
-- The module has one memory with a maximum of 16384 pages (1 GiB) and
-  one mutable `i64` global, the heap pointer.
-- Function 0 is the internal allocator `alloc (bytes : i32) -> i64`. It
-  increases the heap pointer. When a block does not fit, it calls
-  `memory.grow`. When the memory cannot grow past 1 GiB, it traps.
-- Function 1 + K is entry K. Each entry first sets the heap pointer to 0,
-  so each call starts with an empty heap.
-- An entry traps when a `Flag` argument is larger than 1.
-- A word is 8 bytes. A heap block holds the tag in word 0, the word of
-  field K in word 1 + 2K and the trap flag of field K in word 2 + 2K.
-- A tag switch is nested blocks and `br_table`. A tag out of range traps.
+The S8 writer sets the Wasm layout (Q-S3-18).
 
 ## Domain slot
 
@@ -167,16 +148,15 @@ what the domain holds and how to change it.
 | `parse refusals: 9 checked` | each `test/parse` file fails with the code in `test/parse/expect.txt`; one file has 1100 nested parentheses |
 | `check refusals: 19 checked` | each `test/check` mutant fails with the code in `test/check/expect.txt`; the `TYPE_REFL` message shows both normal forms |
 | `evals: 32 checked` | `langc eval` gives each result in `test/eval/expect.txt` |
-| `ir: 10 lowered` | `langc ir` lowers each example, with one `func` for each `abi` line |
-| `wasm: 13 modules valid` | `langc build` writes a module for each example and for `test/ir/spine.lang`, `test/ir/lazy.lang` and `test/ir/proof-trap.lang`; `wasm-validate` and `wasm-objdump -x` accept it |
-| `differential: 813 cases, 0 mismatches` | node runs each entry on the grid of `test/grid.awk`; each result is equal to the `langc eval` result, and a trap is equal to a trap |
 | `gate: 0 failures` | the sum of all failures |
 
+The `ir`, `wasm` and `differential` lines come with the S8 writer.
+
 The gate also checks the usage and IO exit codes, five `eval` refusals,
-`test/ir/closure.lang` (`REFUSE_RUNTIME_CLOSURE`), `test/ir/tree.lang`
-(`REFUSE_RUNTIME_TREE`), the 13 cases of `test/ir/spine.lang`,
-`pick 2 4 9` = `trap` on Wasm, and the absence of em-dashes and en-dashes
-in the kit. `perl bin/doc-check.pl hosts/tcc-wasm` must report 0
+the eval cases of `test/ir/spine.lang` in `Option` form (`eval_spines`
+in `test/runtool.c`), and the absence of em-dashes and en-dashes
+in the kit. `test/ir` stays for S8 (Q-S3-19). The gate does not run its
+files. `perl bin/doc-check.pl hosts/tcc-wasm` must report 0
 problems.
 
 ## Known limits

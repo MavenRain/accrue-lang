@@ -1,0 +1,2 @@
+-- REFUSE_PARTIAL (S3 P5, Q-S3-1 (a), site 1): div is not a kit word; natDiv takes a NonZero divisor.
+def f : Nat -> NonZero Nat -> Nat := fun (x : Nat) (d : NonZero Nat) => div x d

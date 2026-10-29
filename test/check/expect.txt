@@ -39,6 +39,7 @@ history-partial.lang REFUSE_HISTORY_WRITE
 history-shadow.lang REFUSE_HISTORY_WRITE
 history-closed.lang REFUSE_HISTORY_WRITE
 history-hidden.lang REFUSE_HISTORY_WRITE
+history-bind-other.lang REFUSE_HISTORY_WRITE
 history-existential-init.lang REFUSE_HISTORY_WRITE
 history-existential-closed.lang REFUSE_HISTORY_WRITE
 map-key.lang REFUSE_MAP
@@ -188,3 +189,9 @@ polity-l9-swapped.lang PATH_END
 polity-l8-nodecide.lang PATH_END
 schnorr-type.lang TYPE_MISMATCH
 append-swap.lang TYPE_MISMATCH
+partial-name-kit.lang REFUSE_PARTIAL
+partial-name-guest.lang REFUSE_PARTIAL
+partial-option-kit.lang REFUSE_PARTIAL
+partial-option-arg-kit.lang REFUSE_PARTIAL
+partial-zero-kit.lang REFUSE_PARTIAL
+partial-zero-word-kit.lang REFUSE_PARTIAL

@@ -1,6 +1,6 @@
-1 own ok
+1 own revert
 2 own revert
-3 crash trap
+3 crash revert
 4 refuse revert
 5 earn ok
 6 file ok

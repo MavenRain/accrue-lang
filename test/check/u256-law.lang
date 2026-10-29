@@ -1,1 +1,1 @@
-def k2Bad : Path U256 (u256Add 2u 3u) 6u := refl
+def k2Bad : Path (Option U256) (u256Add 2u 3u) (some 6u) := refl

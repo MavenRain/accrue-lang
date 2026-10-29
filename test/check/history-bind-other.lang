@@ -1,0 +1,4 @@
+-- REFUSE_HISTORY_WRITE: the history field earned takes h, the bind variable of an add to held (S3 P3b, rule D-9). The variable e of the outer bind is not the argument.
+state State := makeState (held : U256) history (earned : U256)
+
+def bump : State -> Option State := fun (s : State) => bind (u256Add (earned s) 1u) (fun (e : U256) => bind (u256Add (held s) 1u) (fun (h : U256) => some (makeState e h)))

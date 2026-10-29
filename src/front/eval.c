@@ -25,7 +25,7 @@ static const char *const OP_NAMES[] = {
   [OP_FILTER] = "filter", [OP_WITNESS] = "witness", [OP_PAYLOAD] = "payload",
   [OP_NAT_ADD] = "natAdd", [OP_NAT_SUB] = "natSub",
   [OP_NAT_EQ] = "natEq", [OP_NAT_LE] = "natLe",
-  [OP_FLAG_IF] = "flagIf", [OP_U256_ADD] = "u256Add", [OP_U256_SUB] = "u256Sub",
+  [OP_FLAG_IF] = "flagIf", [OP_U256_ADD] = "u256Add", [OP_U256_SUB] = "u256Sub", [OP_U256_MUL] = "u256Mul",
   [OP_U256_LE] = "u256Le",
   [OP_U256_EQ] = "u256Eq", [OP_TO_U256] = "toU256",
   [OP_NAT_DIV] = "natDiv", [OP_NAT_MOD] = "natMod", [OP_HASH] = "hash",
@@ -37,10 +37,13 @@ static const char *const OP_NAMES[] = {
   [OP_ZK_BALLOT] = "ZkBallot", [OP_ZK_WITNESS] = "ZkWitness", [OP_ZK_CAST] = "zkCast",
   [OP_ZK_PROVE] = "zkProve", [OP_ZK_PROJECT] = "zkProject", [OP_ZK_CHECK] = "zkCheck",
   [OP_NAT_IS_SET] = "natIsSet", [OP_U256_IS_SET] = "u256IsSet", [OP_FLAG_IS_SET] = "flagIsSet",
+  [OP_OPT_NAT_IS_SET] = "optNatIsSet",
   [OP_INTERVAL] = "I", [OP_TRANSP] = "transp",
   [OP_SYSTEM] = "system", [OP_HCOMP] = "hcomp", [OP_FIN] = "Fin",
   [OP_FIN_ADD] = "finAdd", [OP_FIN_NEG] = "finNeg", [OP_FIN_CASE] = "finCase",
-  [OP_GLUE] = "Glue", [OP_GLUE_ELEM] = "glue", [OP_UNGLUE] = "unglue"
+  [OP_GLUE] = "Glue", [OP_GLUE_ELEM] = "glue", [OP_UNGLUE] = "unglue",
+  [OP_NONZERO] = "NonZero", [OP_NONZERO_OF] = "nonZero", [OP_NONZERO_VALUE] = "nonZeroValue",
+  [OP_MUL_DIV] = "mulDiv"
 };
 
 /* The number of arguments of each operation. VARIES: it comes from the
@@ -56,23 +59,23 @@ static const unsigned char OP_ARITY[] = {
   [OP_FOLD_FAMILY] = VARIES, [OP_UNFOLD] = 3, [OP_FILTER] = 2, [OP_WITNESS] = 1,
   [OP_PAYLOAD] = 1, [OP_NAT_ADD] = 2, [OP_NAT_SUB] = 2,
   [OP_NAT_EQ] = 2, [OP_NAT_LE] = 2, [OP_FLAG_IF] = 3, [OP_U256_ADD] = 2,
-  [OP_U256_SUB] = 2, [OP_U256_LE] = 2,
+  [OP_U256_SUB] = 2, [OP_U256_MUL] = 2, [OP_U256_LE] = 2,
   [OP_U256_EQ] = 2, [OP_TO_U256] = 1, [OP_ADDR_EQ] = 2,
   [OP_NAT_DIV] = 2, [OP_NAT_MOD] = 2, [OP_HASH] = 2,
   [OP_EC_ADD] = 2, [OP_EC_MUL] = 2, [OP_ADDR_TO_U256] = 1,
   [OP_PROJ] = 1, [OP_KMAP] = 2, [OP_KMAP_OF] = VARIES, [OP_KMAP_GET] = 3, [OP_KMAP_SET] = 4,
   [OP_ZK_HP] = 1, [OP_ZK_KEY] = 1, [OP_ZK_DIGEST] = 1, [OP_ZK_SIGN] = 4, [OP_ZK_VERIFY] = 4, [OP_SCHNORR_OK] = 5,
   [OP_ZK_BALLOT] = 1, [OP_ZK_WITNESS] = 0, [OP_ZK_CAST] = 4, [OP_ZK_PROVE] = 1, [OP_ZK_PROJECT] = 2, [OP_ZK_CHECK] = 4,
-  [OP_NAT_IS_SET] = 0, [OP_U256_IS_SET] = 0, [OP_FLAG_IS_SET] = 0,
+  [OP_NAT_IS_SET] = 0, [OP_U256_IS_SET] = 0, [OP_FLAG_IS_SET] = 0, [OP_OPT_NAT_IS_SET] = 0,
   [OP_INTERVAL] = 0, [OP_TRANSP] = 3,
   [OP_SYSTEM] = VARIES, [OP_HCOMP] = 4, [OP_FIN] = 1, [OP_FIN_ADD] = 3,
   [OP_FIN_NEG] = 2, [OP_FIN_CASE] = VARIES, [OP_GLUE] = 3, [OP_GLUE_ELEM] = 3,
-  [OP_UNGLUE] = 4
+  [OP_UNGLUE] = 4, [OP_NONZERO] = 1, [OP_NONZERO_OF] = 1,
+  [OP_NONZERO_VALUE] = 1, [OP_MUL_DIV] = 3
 };
 
 typedef enum {
   SCRUT_VALUE,
-  SCRUT_TRAP,
   SCRUT_NEUTRAL
 } Scrut;
 
@@ -82,7 +85,7 @@ typedef struct {
   uint32_t cap;
 } ValBuf;
 
-/* A list value: its cons cells, then the end (nil, a trap or a neutral). */
+/* A list value: its cons cells, then the end (nil or a neutral). */
 typedef struct {
   const Value *const *cells;
   uint32_t count;
@@ -141,15 +144,6 @@ const Value *val_word(Machine *m, uint64_t sort, const U256 *word) {
     v->word = word;
   }
   return v;
-}
-
-static const Value *val_trap(Machine *m) {
-  return new_value(m, VAL_TRAP);
-}
-
-static const Value *overflow(Machine *m) {
-  m->overflowed = 1;
-  return val_trap(m);
 }
 
 const Value *val_var(Machine *m, uint32_t level) {
@@ -539,8 +533,6 @@ const Value *def_value(Machine *m, uint32_t index) {
 
 static Scrut scrut_of(const Value *v) {
   switch (v->kind) {
-  case VAL_TRAP:
-    return SCRUT_TRAP;
   case VAL_VAR:
   case VAL_APP:
   case VAL_STUCK:
@@ -561,13 +553,10 @@ static Scrut scrut_of(const Value *v) {
   return SCRUT_VALUE;
 }
 
-/* 1 when the scrutinee S stops the operation: a trap gives the trap, a
-   neutral S gives the stuck operation. */
+/* 1 when the scrutinee S stops the operation: a neutral S gives the stuck
+   operation. */
 static int blocked(Machine *m, const Value *s, Op op, uint32_t inst, uint32_t field, const Value *const *a, uint32_t n, const Value **out) {
   switch (scrut_of(s)) {
-  case SCRUT_TRAP:
-    *out = s;
-    return 1;
   case SCRUT_NEUTRAL:
     *out = val_op(m, VAL_STUCK, op, inst, field, a, n);
     return 1;
@@ -629,12 +618,10 @@ static const Value *build_list(Machine *m, const Value *const *items, uint32_t c
   return acc;
 }
 
-/* The end of a list result: nil stays nil, a trap stays a trap, a neutral
-   end gives OP FIRST END. */
+/* The end of a list result: nil stays nil, a neutral end gives OP FIRST
+   END. */
 static const Value *list_tail(Machine *m, const Value *tail, Op op, uint32_t inst, const Value *first) {
   switch (scrut_of(tail)) {
-  case SCRUT_TRAP:
-    return tail;
   case SCRUT_NEUTRAL:
     return make(m, VAL_STUCK, op, inst, 2, first, tail, NULL);
   case SCRUT_VALUE:
@@ -650,8 +637,6 @@ const Value *apply_value(Machine *m, const Value *fn, const Value *arg) {
   switch (fn->kind) {
   case VAL_LAM:
     return closure_apply(m, fn, arg);
-  case VAL_TRAP:
-    return fn;
   case VAL_VAR:
   case VAL_APP:
   case VAL_STUCK:
@@ -699,8 +684,6 @@ const Value *path_apply(Machine *m, const Value *p, const Value *r, const Value 
     return NULL;
   if (p->kind == VAL_PLAM)
     return closure_apply(m, p, r);
-  if (p->kind == VAL_TRAP)
-    return p;
   if (scrut_of(p) != SCRUT_NEUTRAL)
     return internal(m, "a path application of a value that is not a path");
   /* The end point rule: a neutral path at i0 or i1 is its end. */
@@ -841,8 +824,6 @@ static const Value *bind_list(Machine *m, const Value *const *a, uint32_t n) {
       return NULL;
     if (scrut_of(t.tail) == SCRUT_NEUTRAL)
       return val_op(m, VAL_STUCK, OP_BIND, CARRIER_LIST, 0, a, n);
-    if (scrut_of(t.tail) == SCRUT_TRAP)
-      return build_list(m, out.items, out.count, t.tail);
   }
   return build_list(m, out.items, out.count, list_tail(m, s.tail, OP_BIND, CARRIER_LIST, a[1]));
 }
@@ -885,9 +866,6 @@ static const Value *reduce_fold_list(Machine *m, const Value *const *a) {
   if (!spine_of(m, a[2], &s))
     return NULL;
   switch (scrut_of(s.tail)) {
-  case SCRUT_TRAP:
-    acc = s.tail;
-    break;
   case SCRUT_NEUTRAL:
     acc = make(m, VAL_STUCK, OP_FOLD_LIST, 0, 3, a[0], a[1], s.tail);
     break;
@@ -956,8 +934,6 @@ static const Value *fold_family(Machine *m, uint32_t family, const Value *const 
   if (x == NULL)
     return NULL;
   switch (scrut_of(x)) {
-  case SCRUT_TRAP:
-    return x;
   case SCRUT_NEUTRAL:
     return stuck_fold(m, family, cases, ncases, x);
   case SCRUT_VALUE:
@@ -1158,9 +1134,6 @@ static int unfold_end(Machine *m, const Value *g, uint64_t left, const Value *se
     return 1;
   }
   switch (scrut_of(p)) {
-  case SCRUT_TRAP:
-    *tail = p;
-    return 1;
   case SCRUT_NEUTRAL:
     *tail = make(m, VAL_STUCK, OP_UNFOLD, 0, 3, g, val_nat(m, left), seed);
     return 1;
@@ -1225,8 +1198,6 @@ static const Value *filter_list(Machine *m, const Value *const *a) {
     if (test == NULL)
       return NULL;
     switch (scrut_of(test)) {
-    case SCRUT_TRAP:
-      return build_list(m, kept.items, kept.count, test);
     case SCRUT_NEUTRAL:
       return build_list(m, kept.items, kept.count, make(m, VAL_STUCK, OP_FILTER, CARRIER_LIST, 2, a[0], s.cells[i], NULL));
     case SCRUT_VALUE:
@@ -1253,12 +1224,8 @@ static const Value *reduce_filter(Machine *m, uint32_t inst, const Value *const 
   return internal(m, "a filter with no instance");
 }
 
-/* 1 when both arguments are numbers. Else *OUT is the trap or the stuck
-   operation. */
+/* 1 when both arguments are numbers. Else *OUT is the stuck operation. */
 static int nat_args(Machine *m, Op op, const Value *const *a, uint32_t n, uint64_t *x, uint64_t *y, const Value **out) {
-  *out = a[0]->kind == VAL_TRAP ? a[0] : a[1];
-  if (a[0]->kind == VAL_TRAP || a[1]->kind == VAL_TRAP)
-    return 0;
   if (blocked(m, a[0], op, 0, 0, a, n, out) || blocked(m, a[1], op, 0, 0, a, n, out))
     return 0;
   if (a[0]->kind != VAL_NAT || a[1]->kind != VAL_NAT) {
@@ -1270,13 +1237,20 @@ static int nat_args(Machine *m, Op op, const Value *const *a, uint32_t n, uint64
   return 1;
 }
 
+/* some X (S3): NULL when X is NULL. */
+static const Value *some_of(Machine *m, const Value *x) {
+  return x == NULL ? NULL : make(m, VAL_OP, OP_SOME, 0, 1, x, NULL, NULL);
+}
+
+/* natAdd and natSub (S3, Q-S3-2): Option Nat. natAdd gives none on a
+   carry; natSub gives none when y > x (no floor). */
 static const Value *nat_add(Machine *m, const Value *const *a, uint32_t n) {
   const Value *out;
   uint64_t x = 0;
   uint64_t y = 0;
   if (!nat_args(m, OP_NAT_ADD, a, n, &x, &y, &out))
     return out;
-  return x + y < x ? overflow(m) : val_nat(m, x + y);
+  return x + y < x ? constant(m, OP_NONE) : some_of(m, val_nat(m, x + y));
 }
 
 static const Value *nat_sub(Machine *m, const Value *const *a, uint32_t n) {
@@ -1285,11 +1259,11 @@ static const Value *nat_sub(Machine *m, const Value *const *a, uint32_t n) {
   uint64_t y = 0;
   if (!nat_args(m, OP_NAT_SUB, a, n, &x, &y, &out))
     return out;
-  return val_nat(m, x < y ? 0 : x - y);
+  return x < y ? constant(m, OP_NONE) : some_of(m, val_nat(m, x - y));
 }
 
-/* natDiv and natMod (S2, R14): the floor and the rest; a zero divisor traps
-   like an overflow does. */
+/* natDiv and natMod (S2, R14): the floor and the rest. The divisor is a
+   NonZero Nat (S3, Q-S3-4), so it is not 0. */
 static const Value *nat_divmod(Machine *m, Op op, const Value *const *a, uint32_t n) {
   const Value *out;
   uint64_t x = 0;
@@ -1297,20 +1271,14 @@ static const Value *nat_divmod(Machine *m, Op op, const Value *const *a, uint32_
   if (!nat_args(m, op, a, n, &x, &y, &out))
     return out;
   if (y == 0)
-    return overflow(m);
+    return internal(m, "a natDiv or natMod with a 0 divisor");
   return val_nat(m, op == OP_NAT_DIV ? x / y : x % y);
 }
 
-/* 1 when each argument is a value of the kind WANT. Else *OUT is the trap or
-   the stuck operation. */
+/* 1 when each argument is a value of the kind WANT. Else *OUT is the stuck
+   operation. */
 static int word_args(Machine *m, Op op, ValKind want, const Value *const *a, uint32_t n, const Value **out) {
   uint32_t i;
-  for (i = 0; i < n; i++) {
-    if (a[i]->kind == VAL_TRAP) {
-      *out = a[i];
-      return 0;
-    }
-  }
   for (i = 0; i < n; i++) {
     if (blocked(m, a[i], op, 0, 0, a, n, out))
       return 0;
@@ -1332,13 +1300,17 @@ static const Value *word_value(Machine *m, const U256 *x) {
   return val_word(m, WORD_U256, w);
 }
 
-/* u256Add traps on an overflow; u256Sub stops at 0. */
+/* u256Add, u256Sub and u256Mul (S3 P3b): some of the word, or none on a
+   carry, a borrow (b > a) or an overflow. u256_sub stops at 0, so the
+   borrow test comes first. */
 static const Value *u256_arith(Machine *m, Op op, const Value *const *a, uint32_t n, int (*fn)(U256 *, const U256 *, const U256 *)) {
   const Value *out;
   U256 r;
   if (!word_args(m, op, VAL_WORD, a, n, &out))
     return out;
-  return fn(&r, a[0]->word, a[1]->word) ? word_value(m, &r) : overflow(m);
+  if (op == OP_U256_SUB && u256_cmp(a[0]->word, a[1]->word) < 0)
+    return constant(m, OP_NONE);
+  return fn(&r, a[0]->word, a[1]->word) ? some_of(m, word_value(m, &r)) : constant(m, OP_NONE);
 }
 
 /* u256Le, u256Eq and addrEq. */
@@ -1358,6 +1330,48 @@ static const Value *to_u256(Machine *m, const Value *const *a, uint32_t n) {
     return out;
   u256_from_u64(&r, a[0]->nat);
   return word_value(m, &r);
+}
+
+static int word_zero(const U256 *x) {
+  U256 zero;
+  u256_from_u64(&zero, 0);
+  return u256_cmp(x, &zero) == 0;
+}
+
+/* nonZero x (S3, Q-S3-4): some x when x is not 0, else none. The NonZero
+   value is the base value. */
+static const Value *nonzero_of(Machine *m, const Value *const *a, uint32_t n) {
+  const Value *out;
+  if (blocked(m, a[0], OP_NONZERO_OF, 0, 0, a, n, &out))
+    return out;
+  if (a[0]->kind == VAL_NAT)
+    return a[0]->nat == 0 ? constant(m, OP_NONE) : make(m, VAL_OP, OP_SOME, 0, 1, a[0], NULL, NULL);
+  if (a[0]->kind == VAL_WORD)
+    return word_zero(a[0]->word) ? constant(m, OP_NONE) : make(m, VAL_OP, OP_SOME, 0, 1, a[0], NULL, NULL);
+  return internal(m, "nonZero on a value that is not a Nat or a U256");
+}
+
+/* nonZeroValue x (S3, Q-S3-5): the base value. An open x stays stuck. */
+static const Value *nonzero_value(Machine *m, const Value *const *a, uint32_t n) {
+  const Value *out;
+  if (blocked(m, a[0], OP_NONZERO_VALUE, 0, 0, a, n, &out))
+    return out;
+  return a[0];
+}
+
+/* mulDiv a b d (S3, Q-S3-5): floor(a * b / d) from the exact 512-bit
+   product; none when the quotient does not fit in 256 bits. */
+static const Value *mul_div(Machine *m, const Value *const *a, uint32_t n) {
+  const Value *out;
+  U256 r;
+  if (!word_args(m, OP_MUL_DIV, VAL_WORD, a, n, &out))
+    return out;
+  if (word_zero(a[2]->word))
+    return internal(m, "a mulDiv with a 0 divisor");
+  if (!u256_muldiv(&r, a[0]->word, a[1]->word, a[2]->word))
+    return constant(m, OP_NONE);
+  out = word_value(m, &r);
+  return out == NULL ? NULL : make(m, VAL_OP, OP_SOME, 0, 1, out, NULL, NULL);
 }
 
 /* hash x y (S2, R16): SHA-256 of the 64 packed bytes, x then y, each
@@ -1393,13 +1407,8 @@ static const Value *schnorr_ok(Machine *m, const Value *const *a, uint32_t n) {
   return flag(m, schnorr_verify(a[0]->word, &sig, a[3]->word, a[4]->word) == AUTH_OK);
 }
 
-/* An open curve or zk op: a trap argument gives the trap; else the
-   application is stuck. */
+/* An open curve or zk op: the application is stuck. */
 static const Value *opaque(Machine *m, Op op, const Value *const *a, uint32_t n) {
-  for (uint32_t i = 0; i < n; i++) {
-    if (a[i]->kind == VAL_TRAP)
-      return a[i];
-  }
   return val_op(m, VAL_STUCK, op, 0, 0, a, n);
 }
 
@@ -1409,9 +1418,10 @@ static int closed_point(const Value *v) {
 }
 
 /* ecAdd and ecMul (S8 B1, USER ruling Q1): closed arguments compute in the
-   host on secp256k1 (front/group.h, slice S4). A coordinate at or above p or
-   a point not on the curve traps like an overflow (R14, R18). An open
-   argument keeps the application stuck (opaque). */
+   host on secp256k1 (front/group.h, slice S4) and give some of the point. A
+   coordinate at or above p or a point not on the curve gives none (R14,
+   R18; S3 P4a, Q-S3-7). An open argument keeps the application stuck
+   (opaque). */
 static const Value *ec_op(Machine *m, Op op, const Value *const *a, uint32_t n) {
   GroupPoint p;
   GroupPoint q;
@@ -1420,16 +1430,16 @@ static const Value *ec_op(Machine *m, Op op, const Value *const *a, uint32_t n) 
   if (!closed_point(a[0]) || (op == OP_EC_ADD ? !closed_point(a[1]) : a[1]->kind != VAL_WORD))
     return opaque(m, op, a, n);
   if (!group_from_words(&p, a[0]->args[0]->word, a[0]->args[1]->word))
-    return overflow(m);
+    return constant(m, OP_NONE);
   if (op == OP_EC_ADD) {
     if (!group_from_words(&q, a[1]->args[0]->word, a[1]->args[1]->word))
-      return overflow(m);
+      return constant(m, OP_NONE);
     group_add(&p, &p, &q);
   } else {
     group_mul(&p, &p, a[1]->word);
   }
   group_to_words(&x, &y, &p);
-  return make(m, VAL_OP, OP_PAIR, 0, 2, word_value(m, &x), word_value(m, &y), NULL);
+  return some_of(m, make(m, VAL_OP, OP_PAIR, 0, 2, word_value(m, &x), word_value(m, &y), NULL));
 }
 
 /* The zk ops (S8 B2a): bLSAG over secp256k1 in the host (front/blsag.c).
@@ -1437,35 +1447,14 @@ static const Value *ec_op(Machine *m, Op op, const Value *const *a, uint32_t n) 
    (opaque). A ring that is empty or above BLSAG_RING_MAX members (O28), a
    point off the curve or with a coordinate at or above p (R14, R18), a
    signer key that is zero, at or above n or outside the ring, and a key
-   image off the curve trap. */
-
-/* The trap among the arguments, or NULL. */
-static const Value *trap_arg(const Value *const *a, uint32_t n) {
-  uint32_t i;
-  for (i = 0; i < n; i++) {
-    if (a[i]->kind == VAL_TRAP)
-      return a[i];
-  }
-  return NULL;
-}
-
-/* A trap in a point itself or either coordinate, or NULL. */
-static const Value *point_trap(const Value *v) {
-  if (v->kind == VAL_TRAP)
-    return v;
-  return val_is(v, OP_PAIR) ? trap_arg(v->args, 2u) : NULL;
-}
+   image off the curve give none (S3 P4a, Q-S3-7). */
 
 /* 1 when V is a closed word or point list (a cons chain to nil). Its
    elements go to ITEMS (at most CAP) and *COUNT gets its length, capped at
-   CAP + 1. A trap in the spine, an element or a point coordinate goes to
-   *TRAP; this must propagate rather than becoming an open application. */
-static int closed_list(const Value *v, const Value **items, uint32_t cap, uint32_t *count, const Value **trap) {
+   CAP + 1. */
+static int closed_list(const Value *v, const Value **items, uint32_t cap, uint32_t *count) {
   uint32_t k = 0;
   while (val_is(v, OP_CONS)) {
-    *trap = point_trap(v->args[0]);
-    if (*trap != NULL)
-      return 0;
     if (k < cap)
       items[k] = v->args[0];
     if (k <= cap)
@@ -1473,23 +1462,20 @@ static int closed_list(const Value *v, const Value **items, uint32_t cap, uint32
     v = v->args[1];
   }
   *count = k;
-  if (v->kind == VAL_TRAP)
-    *trap = v;
   return val_is(v, OP_NIL);
 }
 
 /* Reads the ring A[0] into RING and *COUNT. Else *OUT is the stuck
-   application (an open list or point) or the trap (a bad ring). */
+   application (an open list or point) or none (a bad ring). */
 static int zk_ring(Machine *m, Op op, const Value *const *a, uint32_t n, GroupPoint *ring, uint32_t *count, const Value **out) {
   const Value *items[BLSAG_RING_MAX + 1u];
   uint32_t i;
-  if (!closed_list(a[0], items, BLSAG_RING_MAX, count, out)) {
-    if (*out == NULL)
-      *out = opaque(m, op, a, n);
+  if (!closed_list(a[0], items, BLSAG_RING_MAX, count)) {
+    *out = opaque(m, op, a, n);
     return 0;
   }
   if (*count == 0 || *count > BLSAG_RING_MAX) {
-    *out = overflow(m);
+    *out = constant(m, OP_NONE);
     return 0;
   }
   for (i = 0; i < *count; i++) {
@@ -1500,7 +1486,7 @@ static int zk_ring(Machine *m, Op op, const Value *const *a, uint32_t n, GroupPo
   }
   for (i = 0; i < *count; i++) {
     if (!group_from_words(&ring[i], items[i]->args[0]->word, items[i]->args[1]->word)) {
-      *out = overflow(m);
+      *out = constant(m, OP_NONE);
       return 0;
     }
   }
@@ -1509,28 +1495,22 @@ static int zk_ring(Machine *m, Op op, const Value *const *a, uint32_t n, GroupPo
 
 /* zkHp P: the hash to point H_p(P). */
 static const Value *zk_hp(Machine *m, const Value *const *a, uint32_t n) {
-  const Value *out = point_trap(a[0]);
   GroupPoint p;
   GroupPoint h;
   U256 x;
   U256 y;
   uint32_t counter = 0;
-  if (out != NULL)
-    return out;
   if (!closed_point(a[0]))
     return opaque(m, OP_ZK_HP, a, n);
   if (!group_from_words(&p, a[0]->args[0]->word, a[0]->args[1]->word) || !blsag_hash_point(&h, &counter, &p))
-    return overflow(m);
+    return constant(m, OP_NONE);
   group_to_words(&x, &y, &h);
-  return make(m, VAL_OP, OP_PAIR, 0, 2, word_value(m, &x), word_value(m, &y), NULL);
+  return some_of(m, make(m, VAL_OP, OP_PAIR, 0, 2, word_value(m, &x), word_value(m, &y), NULL));
 }
 
 /* zkKey i: the test key hash(tag, i) mod n. */
 static const Value *zk_key(Machine *m, const Value *const *a, uint32_t n) {
-  const Value *out = trap_arg(a, n);
   U256 w;
-  if (out != NULL)
-    return out;
   if (a[0]->kind != VAL_NAT)
     return opaque(m, OP_ZK_KEY, a, n);
   blsag_key(&w, a[0]->nat);
@@ -1539,127 +1519,42 @@ static const Value *zk_key(Machine *m, const Value *const *a, uint32_t n) {
 
 /* zkDigest ring: the ring digest D. */
 static const Value *zk_digest(Machine *m, const Value *const *a, uint32_t n) {
-  const Value *out = trap_arg(a, n);
+  const Value *out = NULL;
   GroupPoint ring[BLSAG_RING_MAX];
   U256 d;
   uint32_t count = 0;
-  if (out != NULL)
-    return out;
   if (!zk_ring(m, OP_ZK_DIGEST, a, n, ring, &count, &out))
     return out;
   blsag_digest(&d, ring, count);
-  return word_value(m, &d);
+  return some_of(m, word_value(m, &d));
 }
 
 /* zkSign ring x pollId choice: the list c_1, s_1 to s_n, I.x, I.y. */
 static const Value *zk_sign(Machine *m, const Value *const *a, uint32_t n) {
-  const Value *out = trap_arg(a, n);
+  const Value *out = NULL;
   GroupPoint ring[BLSAG_RING_MAX];
   U256 sig[BLSAG_RING_MAX + 3u];
   uint32_t count = 0;
   uint32_t i;
-  if (out != NULL)
-    return out;
   if (a[1]->kind != VAL_WORD || a[2]->kind != VAL_WORD || a[3]->kind != VAL_WORD)
     return opaque(m, OP_ZK_SIGN, a, n);
   if (!zk_ring(m, OP_ZK_SIGN, a, n, ring, &count, &out))
     return out;
   if (!blsag_sign(sig, ring, count, a[1]->word, a[2]->word, a[3]->word))
-    return overflow(m);
+    return constant(m, OP_NONE);
   out = constant(m, OP_NIL);
   for (i = count + 3u; i > 0; i--)
     out = make(m, VAL_OP, OP_CONS, 0, 2, word_value(m, &sig[i - 1u]), out, NULL);
-  return out;
+  return some_of(m, out);
 }
 
-static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, const Value *const *a, uint32_t n);
-
-/* A GroupPoint as a closed pair of words. */
-static const Value *zk_point_value(Machine *m, const GroupPoint *p) {
-  U256 x;
-  U256 y;
-  group_to_words(&x, &y, p);
-  return make(m, VAL_OP, OP_PAIR, 0, 2, word_value(m, &x), word_value(m, &y), NULL);
-}
-
-/* One node of the verifier term through the reducer of its op, so a closed
-   node computes in the host and an open node stays stuck. */
-static const Value *zk_node(Machine *m, Op op, const Value *a, const Value *b, const Value *c) {
-  const Value *args[3];
-  args[0] = a;
-  args[1] = b;
-  args[2] = c;
-  return reduce_op(m, op, 0, 0, args, c != NULL ? 3u : b != NULL ? 2u : 1u);
-}
-
-/* The verifier term of a stuck zkVerify with a closed ring (S8 B3a, Q-B3
-   ruling (a)): blsag_verify unrolled for n over ecAdd, ecMul, hash, u256Le,
-   u256Eq, first, second, pair and flagIf, so the lowering emits 6n precompile
-   calls. The ring points, the H_i table, D, the tag and r minus 1 are closed
-   words of the term. The chain is the challenge fold of front/blsag.c: tag,
-   D, poll id, choice, I.x, I.y, L.x, L.y, R.x, R.y. ITEMS holds c_1, s_1 to
-   s_n, I.x, I.y. */
-static const Value *zk_unroll(Machine *m, const GroupPoint *ring, uint32_t n, const Value *poll, const Value *choice, const Value *const *items) {
-  U256 w;
-  U256 v;
-  GroupPoint h;
-  uint32_t counter = 0;
-  uint32_t i;
-  const Value *g;
-  const Value *tag;
-  const Value *d;
-  const Value *zero;
-  const Value *rmax;
-  const Value *img;
-  const Value *c;
-  const Value *out;
-  group_gen(&h);
-  group_to_words(&w, &v, &h);
-  g = make(m, VAL_OP, OP_PAIR, 0, 2, word_value(m, &w), word_value(m, &v), NULL);
-  tag = word_value(m, &BLSAG_TAG);
-  blsag_digest(&w, ring, n);
-  d = word_value(m, &w);
-  u256_from_u64(&w, 0u);
-  zero = word_value(m, &w);
-  for (i = 0; i < 4u; i++)
-    w.limb[i] = (uint64_t)GROUP_N.w[2u * i] | ((uint64_t)GROUP_N.w[2u * i + 1u] << 32);
-  u256_from_u64(&v, 1u);
-  u256_sub(&w, &w, &v);
-  rmax = word_value(m, &w);
-  img = make(m, VAL_OP, OP_PAIR, 0, 2, items[n + 1u], items[n + 2u], NULL);
-  c = items[0];
-  for (i = 0; i < n; i++) {
-    const Value *s = items[1u + i];
-    const Value *l;
-    const Value *r;
-    if (!blsag_hash_point(&h, &counter, &ring[i]))
-      return overflow(m);
-    l = zk_node(m, OP_EC_ADD, zk_node(m, OP_EC_MUL, g, s, NULL), zk_node(m, OP_EC_MUL, zk_point_value(m, &ring[i]), c, NULL), NULL);
-    r = zk_node(m, OP_EC_ADD, zk_node(m, OP_EC_MUL, zk_point_value(m, &h), s, NULL), zk_node(m, OP_EC_MUL, img, c, NULL), NULL);
-    c = zk_node(m, OP_HASH, tag, d, NULL);
-    c = zk_node(m, OP_HASH, c, poll, NULL);
-    c = zk_node(m, OP_HASH, c, choice, NULL);
-    c = zk_node(m, OP_HASH, c, items[n + 1u], NULL);
-    c = zk_node(m, OP_HASH, c, items[n + 2u], NULL);
-    c = zk_node(m, OP_HASH, c, zk_node(m, OP_FIRST, l, NULL, NULL), NULL);
-    c = zk_node(m, OP_HASH, c, zk_node(m, OP_SECOND, l, NULL, NULL), NULL);
-    c = zk_node(m, OP_HASH, c, zk_node(m, OP_FIRST, r, NULL, NULL), NULL);
-    c = zk_node(m, OP_HASH, c, zk_node(m, OP_SECOND, r, NULL, NULL), NULL);
-  }
-  out = zk_node(m, OP_FLAG_IF, zk_node(m, OP_U256_EQ, items[n + 2u], zero, NULL), flag(m, 0), flag(m, 1));
-  out = zk_node(m, OP_FLAG_IF, zk_node(m, OP_U256_EQ, items[n + 1u], zero, NULL), out, flag(m, 1));
-  for (i = n; i > 0; i--)
-    out = zk_node(m, OP_FLAG_IF, zk_node(m, OP_U256_LE, items[i], rmax, NULL), out, flag(m, 0));
-  return zk_node(m, OP_FLAG_IF, zk_node(m, OP_U256_EQ, c, items[0], NULL), out, flag(m, 0));
-}
-
-/* zkVerify ring pollId choice sig: flagYes when the chain closes, each s_i
-   is below r and I is not (0, 0). A list of another length than n + 3 is
-   flagNo. An open poll id, choice or signature word with a closed ring of
-   the right length gives the unrolled verifier term (zk_unroll); any other
-   open call stays stuck. */
+/* zkVerify ring pollId choice sig: some flagYes when the chain closes, each
+   s_i is below r and I is not (0, 0). A list of another length than n + 3
+   is some flagNo. A bad ring and BLSAG_NONE give none (S3 P4a, Q-S3-13
+   (a)). An open poll id, choice or signature word keeps the call stuck
+   (Q-S3-12 (a): no unrolled verifier term). */
 static const Value *zk_verify(Machine *m, const Value *const *a, uint32_t n) {
-  const Value *out = trap_arg(a, n);
+  const Value *out = NULL;
   const Value *items[BLSAG_RING_MAX + 4u];
   GroupPoint ring[BLSAG_RING_MAX];
   U256 sig[BLSAG_RING_MAX + 3u];
@@ -1667,31 +1562,29 @@ static const Value *zk_verify(Machine *m, const Value *const *a, uint32_t n) {
   uint32_t len = 0;
   uint32_t i;
   int open = 0;
-  if (out != NULL)
-    return out;
   if (a[1]->kind != VAL_WORD || a[2]->kind != VAL_WORD)
     open = 1;
-  if (!closed_list(a[3], items, BLSAG_RING_MAX + 3u, &len, &out))
-    return out != NULL ? out : opaque(m, OP_ZK_VERIFY, a, n);
+  if (!closed_list(a[3], items, BLSAG_RING_MAX + 3u, &len))
+    return opaque(m, OP_ZK_VERIFY, a, n);
   for (i = 0; i < len && i < BLSAG_RING_MAX + 3u; i++) {
     if (items[i]->kind != VAL_WORD)
       open = 1;
   }
   if (!zk_ring(m, OP_ZK_VERIFY, a, n, ring, &count, &out))
     return open ? opaque(m, OP_ZK_VERIFY, a, n) : out;
-  if (len != count + 3u)
-    return open ? opaque(m, OP_ZK_VERIFY, a, n) : flag(m, 0);
   if (open)
-    return zk_unroll(m, ring, count, a[1], a[2], items);
+    return opaque(m, OP_ZK_VERIFY, a, n);
+  if (len != count + 3u)
+    return some_of(m, flag(m, 0));
   for (i = 0; i < len; i++)
     sig[i] = *items[i]->word;
   switch (blsag_verify(ring, count, a[1]->word, a[2]->word, sig)) {
   case BLSAG_ACCEPT:
-    return flag(m, 1);
+    return some_of(m, flag(m, 1));
   case BLSAG_REJECT:
-    return flag(m, 0);
-  case BLSAG_TRAP:
-    return overflow(m);
+    return some_of(m, flag(m, 0));
+  case BLSAG_NONE:
+    return constant(m, OP_NONE);
   }
   return internal(m, "an unknown bLSAG verdict");
 }
@@ -1807,9 +1700,6 @@ static int zk_member_ring(GroupPoint *ring, uint64_t card) {
 /* zkCast M C m c stores its arguments, even under binders. Only zkProve
    needs their closed finite encoding; zkProject just reads the choice. */
 static const Value *zk_cast(Machine *m, const Value *const *a, uint32_t n) {
-  const Value *out = trap_arg(a, n);
-  if (out != NULL)
-    return out;
   return val_op(m, VAL_OP, OP_ZK_CAST, 0, 0, a, n);
 }
 
@@ -1825,56 +1715,51 @@ ZkWitnessVerdict zk_witness(Machine *m, const Value *b, const U256 *poll, U256 *
   if (!val_is(b, OP_ZK_CAST) || !zk_card(m, b->args[0], &card) || !zk_index(m, b->args[0], b->args[2], &member) || !zk_index(m, b->args[1], b->args[3], &index))
     return ZK_WITNESS_OPEN;
   if (!zk_member_ring(ring, card))
-    return ZK_WITNESS_TRAP;
+    return ZK_WITNESS_NONE;
   blsag_key(&key, member);
   u256_from_u64(choice, index);
   if (!blsag_sign(sig, ring, (uint32_t)card, &key, poll, choice))
-    return ZK_WITNESS_TRAP;
+    return ZK_WITNESS_NONE;
   *n = (uint32_t)card;
   return ZK_WITNESS_OK;
 }
 
 /* zkProve b: the witness of a canonical ballot, the word list poll id 0,
-   c_1, s_1 to s_n, I.x, I.y (n + 4 words). A sign failure is overflow; an
-   open b is stuck. */
+   c_1, s_1 to s_n, I.x, I.y (n + 4 words), as some. A sign failure gives
+   none (S3 P4a); an open b is stuck. */
 static const Value *zk_prove(Machine *m, const Value *const *a, uint32_t n) {
-  const Value *out = trap_arg(a, n);
+  const Value *out = NULL;
   U256 poll;
   U256 choice;
   U256 sig[BLSAG_RING_MAX + 3u];
   uint32_t card = 0;
   uint32_t i;
-  if (out != NULL)
-    return out;
   u256_from_u64(&poll, 0u);
   switch (zk_witness(m, a[0], &poll, &choice, sig, &card)) {
   case ZK_WITNESS_OPEN:
     return opaque(m, OP_ZK_PROVE, a, n);
-  case ZK_WITNESS_TRAP:
-    return overflow(m);
+  case ZK_WITNESS_NONE:
+    return constant(m, OP_NONE);
   case ZK_WITNESS_OK:
     break;
   }
   out = constant(m, OP_NIL);
   for (i = card + 3u; i > 0; i--)
     out = make(m, VAL_OP, OP_CONS, 0, 2, word_value(m, &sig[i - 1u]), out, NULL);
-  return make(m, VAL_OP, OP_CONS, 0, 2, word_value(m, &poll), out, NULL);
+  return some_of(m, make(m, VAL_OP, OP_CONS, 0, 2, word_value(m, &poll), out, NULL));
 }
 
 /* zkProject C b: the choice of a canonical ballot. */
 static const Value *zk_project(Machine *m, const Value *const *a, uint32_t n) {
-  const Value *out = trap_arg(a, n);
-  if (out != NULL)
-    return out;
   return val_is(a[1], OP_ZK_CAST) ? a[1]->args[3] : opaque(m, OP_ZK_PROJECT, a, n);
 }
 
-/* zkCheck M C w c: the type Unit when the host accepts the witness w (poll
-   id w[0], then the n + 3 signature words) for the member ring of M and
-   the choice c. Stuck, so neutral, when a word is open, the length is not
-   n + 4 or the host rejects; a bad ring or key image is overflow. */
+/* zkCheck M C w c: some of the type Unit when the host accepts the witness
+   w (poll id w[0], then the n + 3 signature words) for the member ring of
+   M and the choice c. Stuck, so neutral, when a word is open, the length
+   is not n + 4 or the host rejects; a bad ring or key image gives none
+   (S3 P4a, Q-S3-14 (b)). */
 static const Value *zk_check(Machine *m, const Value *const *a, uint32_t n) {
-  const Value *out = trap_arg(a, n);
   const Value *items[BLSAG_RING_MAX + 5u];
   GroupPoint ring[BLSAG_RING_MAX];
   U256 choice;
@@ -1883,10 +1768,8 @@ static const Value *zk_check(Machine *m, const Value *const *a, uint32_t n) {
   uint64_t index;
   uint32_t len = 0;
   uint32_t i;
-  if (out != NULL)
-    return out;
-  if (!closed_list(a[2], items, BLSAG_RING_MAX + 4u, &len, &out))
-    return out != NULL ? out : opaque(m, OP_ZK_CHECK, a, n);
+  if (!closed_list(a[2], items, BLSAG_RING_MAX + 4u, &len))
+    return opaque(m, OP_ZK_CHECK, a, n);
   for (i = 0; i < len && i < BLSAG_RING_MAX + 4u; i++) {
     if (items[i]->kind != VAL_WORD)
       return opaque(m, OP_ZK_CHECK, a, n);
@@ -1896,17 +1779,17 @@ static const Value *zk_check(Machine *m, const Value *const *a, uint32_t n) {
   if (card == 0 || card > BLSAG_RING_MAX || len != (uint32_t)card + 4u)
     return opaque(m, OP_ZK_CHECK, a, n);
   if (!zk_member_ring(ring, card))
-    return overflow(m);
+    return constant(m, OP_NONE);
   u256_from_u64(&choice, index);
   for (i = 0; i < (uint32_t)card + 3u; i++)
     sig[i] = *items[i + 1u]->word;
   switch (blsag_verify(ring, (uint32_t)card, items[0]->word, &choice, sig)) {
   case BLSAG_ACCEPT:
-    return constant(m, OP_UNIT);
+    return some_of(m, constant(m, OP_UNIT));
   case BLSAG_REJECT:
     return opaque(m, OP_ZK_CHECK, a, n);
-  case BLSAG_TRAP:
-    return overflow(m);
+  case BLSAG_NONE:
+    return constant(m, OP_NONE);
   }
   return internal(m, "an unknown bLSAG verdict");
 }
@@ -1919,8 +1802,6 @@ static const Value *fin_add(Machine *m, const Value *const *a, uint32_t n) {
   uint64_t y = 0;
   if (!nat_args(m, OP_FIN_ADD, a, n, &k, &x, &out))
     return out;
-  if (a[2]->kind == VAL_TRAP)
-    return a[2];
   if (blocked(m, a[2], OP_FIN_ADD, 0, 0, a, n, &out))
     return out;
   if (a[2]->kind != VAL_NAT)
@@ -2480,6 +2361,7 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_U256:
   case OP_ADDR:
   case OP_KMAP:
+  case OP_NONZERO:
     return base;
   case OP_ZK_BALLOT: {
     const Value *start = line_at(m, line, val_iend(m, 0));
@@ -2565,6 +2447,7 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_FLAG_IF:
   case OP_U256_ADD:
   case OP_U256_SUB:
+  case OP_U256_MUL:
   case OP_U256_LE:
   case OP_U256_EQ:
   case OP_TO_U256:
@@ -2600,6 +2483,10 @@ static const Value *transp_data(Machine *m, const Value *head, const Value *line
   case OP_NAT_IS_SET:
   case OP_U256_IS_SET:
   case OP_FLAG_IS_SET:
+  case OP_OPT_NAT_IS_SET:
+  case OP_NONZERO_OF:
+  case OP_NONZERO_VALUE:
+  case OP_MUL_DIV:
     return internal(m, "a transport along a line that is not a type");
   }
   return transp_stuck(m, line, phi, base);
@@ -2627,7 +2514,7 @@ static const Value *transp(Machine *m, const Value *line, const Value *phi, cons
   if (face == NULL)
     return NULL;
   /* Rule 1: phi is true. */
-  if (ival_is_end(face, 1) || base->kind == VAL_TRAP)
+  if (ival_is_end(face, 1))
     return base;
   head = line_head(m, line);
   if (head == NULL)
@@ -2641,8 +2528,6 @@ static const Value *transp(Machine *m, const Value *line, const Value *phi, cons
     return kan_closure(m, VAL_LAM, CLOS_TRANSP_PI, 0, 3, line, face, base);
   case VAL_SIGMA: /* rule 6 */
     return transp_sigma(m, line, face, base);
-  case VAL_TRAP:
-    return head;
   case VAL_NAT:
   case VAL_WORD:
   case VAL_LAM:
@@ -2932,8 +2817,6 @@ static const Value *hcomp(Machine *m, const Value *ty, const Value *phi, const V
   face = face_norm(m, phi);
   if (face == NULL)
     return NULL;
-  if (base->kind == VAL_TRAP)
-    return base;
   /* In U a true key goes to hcomp_univ, so that its Glue makes the record
      that transp at Glue reads at an end. */
   if (ival_is_end(face, 1) && ty->kind != VAL_UNIV)
@@ -2951,8 +2834,6 @@ static const Value *hcomp(Machine *m, const Value *ty, const Value *phi, const V
     return hcomp_data(m, ty, face, sys, base);
   case VAL_UNIV:
     return hcomp_univ(m, face, sys, base);
-  case VAL_TRAP:
-    return ty;
   case VAL_NAT:
   case VAL_WORD:
   case VAL_LAM:
@@ -3055,14 +2936,12 @@ static const Value *reduce_glue_elem(Machine *m, const Value *const *a, uint32_t
   return glue_true(m, a[1], &branch) ? branch : glue_op(m, VAL_OP, OP_GLUE_ELEM, a, n, 0);
 }
 
-/* unglue A phi sys g. A trap g gives the trap. A true key gives witness e
+/* unglue A phi sys g. A true key gives witness e
    g, with e the payload of its branch pack T e. Test this first: its
    branch type may itself be Glue, with a glue constructor for g. Else
    unglue (glue sys a) is a, and a neutral g leaves unglue stuck. */
 static const Value *reduce_unglue(Machine *m, const Value *const *a, uint32_t n) {
   const Value *branch = NULL;
-  if (a[3]->kind == VAL_TRAP)
-    return a[3];
   if (glue_true(m, a[2], &branch))
     return apply_value(m, sigma_part(m, sigma_part(m, branch, 1), 0), a[3]);
   if (val_is(a[3], OP_GLUE_ELEM) && a[3]->argc == 3u)
@@ -3233,7 +3112,6 @@ static const Value *val_isubst(Machine *m, const Value *v, uint32_t level, const
   case VAL_NAT:
   case VAL_WORD:
   case VAL_VAR:
-  case VAL_TRAP:
     break;
   case VAL_OP:
   case VAL_STUCK:
@@ -3500,6 +3378,7 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_PACK:
   case OP_KMAP:
   case OP_KMAP_OF:
+  case OP_NONZERO:
     return val_op(m, VAL_OP, op, inst, field, a, n);
   case OP_CTOR:
     return reduce_ctor(m, inst, field, a, n);
@@ -3556,6 +3435,8 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
     return u256_arith(m, op, a, n, u256_add);
   case OP_U256_SUB:
     return u256_arith(m, op, a, n, u256_sub);
+  case OP_U256_MUL:
+    return u256_arith(m, op, a, n, u256_mul);
   case OP_U256_LE:
   case OP_U256_EQ:
   case OP_ADDR_EQ:
@@ -3565,6 +3446,12 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_NAT_DIV:
   case OP_NAT_MOD:
     return nat_divmod(m, op, a, n);
+  case OP_NONZERO_OF:
+    return nonzero_of(m, a, n);
+  case OP_NONZERO_VALUE:
+    return nonzero_value(m, a, n);
+  case OP_MUL_DIV:
+    return mul_div(m, a, n);
   case OP_HASH:
     return hash_words(m, a, n);
   case OP_ADDR_TO_U256:
@@ -3595,6 +3482,7 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_NAT_IS_SET: /* S5: a trusted constant has no rule, so it stays stuck */
   case OP_U256_IS_SET:
   case OP_FLAG_IS_SET:
+  case OP_OPT_NAT_IS_SET:
     return val_op(m, VAL_STUCK, op, 0, 0, a, n);
   case OP_FLAG_IF:
     return reduce_flag_if(m, a, n);
@@ -3656,8 +3544,6 @@ static const Value *eval_inner(Machine *m, const Env *env, const Core *c) {
     return val_nat(m, c->nat);
   case CORE_WORD:
     return val_word(m, c->nat, c->word);
-  case CORE_TRAP:
-    return val_trap(m);
   case CORE_UNIV:
     return val_univ(m, c->nat);
   case CORE_LAM:
@@ -3776,8 +3662,6 @@ static int conv_loop(Machine *m, uint32_t level, const Value *a, const Value *b)
     case VAL_UNIV:
     case VAL_VAR:
       return a->nat == b->nat;
-    case VAL_TRAP:
-      return 1;
     case VAL_LAM:
     case VAL_PLAM:
       return 0;
@@ -3999,8 +3883,6 @@ static const Core *quote_inner(Machine *m, uint32_t level, const Value *v) {
     return core_leaf(m, CORE_NAT, v->nat);
   case VAL_WORD:
     return core_word(m, v);
-  case VAL_TRAP:
-    return core_leaf(m, CORE_TRAP, 0);
   case VAL_UNIV:
     return core_leaf(m, CORE_UNIV, v->nat);
   case VAL_VAR:
@@ -4182,7 +4064,6 @@ static void print_binder(Printer *p, const Value *v) {
     break;
   case VAL_NAT:
   case VAL_WORD:
-  case VAL_TRAP:
   case VAL_UNIV:
   case VAL_OP:
   case VAL_VAR:
@@ -4309,9 +4190,6 @@ static void print_other(Printer *p, const Value *v, int atom) {
     word_text(v->nat, v->word, num, sizeof num);
     put(p, num);
     return;
-  case VAL_TRAP:
-    put(p, "trap");
-    return;
   case VAL_VAR:
     put(p, var_name(p, v->nat));
     return;
@@ -4358,7 +4236,6 @@ static void print_other(Printer *p, const Value *v, int atom) {
     break;
   case VAL_NAT:
   case VAL_WORD:
-  case VAL_TRAP:
   case VAL_VAR:
   case VAL_OP:
   case VAL_STUCK:

@@ -57,16 +57,17 @@ static const char dao_source[] =
    internal carriers ZkBallot and ZkWitness, after Member, Choice and the
    DAO prelude (Tally present means the prelude is in). The member and the
    choice go to the host by constructor index, the poll id is 0, and
-   verifyZK leaves t unread in S8. */
+   verifyZK leaves t unread in S8. proveZK gives an Option ZKWitness and
+   verifyZK an Option (Type 0) (S3 P4a, Q-S3-14 (b)). */
 #define ZK_SOURCE_NAME "kernel/zk.lang"
 
 static const char zk_source[] =
   "def Ballot_priv : Type 0 := ZkBallot Choice\n"
   "def ZKWitness : Type 0 := ZkWitness\n"
   "def castPrivate : Member -> Choice -> Ballot_priv := fun (m : Member) (c : Choice) => zkCast Member Choice m c\n"
-  "def proveZK : Ballot_priv -> ZKWitness := fun (b : Ballot_priv) => zkProve b\n"
+  "def proveZK : Ballot_priv -> Option ZKWitness := fun (b : Ballot_priv) => zkProve b\n"
   "def project : Ballot_priv -> Choice := fun (b : Ballot_priv) => zkProject Choice b\n"
-  "def verifyZK : ZKWitness -> Choice -> Tally -> Type 0 := fun (w : ZKWitness) (c : Choice) (t : Tally) => zkCheck Member Choice w c\n";
+  "def verifyZK : ZKWitness -> Choice -> Tally -> Option (Type 0) := fun (w : ZKWitness) (c : Choice) (t : Tally) => zkCheck Member Choice w c\n";
 
 /* The first definition or family named NAME in OUT from FIRST on, or
    OUT->count. */
