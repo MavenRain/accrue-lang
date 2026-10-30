@@ -724,6 +724,18 @@ int main(void) {
   ok &= domain("def f : Nat -> Nat := fun x => natAdd x 1", "REFUSE_PARTIAL");
   ok &= domain("def q : Nat := natDiv 7 0", "REFUSE_PARTIAL");
   ok &= guest("def f : Sum Unit Unit -> Sum Unit Unit := fun c => tail c", "REFUSE_PARTIAL");
+  /* S4: REFUSE_CLOCK (Q-S4-1 (a)) for a declaration, each kind of binder
+     and a use, in the domain file and in a guest program. time, epoch
+     and stamp stay free names. */
+  ok &= domain("def now : Nat := 0", "REFUSE_CLOCK");
+  ok &= domain("def bad : (block : Nat) -> Nat := fun x => x", "REFUSE_CLOCK");
+  ok &= domain("def bad : Nat -> Nat := fun clock => clock", "REFUSE_CLOCK");
+  ok &= domain("def bad : Path Nat 0 0 := fun (timestamp : I) => 0", "REFUSE_CLOCK");
+  ok &= domain("family Test (clock : Type 0) := makeTest (payload : clock)", "REFUSE_CLOCK");
+  ok &= domain("def bad : Nat := timestamp", "REFUSE_CLOCK");
+  ok &= guest("def bad : Sum Unit Unit -> Sum Unit Unit := fun now => now", "REFUSE_CLOCK");
+  ok &= domain("def keep : Nat -> Nat -> Nat := fun time epoch => time", NULL);
+  ok &= domain("def stamp : Nat := 0", NULL);
   if (ok) puts("domain regressions: passed");
   return ok ? 0 : 1;
 }

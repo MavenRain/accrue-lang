@@ -1,0 +1,2 @@
+-- REFUSE_CLOCK (S4, Q-S4-1 (a)) in a guest program: a binder cannot take a clock word.
+def keep : Sum Unit Unit -> Sum Unit Unit := fun clock => clock

@@ -9,7 +9,9 @@
    key signs. The message is the head of the empty record (hash tagGenesis
    0) and the entry 42. The seeds are fixed for reproducible vectors only.
    With the argument `words` it also prints the closed Auth words of
-   examples/append.lang (slice S7 b5), one `name 0x<word>` per line. */
+   examples/append.lang (slice S7 b5), one `name 0x<word>` per line. With
+   the argument `stamps` it prints the stamp words of examples/stamps.lang
+   (slice S4, Q-S4-3 (a)) in the same form. */
 #include <stdio.h>
 #include <string.h>
 
@@ -128,6 +130,69 @@ static AuthResult session(AuthSig *sig, AuthCommit *list, AuthShare *zs, const T
       return r;
   }
   return frost_aggregate(sig, &at, zs, list, k, keys, t, n, pk, head, e);
+}
+
+/* The stamp tags of domain/domain.lang (slice S4): the ASCII bytes of
+   "accrue-stamp" and "accrue-stamp-genesis" as a big-endian U256. */
+static void stamp_tags(U256 *tag, U256 *genesis) {
+  u256_from_u64(tag, 0x75652d7374616d70ull);
+  tag->limb[1] = 0x61636372ull;
+  u256_from_u64(genesis, 0x2d67656e65736973ull);
+  genesis->limb[1] = 0x75652d7374616d70ull;
+  genesis->limb[2] = 0x61636372ull;
+}
+
+/* One stamp of examples/stamps.lang: a session of members 1 and 2 of the
+   2 of 3 committee SHARES (KEYS) under PK on the message (PREV, T), with
+   the seeds from SEED. It prints R_NAME and Z_NAME and puts the
+   signature in SIG. 0 when the session or the check fails. */
+static int stamp(const char *r_name, const char *z_name, AuthSig *sig, const ThrShare *shares, const GroupPoint *keys, const GroupPoint *pk, const U256 *px, const U256 *prev, uint64_t t, uint64_t seed) {
+  static const uint32_t pair[2] = {1u, 2u};
+  AuthCommit list[THR_N_MAX];
+  AuthShare zs[THR_N_MAX];
+  U256 e;
+  u256_from_u64(&e, t);
+  if (session(sig, list, zs, shares, pair, 2u, keys, 2u, 3u, pk, prev, &e, seed) != AUTH_OK || schnorr_verify(px, sig, prev, &e) != AUTH_OK)
+    return fail(r_name);
+  word(r_name, &sig->rx);
+  word(z_name, &sig->z);
+  return 1;
+}
+
+/* The stamp words (slice S4, Q-S4-3 (a)): the key, the head g0 of the
+   empty chain (hash tagStampGenesis 0), the head h1 after s1 (H3 tagStamp
+   g0 5) and the signatures of the keyAppend committee. s1 (5, g0) and s2
+   (9, h1) are the good stamps. sOld (3, h1), sSame (5, h1) and sPrev (9,
+   g0) have a good signature on their own message, so only one check of
+   stampOk refuses each. s1ZBad is the z of s1 plus 1. */
+static int stamp_words(const ThrShare *shares, const GroupPoint *keys, const GroupPoint *pk, const U256 *px) {
+  U256 tag;
+  U256 genesis;
+  U256 zero;
+  U256 one;
+  U256 five;
+  U256 g0;
+  U256 h1;
+  U256 z_bad;
+  AuthSig s1;
+  AuthSig x;
+  stamp_tags(&tag, &genesis);
+  u256_from_u64(&zero, 0u);
+  u256_from_u64(&one, 1u);
+  u256_from_u64(&five, 5u);
+  thr_hash(&g0, &genesis, &zero);
+  thr_hash(&h1, &tag, &g0);
+  thr_hash(&h1, &h1, &five);
+  word("stampKey", px);
+  word("g0", &g0);
+  word("h1", &h1);
+  if (!(stamp("s1R", "s1Z", &s1, shares, keys, pk, px, &g0, 5u, 400u) && stamp("s2R", "s2Z", &x, shares, keys, pk, px, &h1, 9u, 410u)
+        && stamp("sOldR", "sOldZ", &x, shares, keys, pk, px, &h1, 3u, 420u) && stamp("sSameR", "sSameZ", &x, shares, keys, pk, px, &h1, 5u, 430u)
+        && stamp("sPrevR", "sPrevZ", &x, shares, keys, pk, px, &g0, 9u, 440u)))
+    return 0;
+  u256_add(&z_bad, &s1.z, &one);
+  word("s1ZBad", &z_bad);
+  return 1;
 }
 
 int main(int argc, char **argv) {
@@ -253,6 +318,8 @@ int main(int argc, char **argv) {
         & expect("the 3 of 4 key verifies", schnorr_verify(&px, &sig_t, &head, &e), AUTH_OK);
   if (!ok)
     return 1;
+  if (argc == 2 && strcmp(argv[1], "stamps") == 0)
+    return stamp_words(old, old_keys, &pk, &px) ? 0 : 1;
   if (argc == 2 && strcmp(argv[1], "words") == 0) {
     u256_add(&z_bad, &sig_a.z, &one);
     word("key", &px);

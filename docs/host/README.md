@@ -71,6 +71,7 @@ The compiler enforces these rules:
 | R1 | `REFUSE_DATA` | a `family` declaration in a program |
 | R2 | `REFUSE_AXIOM` | an `axiom` declaration |
 | R3 | `REFUSE_REC` | `def rec`, or a definition that refers to itself or to a later definition |
+| Time | `REFUSE_CLOCK` | a clock word (`now`, `block`, `timestamp`, `clock`) as a name or a use; the message says to take the time as a `Stamp` argument (PLAN section 5) |
 | R4 | `REFUSE_NAME` | a core name, a domain name, a reserved name or a repeated name as a new definition |
 
 ## CLI

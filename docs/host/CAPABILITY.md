@@ -35,6 +35,9 @@ on 2026-10-08 on AArch64 Darwin.
   `REFUSE_PARTIAL`: use `option` or `bind`. The literal 0 where a
   `NonZero` is wanted also gives `REFUSE_PARTIAL`: use `nonZero`
   (Q-S3-1, Q-S3-8, Q-S3-21).
+- A clock word (`now`, `block`, `timestamp` or `clock`) as a declaration,
+  a binder or a use gives `REFUSE_CLOCK`. A program reads time only as a
+  `Stamp` argument (PLAN section 5, Q-S4-1).
 - There is no text type. The lexer refuses `"` (`test/parse/string.lang`).
 - The Wasm writer (`src/wasm.c`, `src/front/lower.c`, `src/ir.h`) is out
   of the build until S8. S8 replaces it. Rule N4 in `docs/PLAN.md`: a

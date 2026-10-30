@@ -195,3 +195,7 @@ partial-option-kit.lang REFUSE_PARTIAL
 partial-option-arg-kit.lang REFUSE_PARTIAL
 partial-zero-kit.lang REFUSE_PARTIAL
 partial-zero-word-kit.lang REFUSE_PARTIAL
+clock-now.lang REFUSE_CLOCK
+clock-block.lang REFUSE_CLOCK
+clock-timestamp.lang REFUSE_CLOCK
+clock-clock.lang REFUSE_CLOCK

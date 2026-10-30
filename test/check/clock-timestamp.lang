@@ -1,0 +1,2 @@
+-- REFUSE_CLOCK (S4, Q-S4-1 (a)): no name can use a clock word.
+def late : Nat := timestamp

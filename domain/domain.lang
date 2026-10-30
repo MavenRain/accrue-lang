@@ -296,6 +296,39 @@ def authOk : Polity -> Auth -> Entry -> Record -> Verdict :=
       (fun (rx : U256) (z : U256) => schnorrOk (keyAppend s) rx z (head r) e) a
 def append : Polity -> Auth -> Entry -> Record -> Option Record :=
   fun (s : Polity) (a : Auth) (e : Entry) (r : Record) => flagIf (authOk s a e r) (some (snoc e r)) none
+-- The stamp chain (S4, Q-S4-2 to Q-S4-4 (a)). No program can read a clock
+-- (REFUSE_CLOCK), so a time comes in only as a Stamp argument. A Stamp
+-- holds the time t, the head prev of the chain before it and a threshold
+-- Schnorr signature (R.x, z) on the message (prev, toU256 t), as an Auth.
+-- The tags are the ASCII bytes of "accrue-stamp" and
+-- "accrue-stamp-genesis" as a big-endian U256. stampHead c runs H3 with
+-- tagStamp over the times of c from the stamp genesis digest. lastT c is
+-- the time of the last stamp of c, or none for the empty chain. later t o
+-- is verdictYes when o is none or t is above the time in o. stampSnoc
+-- key s c puts s at the end of c only when prev is the head of c, t is
+-- later than the last time of c and the signature holds under key, else
+-- it gives none. The first stamp needs only a good signature and prev =
+-- the stamp genesis digest.
+def Time : Type 0 := Nat
+family Stamp := stampOf (stampT : Time) (stampPrev : Digest) (stampR : U256) (stampZ : U256)
+def Stamps : Type 0 := FreeMon Stamp
+def tagStamp : Digest := 0x6163637275652d7374616d70u
+def tagStampGenesis : Digest := 0x6163637275652d7374616d702d67656e65736973u
+def stampStep : Digest -> Stamp -> Digest :=
+  fun (h : Digest) (s : Stamp) => elim (fun (u : Stamp) => Digest) (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => H3 tagStamp h (toU256 t)) s
+def stampHead : Stamps -> Digest :=
+  fun (c : Stamps) => fmChain Stamp Digest u256IsSet stampStep (hash tagStampGenesis 0u) c
+def lastT : Stamps -> Option Time :=
+  fun (c : Stamps) => fmChain Stamp (Option Nat) optNatIsSet
+    (fun (o : Option Nat) (s : Stamp) => elim (fun (u : Stamp) => Option Nat) (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => some t) s) none c
+def later : Time -> Option Time -> Verdict :=
+  fun (t : Time) (o : Option Time) => option flagYes (fun (k : Time) => flagIf (natLe t k) flagNo flagYes) o
+def stampOk : Point -> Stamp -> Stamps -> Verdict :=
+  fun (key : Point) (s : Stamp) (c : Stamps) =>
+    elim (fun (u : Stamp) => Flag)
+      (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => flagIf (u256Eq prev (stampHead c)) (flagIf (later t (lastT c)) (schnorrOk key rx z prev (toU256 t)) flagNo) flagNo) s
+def stampSnoc : Point -> Stamp -> Stamps -> Option Stamps :=
+  fun (key : Point) (s : Stamp) (c : Stamps) => flagIf (stampOk key s c) (some (fmMul Stamp c (fmEta Stamp s))) none
 def Proposal : Type 0 := Polity
 def Bit : Enc Verdict -> Type 0 :=
   fun (c : Enc Verdict) => Sigma (v : Verdict) (Path (Enc Verdict) (encEta Verdict v) c)

@@ -60,6 +60,18 @@ while read -r file code; do
 done <test/check/expect.txt
 echo "kit-only refusals: $kit_only checked"
 
+# A REFUSE_CLOCK refusal names Stamp (S4, Q-S4-1 (a)), in kit and guest mode.
+clock_hint=0
+for file in clock-now.lang clock-clock.lang; do
+  build/langc $(kit test/check/kit.txt "$file") check "test/check/$file" 2>"$tmp/err" >/dev/null || true
+  clock_hint=$((clock_hint + 1))
+  if ! rg -q -F 'no program can read a chain or host clock; take the time as a Stamp argument' "$tmp/err"; then
+    echo "FAIL $file: the message does not name Stamp"
+    fail=$((fail + 1))
+  fi
+done
+echo "clock hint: $clock_hint checked"
+
 # A refl refusal shows both normal forms.
 build/langc $(kit test/check/kit.txt bad-refl.lang) check test/check/bad-refl.lang 2>"$tmp/err" >/dev/null || true
 if ! rg -q -F 'the path at i1 is some 1201, but the type needs some 1200' "$tmp/err"; then

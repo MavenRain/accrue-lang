@@ -1,0 +1,43 @@
+-- L12 (S4, Q-S4-1 to Q-S4-4 (a)): the stamp chain. A kit file: the keys,
+-- the heads and the signature words come from `build/frosttool stamps` and
+-- `build/frosttool words` (test/frosttool.c). kS is the keyAppend key of
+-- examples/append.lang and kO is the other key. c0 is the empty chain, c1
+-- holds s1 (time 5) and c2 holds s1 and s2 (time 9). sBadZ is s1 with z + 1.
+-- sOld (time 3), sSame (time 5) and sPrev (prev is the head of c0) come
+-- after c1 with a good signature on their own message, so only one check
+-- refuses each.
+def kS : Point := 0x3ded4fb781b4977c61b99911b4ac86e631601ffbbe49959b44c6c462ee92bceau
+def kO : Point := 0xf7f36a2ad3963a54863980b0ddf4c0cab710f2f1d88e3102eca3ec0429bc67e7u
+def c0 : Stamps := fmUnit Stamp
+def s1 : Stamp := stampOf 5 (stampHead c0) 0xe15a5b8398bcda926d5ff37dcc3e8adc948ff7f42fbf852eeb87a2a4b811a401u 0xd5312de31e3c731d2fa64dc1443e3043837d9bba12a505296ae978f5ee2d0aa3u
+def c1 : Stamps := fmMul Stamp c0 (fmEta Stamp s1)
+def s2 : Stamp := stampOf 9 (stampHead c1) 0x149b26258d4e06f1540231bf50373330985e60dbe406be2e6ec4af4b853b841bu 0xa9aacbc4e2c0155e7817dab111a760f015b0c1236b1a6ae3daa1786378f48738u
+def c2 : Stamps := fmMul Stamp c1 (fmEta Stamp s2)
+def sBadZ : Stamp := stampOf 5 (stampHead c0) 0xe15a5b8398bcda926d5ff37dcc3e8adc948ff7f42fbf852eeb87a2a4b811a401u 0xd5312de31e3c731d2fa64dc1443e3043837d9bba12a505296ae978f5ee2d0aa4u
+def sOld : Stamp := stampOf 3 (stampHead c1) 0x58917b76bc66db91df1e03f110c4008d7e48140868bc7ac573b5909af7a8b2e8u 0x8f9170d6c4411e3b68178576b7623bddef10587a2dbc4d4f59ddd84f6dfdf427u
+def sSame : Stamp := stampOf 5 (stampHead c1) 0xb14460643de8d11a559ebe57e9836fccc5e976feee233f6c7350ed19839db0ddu 0x8bf5d214f5df1461fc04bf1a6ce7c854cbed5a064fd8c55fa9997cd7e07ebea2u
+def sPrev : Stamp := stampOf 9 (stampHead c0) 0xab6ccfde4ad7d64966308b65f6e922a8f127f4b457d547d05e070932f48eded0u 0xf31f4604978c4114324ec0b6f5857032796a6c2d4fdfc4a410c0673893ef9cb4u
+
+-- L12 (Q-S4-3 (a)): a good stamp goes at the end of the chain, and each bad
+-- stamp gives none.
+def l12First : Path (Option Stamps) (stampSnoc kS s1 c0) (some c1) := refl
+def l12Second : Path (Option Stamps) (stampSnoc kS s2 c1) (some c2) := refl
+def l12BadZ : Path (Option Stamps) (stampSnoc kS sBadZ c0) none := refl
+def l12Old : Path (Option Stamps) (stampSnoc kS sOld c1) none := refl
+def l12Same : Path (Option Stamps) (stampSnoc kS sSame c1) none := refl
+def l12Prev : Path (Option Stamps) (stampSnoc kS sPrev c1) none := refl
+def l12Key : Path (Option Stamps) (stampSnoc kO s1 c0) none := refl
+
+-- Eval rows: each case of L12, the last time of c2 and of c0, and the heads
+-- of c0 and c1 against the host words g0 and h1.
+def stFirst : Option Stamps := stampSnoc kS s1 c0
+def stSecond : Option Stamps := stampSnoc kS s2 c1
+def stBadZ : Option Stamps := stampSnoc kS sBadZ c0
+def stOld : Option Stamps := stampSnoc kS sOld c1
+def stSame : Option Stamps := stampSnoc kS sSame c1
+def stPrev : Option Stamps := stampSnoc kS sPrev c1
+def stKey : Option Stamps := stampSnoc kO s1 c0
+def stLast : Option Time := lastT c2
+def stLastEmpty : Option Time := lastT c0
+def stGenesis : Verdict := u256Eq (stampHead c0) 0x6fb7e2f6ff145a3060e0ebc2bf452d2768253e70744b3a7abe4fc4a79774b306u
+def stHead : Verdict := u256Eq (stampHead c1) 0xe2fe4300081fef6983dcb5bcea4bd604c54cb35bd7cd5b3aaeea88d6963f9df9u

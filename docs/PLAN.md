@@ -19,7 +19,12 @@ at cairn-lang 0743108, the tags are renamed, the time parts are removed.
 S3 DONE: the kernel is total. Each partial operation gives an `Option`
 or takes a `NonZero` divisor, `REFUSE_PARTIAL` refuses a partial use,
 and no value is a trap (section 2, Q-S3-1 to Q-S3-21).
-Next: S4 (time: `Stamp`, the stamp chain, `REFUSE_CLOCK`, L12; section 5).
+S4 DONE: a program reads time only as a `Stamp` argument.
+`REFUSE_CLOCK` refuses a clock word, and `stampSnoc` adds a stamp to the
+chain only with a good signature, a later t and the right prev; L12
+(section 5, Q-S4-1 to Q-S4-5).
+Next: S5 (Part E: port the retainer-lang domain, L1 to L6, the CC dual
+and close at T; section 4.1).
 
 ## 1. Rulings
 
@@ -52,6 +57,13 @@ Next: S4 (time: `Stamp`, the stamp chain, `REFUSE_CLOCK`, L12; section 5).
 | 2026-10-29 | Q-S3-19, verbatim: "(a) Keep for S8 (Recommended)". S3 makes no edit in `test/ir`. The Q-S3-17 names do not apply there. | USER, S3 |
 | 2026-10-29 | Q-S3-20, verbatim: "(a) Rename to BLSAG_NONE (Recommended)". `BLSAG_TRAP` becomes `BLSAG_NONE`. | USER, S3 |
 | 2026-10-29 | Q-S3-21, verbatim: "(a) Kit words only (Recommended)". `REFUSE_PARTIAL` site 2 covers only the checked words of the `BUILTINS` table (an `Option` result, internal, not an `isSet` rule). A guest program cannot name a kit word (`REFUSE_KIT` comes first). A domain definition with an `Option` result where its payload is wanted (`opSucc n` where a `Count` is wanted) stays `TYPE_MISMATCH`. | USER, S3 |
+| 2026-10-29 | Q-S4-1, verbatim: "(a) 4 words, all (Recommended)". `REFUSE_CLOCK` refuses the clock words `now`, `block`, `timestamp` and `clock` as a declaration, a binder or a use, in kit, domain and guest programs. The hint names `Stamp`. `time` and `epoch` stay free names. | USER, S4 |
+| 2026-10-29 | Q-S4-2, verbatim: "(a) Time := Nat (Recommended)". The domain definition `Time := Nat`. The stamp signature message uses `toU256 t`. Two times compare with `natLe`. | USER, S4 |
+| 2026-10-29 | Q-S4-3, verbatim: "(a) Domain check + refl laws (Recommended)". The domain word `stampSnoc : Point -> Stamp -> Stamps -> Option Stamps` uses `schnorrOk`, `natLe` and `u256Eq`. It gives `none` on a bad signature, an old t or a wrong prev. L12 is refl paths on closed values (`examples/stamps.lang`), with mutants. | USER, S4 |
+| 2026-10-29 | Q-S4-4, verbatim: "(a) As section 10 places them (Recommended)". S4 = the stamp chain CM, `Stamp`, `stampSnoc`, `lastT`, the stamp head, `REFUSE_CLOCK`, L12. The CC dual and close at T go to S5. Causality goes to S5 L6 or to S6. | USER, S4 |
+| 2026-10-29 | Q-S4-5, verbatim: "(a) Remove it (Recommended)". The `var_core` clock test goes. `resolve_head` gives `var_core` only a local or a definition, so the test cannot run (mutant M3 survived: an equivalent mutant). `unknown_name` refuses each clock use (mutant M11 killed). | USER, S4 |
+| 2026-10-29 | Not asked, a recommendation (not a ruling): the stamp key is a `Point` argument of `stampSnoc`. Polity does not change. S6 puts `keyStamp` and `tStamp` in the `Constitution`. | S4 default |
+| 2026-10-29 | Not asked, a recommendation (not a ruling): an empty chain has no last t. The first stamp needs a good signature, and prev must be the stamp genesis digest. | S4 default |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -310,8 +322,8 @@ refusal or a law kills at least one mutant of it.
 | S1 | The USER rules section 12. Record the rulings here. | DONE |
 | S2 | Port the cairn-lang kernel (7.1). Survey first: SAME, CHANGED, CAIRN-ONLY. | DONE |
 | S3 | R0: N1, N5 in the kernel and eval; `REFUSE_PARTIAL`; checked `U256`, `mulDiv`. | DONE |
-| S4 | Time: `Stamp`, the stamp chain, `REFUSE_CLOCK`; L12. | NEXT |
-| S5 | Part E: port the retainer-lang domain (7.1); L1 to L6. | |
+| S4 | Time: `Stamp`, the stamp chain, `REFUSE_CLOCK`; L12. | DONE |
+| S5 | Part E: port the retainer-lang domain (7.1); L1 to L6. The CC dual and close at T (Q-S4-4). | NEXT |
 | S6 | Part D: PolicyBallot, Tally, `choice` table, `GovPi`, regimes, AmendBallot, reshare; L7 to L11. | |
 | S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | |
 | S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | |
@@ -352,6 +364,11 @@ refusal or a law kills at least one mutant of it.
   the build until S8. `lower.c` does not compile: it names `OP_NAT_MUL`,
   which S2 removed. `test/ir` stays for S8 (Q-S3-19), and the gate does
   not run it.
+- O10 The S4 mutant M3 (the `var_core` clock test) survived as an
+  equivalent mutant, so S4 removed the test (Q-S4-5). The
+  `NAME_UNKNOWN` return at the end of `var_core` cannot run for the same
+  reason (before S4 too): `resolve_head` gives `var_core` only a local or
+  a definition. It stays as a guard. A later slice can remove it.
 
 ## 12. Questions for the USER (S0)
 

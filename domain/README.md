@@ -22,6 +22,9 @@ prelude, then the program.
   `div` or `sub`), or the `Option` result of a checked kit word where a
   plain value is wanted (`REFUSE_PARTIAL`, Q-S3-1, Q-S3-21). Take the
   `Option` apart with `option` or `bind`.
+- A program and `domain/domain.lang` cannot declare, bind or use a clock
+  word (`now`, `block`, `timestamp` or `clock`): `REFUSE_CLOCK`, Q-S4-1.
+  Take the time as a `Stamp` argument.
 
 ## Declaration forms
 
@@ -54,6 +57,7 @@ of each section gives its rule or ruling.
 | The empty family and the bag | `Empty`, `Bag` (the free commutative monoid) |
 | The free monoid | `FreeMon`, `fmCons`, `fmIsSet`, `fmFold`, `fmBind`, `fmMap`, `endoThen`, `fmChain`, `fmRun`, `len` |
 | Part R, the record | `Digest`, `Entry`, `Record`, `snoc`, `tagGenesis`, `tagAppend`, `H3`, `chainFrom`, `head`, `opSucc`, `Verdict`, `verdictYes`, `foundAt`, `verify`, `prefix`, `Inclusion`, `recTake`, `recDrop`, `inclusion`, `verifyAt`, `Auth`, `authOf`, `authR`, `authZ`, `authOk`, `append` |
+| S4, the stamp chain | `Time`, `Stamp`, `stampOf`, `stampT`, `stampPrev`, `stampR`, `stampZ`, `Stamps`, `tagStamp`, `tagStampGenesis`, `stampStep`, `stampHead`, `lastT`, `later`, `stampOk`, `stampSnoc` |
 | The encrypted values | the sealed family `Enc`, `encBind`, `encMap`, `encOp2`, the law defs `decrypt` and `observe` |
 | Quorum and proofs | `Quorum`, the law def `open`, `ZKProof`, the sealed family `Transcript`, the law def `verified` |
 | Part D, the DAO | `Point`, `Count`, `verdictNo`, `isSetProd`, `encEtaOf`, `encIsSet`, `Polity`, `makePolity`, `members`, `tAppend`, `tAmend`, `tOpen`, `keyOpen`, `keyAppend`, `polityIsSet`, `Proposal`, `Bit`, `SealedBallot`, `mkBallot`, `ballotVote`, `linkTag`, `Box`, `tagUsed`, `castBallot`, `tallyBox`, `countVotes`, `Decided`, `decideYes`, `enact`, `stepD`, `amendAll` |
@@ -79,6 +83,9 @@ of each section gives its rule or ruling.
 - `examples/append.lang` holds the laws L10 and L11 (a good and a bad
   Auth under `keyAppend`), and `examples/outlog.lang` is the run row of
   the host append (O20).
+- `examples/stamps.lang` holds the law L12 (S4): a good first and second
+  stamp go at the end of the chain, and a bad signature, an old or equal
+  time, a wrong prev or another key gives none.
 
 ## How to change the domain
 

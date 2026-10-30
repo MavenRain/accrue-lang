@@ -441,9 +441,28 @@ static const char *show(Checker *c, const Value *v) {
   return buf;
 }
 
+/* Clock words (S4, USER ruling Q-S4-1 (a), PLAN section 5): a chain or
+   host clock word. No declaration can take one and no name can use one
+   (REFUSE_CLOCK), in kit, domain and guest programs. A program reads
+   time only as a Stamp argument. */
+static const char *const CLOCK_WORDS[] = {"now", "block", "timestamp", "clock"};
+
+#define CLOCK_HINT "%s is a clock word: no program can read a chain or host clock; take the time as a Stamp argument"
+
+static int clock_word(const char *name) {
+  size_t i;
+  for (i = 0; i < sizeof CLOCK_WORDS / sizeof CLOCK_WORDS[0]; i++) {
+    if (strcmp(CLOCK_WORDS[i], name) == 0)
+      return 1;
+  }
+  return 0;
+}
+
 static int push_value(Checker *c, const char *name, const Value *type, const Value *value) {
   Scope *s;
   const Env *e;
+  if (name != NULL && clock_word(name))
+    return FAIL(c, "REFUSE_CLOCK", CLOCK_HINT, name);
   s = arena_alloc(c->m->arena, sizeof *s);
   e = env_push(c->m, c->env, value);
   if (type == NULL || value == NULL || s == NULL || e == NULL)
@@ -2755,6 +2774,8 @@ static const char *partial_hint(const Checker *c, const char *name) {
 static int unknown_name(Checker *c, const char *name) {
   size_t i;
   const char *hint = partial_hint(c, name);
+  if (clock_word(name))
+    return FAIL(c, "REFUSE_CLOCK", CLOCK_HINT, name);
   for (i = c->decl_index; i < c->decls->count; i++) {
     if (strcmp(c->decls->items[i].name, name) == 0)
       return FAIL(c, "REFUSE_REC", "%s is this definition or a later one; a definition can use only earlier ones (rule R3)", name);
@@ -3251,6 +3272,8 @@ static const char *name_owner(const Checker *c, const char *name) {
 
 static int name_free(Checker *c, const char *name) {
   const char *why;
+  if (clock_word(name))
+    return FAIL(c, "REFUSE_CLOCK", CLOCK_HINT, name);
   why = name_owner(c, name);
   return why == NULL ? 1 : FAIL(c, "REFUSE_NAME", "%s is %s (rule R4)", name, why);
 }

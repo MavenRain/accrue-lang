@@ -1,0 +1,2 @@
+-- REFUSE_CLOCK (S4, Q-S4-1 (a)): a declaration cannot take a clock word.
+def now : Nat := 0

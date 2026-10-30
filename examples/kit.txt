@@ -36,3 +36,4 @@ ballot.lang
 daokit.lang
 append.lang
 outlog.lang
+stamps.lang
