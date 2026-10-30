@@ -59,6 +59,7 @@ of each section gives its rule or ruling.
 | Part R, the record | `Digest`, `Entry`, `Record`, `snoc`, `tagGenesis`, `tagAppend`, `H3`, `chainFrom`, `head`, `opSucc`, `Verdict`, `verdictYes`, `foundAt`, `verify`, `prefix`, `Inclusion`, `recTake`, `recDrop`, `inclusion`, `verifyAt`, `Auth`, `authOf`, `authR`, `authZ`, `authOk`, `append` |
 | S4, the stamp chain | `Time`, `Stamp`, `stampOf`, `stampT`, `stampPrev`, `stampR`, `stampZ`, `Stamps`, `tagStamp`, `tagStampGenesis`, `stampStep`, `stampHead`, `lastT`, `later`, `stampOk`, `stampSnoc` |
 | S5a, Part E | `Segment`, `segmentOf`, `segFrom`, `segUntil`, `segNum`, `segDen`, `Mass`, `massOf`, `massAt`, `massAmount`, `Rate`, `Window`, `windowOf`, `winStart`, `winEnd`, `Instrument`, `instrPush`, `instrPull`, `instrStream`, `Grant`, `grantOf`, `grantInstrument`, `grantPaused`, `Dispute`, `Policy`, `policyOf`, `polRate`, `polWindow`, `polGrant`, `polDispute`, `Engagement`, `engagementOf`, `engClient`, `engFirm`, `engAsset`, `engScope`, `engWindow`, `engSigned`, `engCancelled`, `History`, `u256Min`, `natMax`, `natMin`, `Acc`, `accIsSet`, `accZero`, `accAdd`, `accOut`, `segTerm`, `gAt`, `optMin`, `optMax`, `accrue`, `entryTerm`, `EarnRun`, `earnedFrom`, `earnedAt`, `earnedBetween` |
+| S5b, the books | `Instruction`, `instructionOf`, `ixPayee`, `ixAsset`, `ixAmount`, `ixAt`, `Funding`, `Book`, `bookOf`, `bookLog`, `bookWithdrawn`, `bookClosed`, `Escrow`, `escrowOf`, `escEng`, `escBook`, `Payout`, `stampTime`, `fundedAt`, `logOk`, `bookOk`, `logPut`, `recognizedAt`, `unearnedAt`, `withdrawableAt`, `engClientOf`, `engFirmOf`, `engAssetOf`, `engStartOf`, `engEndOf`, `engIsOpen`, `engIsSigned`, `engCancel`, `engSign`, `isPull`, `pullAt`, `disputeOf`, `disputeAt`, `ShareRun`, `shareAt`, `bpsDen`, `escFund`, `escSettle`, `escCancel`, `escDispute`, `escClose`, `tagEngage`, `tagCountersign`, `engDigest`, `engage`, `countersign`, `Books`, `booksCorec`, `booksNow`, `booksNext`, `booksPair`, `booksStep`, `booksLast`, `booksChain`, `booksLaw`, `booksLawNine` |
 | The encrypted values | the sealed family `Enc`, `encBind`, `encMap`, `encOp2`, the law defs `decrypt` and `observe` |
 | Quorum and proofs | `Quorum`, the law def `open`, `ZKProof`, the sealed family `Transcript`, the law def `verified` |
 | Part D, the DAO | `Point`, `Count`, `verdictNo`, `isSetProd`, `encEtaOf`, `encIsSet`, `Polity`, `makePolity`, `members`, `tAppend`, `tAmend`, `tOpen`, `keyOpen`, `keyAppend`, `polityIsSet`, `Proposal`, `Bit`, `SealedBallot`, `mkBallot`, `ballotVote`, `linkTag`, `Box`, `tagUsed`, `castBallot`, `tallyBox`, `countVotes`, `Decided`, `decideYes`, `enact`, `stepD`, `amendAll` |
@@ -93,6 +94,18 @@ of each section gives its rule or ruling.
   a pause, no signed time, a bad Segment and a sum past the U256 maximum.
 - `examples/causality.lang` holds the law L6 (S5a): an amendment at t*
   does not change earned at a t <= t*.
+- `examples/books.lang` holds the laws L3, L4 and L5 (S5b). L3: push,
+  pull and stream give the same earned, recognized and withdrawable on a
+  fully funded book. L4: withdrawn <= recognized <= funded after each op.
+  L5: a dispute changes only the residual. lCloseSum: the closes sum to
+  recognized at the last close (Q-S5b-4). lCloseCancel and the cb rows: an
+  op at or before the last close gives none (`bookOk`, Q-S5b-5). It also
+  holds the payouts, the guard rows of each op, and the engage and
+  countersign rows with the words of `build/frosttool engage`.
+  Every settle logs its time even when funded is unchanged, so cancellation
+  cannot precede a withdrawal. Countersign also checks `bookOk` to preserve
+  closed periods and the order of the funding log. The paid and cs rows
+  cover these guards and their valid controls.
 
 ## How to change the domain
 

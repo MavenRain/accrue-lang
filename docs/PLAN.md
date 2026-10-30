@@ -27,8 +27,14 @@ S5a DONE: Part E is data (Segment, Mass, Rate, Window, Instrument,
 Grant, Policy, Engagement, History). G (`gAt`) and `earnedAt` read
 retainer-lang SPEC 6.1. L1, L2 and L6 are refl on closed values
 (section 1, Q-S5-1 to Q-S5-10).
-Next: S5b (the books, fund, settle, cancel, dispute, close at T,
-Instruction data, the CC dual; L3 to L5; section 4.1).
+S5b DONE: a `Book` is a funding log, the withdrawn amount and the last
+close. The ops `escFund`, `escSettle`, `escCancel`, `escDispute` and
+`escClose` give an `Option` result. An op that moves value gives
+`Instruction` data and does not move it. The CC dual is the cofamily
+`Books` and `booksPair`. L3, L4 and L5 are refl on closed values
+(section 1, Q-S5b-1 to Q-S5b-5). S5 DONE.
+Next: S6 (Part D: PolicyBallot, Tally, the `choice` table, `GovPi`, the
+regimes, AmendBallot, reshare; L7 to L11; section 4.2).
 
 ## 1. Rulings
 
@@ -79,6 +85,15 @@ Instruction data, the CC dual; L3 to L5; section 4.1).
 | 2026-10-30 | Q-S5-9, verbatim: "(b) Prod Verdict U256 fold". Each sum of G and earned folds into `Acc := Prod Verdict U256` (an ok flag and a value). `accIsSet` is `isSetProd Flag U256 flagIsSet u256IsSet`, so no trusted row is necessary. `accOut` makes the `Option` at the end. | USER, S5 |
 | 2026-10-30 | Q-S5-10, verbatim: "(a) Add a killer row (Recommended)". The mutant M22 (no engagement end in hi) survived: in each row with t after the end of the engagement, the rate was flat. `eEndAt50` in examples/earned.lang (the engagement ends at 30, the rate of hA accrues to 60) kills it. | USER, S5 |
 | 2026-10-30 | Not asked, a recommendation (not a ruling): the earned word is `earnedAt h e t`, because `earned` is a `State` field in 13 test/check files and 2 examples (R4). `earnedBetween h e t1 t2` is earned on (t1, t2] (L1). | S5a default |
+| 2026-10-30 | Q-S5b-1, verbatim: "(a) Funding log (Recommended)". `Book := bookOf (bookLog : Funding) (bookWithdrawn : U256) (bookClosed : Option Time)`, with `Funding := FreeMon (Prod Time U256)`. funded at T is the last log entry at T or before (0 if none). fund, cancel, dispute and a pull settle add (t, funded after) to the log. So close T is exact for each T <= now. | USER, S5b |
+| 2026-10-30 | Q-S5b-2, verbatim: "(a) Guard on the book after (Recommended)". settle makes the book after, then requires withdrawn after <= recognized after. For push and stream this is w <= withdrawable. For pull it is w <= earned - withdrawn. The L3 rows use a fully funded book. One row shows the pull book when earned > funded. | USER, S5b |
+| 2026-10-30 | Q-S5b-3, verbatim: "(a) Escrow + list (Recommended)". `Escrow := escrowOf (escEng : Engagement) (escBook : Book)`. Each op takes the History, a Stamp and an Escrow, and gives `Option (Prod Escrow Payout)`, with `Payout := FreeMon Instruction`. fund gives no Instruction, settle and cancel give one, dispute gives two. A failed guard gives none. | USER, S5b |
+| 2026-10-30 | Q-S5b-4, verbatim: "(a) First close: r T - 0 (Recommended)". The first close gives recognized T - 0. T^- is the start only in the bound S < T. So the closes sum to recognized at the last close (the law lCloseSum). | USER, S5b |
+| 2026-10-30 | Q-S5b-5, verbatim: "(a) Strict later guard (Recommended)". `logOk` reads only the funding log, so a stamp at or before the last close could change funded at a closed time. Now each of fund, settle, cancel and dispute needs `bookOk l c t := flagIf (logOk l t) (later t c) flagNo`: the log is in time order up to t, and t is after the last close. The law lCloseCancel and the cb rows of examples/books.lang show it. | USER, S5b |
+| 2026-10-30 | Not asked, a build default (not a ruling): the words are `engIsOpen` and `engIsSigned`, because `isOpen` is a `State` field in examples/storage.lang (R4). | S5b default |
+| 2026-10-30 | Not asked, a build default (not a ruling): the survey form `isSetFun Books.pos A sA` does not lex (`LEX_CHAR` 0x2e). `booksPair A sA b c` folds the stamps of c (`fmChain`, the first stamp first) into a map on the readers `Books A -> A`, set by `isSetFun (Books A -> A) (Books A -> A) (isSetFun (Books A) A sA)`, and applies the map to `booksNow A` and b. booksLaw: the pairing of a corecursor with a chain is the fold of its step (refl). booksLawNine: the value is some 9. | S5b default |
+| 2026-10-30 | Not asked, a build default (not a ruling): the test signer `build/frosttool engage` prints the words of the engage and countersign rows (the client and the firm committees, the good and bad signatures). It is test data only, as the `stamps` mode (S4). | S5b default |
+| 2026-10-30 | Review fix: every settle logs `(t, funded after)`, including push and stream when funded is unchanged, so `logOk` also prevents operations before a withdrawal. Countersign checks `bookOk` before setting the signed time, so a signature cannot change a closed period or precede the funding log. The paid and cs regression rows in examples/books.lang cover both cases and valid controls. | S5b review |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -171,9 +186,10 @@ internal to the kernel. There is no `Addr`, `Env`, `msg.sender`, ERC-20
 | Policy | defined | `policyOf (Rate, Window, Grant, Dispute)`. |
 | History | defined | `FreeMon (Prod Time Policy)`: the policy history as data, each entry a time and a policy (Q-S5-5). |
 | Engagement | defined | `(client, firm : Point, asset : Digest, scopeHash : Digest, window : Window)`, plus `countersignedAt, cancelledAt : Option Time`. `asset` names the off-chain asset (Q-S0-4). |
-| engage, countersign | defined | A Schnorr signature of the client, then of the firm, on the engagement digest. |
+| engage, countersign | defined | A Schnorr signature of the client, then of the firm, on the engagement digest. S5b: `engDigest` with the tags `tagEngage` and `tagCountersign`. `engIsOpen e`: no cancelled time. `engIsSigned e`: a signed time. countersign needs a not signed e. |
 | earnedAt, recognized, unearned, withdrawable | defined | retainer-lang SPEC 6.1, without change: `G` from the segment start, the closed first interval, the open later intervals. S5a: `gAt`, `earnedAt h e t` and `earnedBetween h e t1 t2` (on (t1, t2]). |
-| fund, settle, cancel, dispute, close | defined | As retainer-lang, but each one that moves value gives an `Instruction` (4.3) and does not move it. |
+| fund, settle, cancel, dispute, close | defined | As retainer-lang, but each one that moves value gives an `Instruction` (4.3) and does not move it. S5b: `escFund`, `escSettle`, `escCancel`, `escDispute` and `escClose` on an `Escrow` (Q-S5b-1, Q-S5b-3). Each op that moves value needs `bookOk` (Q-S5b-5); fund and cancel need an open engagement; dispute needs a cancel, or the end or later (O3). settle guards on the book after (Q-S5b-2). close T gives recognized T - recognized T^- (Q-S5-6, Q-S5b-4). |
+| Books | defined | `cofamily Books (A) := booksCorec (booksNow : A) (booksNext : Stamp -> Books A)`, the CC dual (Q-S5-4). `booksPair` pairs a `Books A` with a stamp chain (section 1, the S5b default). |
 
 ### 4.2 Part D: the DAO (cairn-lang Part D plus retainer-lang Gov)
 
@@ -340,8 +356,8 @@ refusal or a law kills at least one mutant of it.
 | S3 | R0: N1, N5 in the kernel and eval; `REFUSE_PARTIAL`; checked `U256`, `mulDiv`. | DONE |
 | S4 | Time: `Stamp`, the stamp chain, `REFUSE_CLOCK`; L12. | DONE |
 | S5a | Part E (7.1): the types, G, `earnedAt`, the policy history as data; L1, L2, L6 (Q-S5-1). | DONE |
-| S5b | Part E: the books, fund, settle, cancel, dispute, close at T (Q-S5-6), Instruction data (Q-S5-2), the CC dual (Q-S5-4); L3 to L5. | NEXT |
-| S6 | Part D: PolicyBallot, Tally, `choice` table, `GovPi`, regimes, AmendBallot, reshare; L7 to L11. | |
+| S5b | Part E: the books, fund, settle, cancel, dispute, close at T (Q-S5-6), Instruction data (Q-S5-2), the CC dual (Q-S5-4); L3 to L5. | DONE |
+| S6 | Part D: PolicyBallot, Tally, `choice` table, `GovPi`, regimes, AmendBallot, reshare; L7 to L11. | NEXT |
 | S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | |
 | S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | |
 | S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | |

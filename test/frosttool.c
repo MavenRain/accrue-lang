@@ -11,7 +11,9 @@
    With the argument `words` it also prints the closed Auth words of
    examples/append.lang (slice S7 b5), one `name 0x<word>` per line. With
    the argument `stamps` it prints the stamp words of examples/stamps.lang
-   (slice S4, Q-S4-3 (a)) in the same form. */
+   (slice S4, Q-S4-3 (a)) in the same form. With the argument `engage` it
+   prints the engage words of examples/books.lang (slice S5b) in the same
+   form. */
 #include <stdio.h>
 #include <string.h>
 
@@ -195,6 +197,98 @@ static int stamp_words(const ThrShare *shares, const GroupPoint *keys, const Gro
   return 1;
 }
 
+/* The engage tags of domain/domain.lang (slice S5b): the ASCII bytes of
+   "accrue-engage" and "accrue-countersign" as a big-endian U256. */
+static void engage_tags(U256 *engage, U256 *countersign) {
+  u256_from_u64(engage, 0x652d656e67616765ull);
+  engage->limb[1] = 0x6163637275ull;
+  u256_from_u64(countersign, 0x6e7465727369676eull);
+  countersign->limb[1] = 0x637275652d636f75ull;
+  countersign->limb[2] = 0x6163ull;
+}
+
+/* One signature of members 1 and 2 of the 2 of 3 committee SHARES (KEYS)
+   under PK on the message (TAG, D), with the seeds from SEED. It prints
+   R_NAME and Z_NAME and puts the signature in SIG. 0 when the session or
+   the check fails. */
+static int signed_by(const char *r_name, const char *z_name, AuthSig *sig, const ThrShare *shares, const GroupPoint *keys, const GroupPoint *pk, const U256 *px, const U256 *tag, const U256 *d, uint64_t seed) {
+  static const uint32_t pair[2] = {1u, 2u};
+  AuthCommit list[THR_N_MAX];
+  AuthShare zs[THR_N_MAX];
+  if (session(sig, list, zs, shares, pair, 2u, keys, 2u, 3u, pk, tag, d, seed) != AUTH_OK || schnorr_verify(px, sig, tag, d) != AUTH_OK)
+    return fail(r_name);
+  word(r_name, &sig->rx);
+  word(z_name, &sig->z);
+  return 1;
+}
+
+/* The engage words (slice S5b, Q-S5-7 (a)): two 2 of 3 committees, the
+   client (seeds blsag_key(500 + i)) and the firm (seeds blsag_key(510 +
+   i)), and their keys cK and fK. The message digest is engDigest of the
+   engagement (cK, fK, asset 3, scope 4, window 10 to 60): H3 tagEngage
+   (hash cK fK) (H3 tagEngage (hash 3 4) (hash 10 60)), with H3 t x y =
+   hash (hash t x) y. engR, engZ: the client on tagEngage. ctrR, ctrZ: the
+   firm on tagCountersign. ctrWrongR, ctrWrongZ: the client on
+   tagCountersign. engZBad is engZ plus 1. */
+static int engage_words(void) {
+  ThrShare client[THR_N_MAX];
+  ThrShare firm[THR_N_MAX];
+  GroupPoint client_pk;
+  GroupPoint firm_pk;
+  GroupPoint client_keys[THR_N_MAX];
+  GroupPoint firm_keys[THR_N_MAX];
+  U256 seeds[THR_N_MAX];
+  U256 cx;
+  U256 cy;
+  U256 fx;
+  U256 fy;
+  U256 tag_engage;
+  U256 tag_countersign;
+  U256 asset;
+  U256 scope;
+  U256 s_e;
+  U256 e_e;
+  U256 one;
+  U256 keys_h;
+  U256 inner;
+  U256 window_h;
+  U256 d;
+  U256 z_bad;
+  AuthSig sig;
+  uint32_t i;
+  for (i = 0; i < 3u; i++)
+    blsag_key(&seeds[i], 500u + i);
+  if (!committee(client, &client_pk, client_keys, seeds, 2u, 3u))
+    return fail("the client committee");
+  for (i = 0; i < 3u; i++)
+    blsag_key(&seeds[i], 510u + i);
+  if (!committee(firm, &firm_pk, firm_keys, seeds, 2u, 3u))
+    return fail("the firm committee");
+  group_to_words(&cx, &cy, &client_pk);
+  group_to_words(&fx, &fy, &firm_pk);
+  engage_tags(&tag_engage, &tag_countersign);
+  u256_from_u64(&asset, 3u);
+  u256_from_u64(&scope, 4u);
+  u256_from_u64(&s_e, 10u);
+  u256_from_u64(&e_e, 60u);
+  u256_from_u64(&one, 1u);
+  thr_hash(&keys_h, &cx, &fx);
+  thr_hash(&inner, &asset, &scope);
+  thr_hash(&window_h, &s_e, &e_e);
+  thr_hash(&inner, &tag_engage, &inner);
+  thr_hash(&inner, &inner, &window_h);
+  thr_hash(&d, &tag_engage, &keys_h);
+  thr_hash(&d, &d, &inner);
+  word("cK", &cx);
+  word("fK", &fx);
+  if (!signed_by("engR", "engZ", &sig, client, client_keys, &client_pk, &cx, &tag_engage, &d, 520u))
+    return 0;
+  u256_add(&z_bad, &sig.z, &one);
+  word("engZBad", &z_bad);
+  return signed_by("ctrR", "ctrZ", &sig, firm, firm_keys, &firm_pk, &fx, &tag_countersign, &d, 530u)
+         && signed_by("ctrWrongR", "ctrWrongZ", &sig, client, client_keys, &client_pk, &cx, &tag_countersign, &d, 540u);
+}
+
 int main(int argc, char **argv) {
   static const uint32_t pair[2] = {1u, 2u};
   static const uint32_t append_q[2] = {1u, 3u};
@@ -320,6 +414,8 @@ int main(int argc, char **argv) {
     return 1;
   if (argc == 2 && strcmp(argv[1], "stamps") == 0)
     return stamp_words(old, old_keys, &pk, &px) ? 0 : 1;
+  if (argc == 2 && strcmp(argv[1], "engage") == 0)
+    return engage_words() ? 0 : 1;
   if (argc == 2 && strcmp(argv[1], "words") == 0) {
     u256_add(&z_bad, &sig_a.z, &one);
     word("key", &px);

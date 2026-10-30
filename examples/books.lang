@@ -1,0 +1,206 @@
+-- L3, L4, L5 and the op guards (S5b, Q-S5b-1 to Q-S5b-4 (a)): the books. A
+-- kit file. eB runs from 10 to 60 and is signed at 10. rB accrues 2 for each
+-- unit on the offsets 0 to 50, with a mass of 40 at the offset 0, so earned
+-- at t is 40 + 2 (t - 10) on [10, 60]. hPush, hPull and hStream hold one
+-- policy at 0 and differ only in the instrument. dB holds the firm shares
+-- 2500 and 5000 bps. xE is eB with an empty book. sAt t is a stamp at t with
+-- no signature (the ops read only the time). The push run: xF funds 200 at
+-- 10, xS1 then settles 30 at 20 and xC then cancels at 30.
+def rB : Rate := pair (fmEta Segment (segmentOf 0 50 2u 1u)) (fmEta Mass (massOf 0 40u))
+def dB : Dispute := fmMul U256 (fmEta U256 2500u) (fmEta U256 5000u)
+def histOf : Instrument -> History := fun (i : Instrument) => fmEta (Prod Time Policy) (pair 0 (policyOf rB (windowOf 0 100) (grantOf i flagNo) dB))
+def hPush : History := histOf instrPush
+def hPull : History := histOf instrPull
+def hStream : History := histOf instrStream
+def eB : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 60) (some 10) none
+def xE : Escrow := escrowOf eB (bookOf (fmUnit (Prod Time U256)) 0u none)
+def sAt : Time -> Stamp := fun (t : Time) => stampOf t 0u 0u 0u
+-- Step is the result of an op. andThen o f runs f on the Escrow of o (none
+-- stays none). payOf o is the Payout of o. plusO adds two Option values.
+def Step : Type 0 := Option (Prod Escrow Payout)
+def andThen : Step -> (Escrow -> Step) -> Step := fun (o : Step) (f : Escrow -> Step) => bind o (fun (p : Prod Escrow Payout) => f (first p))
+def payOf : Step -> Option Payout := fun (o : Step) => bind o (fun (p : Prod Escrow Payout) => some (second p))
+def plusO : Option U256 -> Option U256 -> Option U256 := fun (a : Option U256) (b : Option U256) => bind a (fun (x : U256) => bind b (fun (y : U256) => u256Add x y))
+-- The readers: funded at t, withdrawn, earned at t and recognized at t of
+-- an Escrow. recAfter and fundedAfter read the Escrow of a Step.
+def bkFunded : Time -> Escrow -> U256 := fun (t : Time) (x : Escrow) => elim (fun (u : Escrow) => U256) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => U256) (fun (l : Funding) (w : U256) (c : Option Time) => fundedAt l t) b) x
+def bkWithdrawn : Escrow -> U256 := fun (x : Escrow) => elim (fun (u : Escrow) => U256) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => U256) (fun (l : Funding) (w : U256) (c : Option Time) => w) b) x
+def bkEarned : History -> Time -> Escrow -> Option U256 := fun (h : History) (t : Time) (x : Escrow) => elim (fun (u : Escrow) => Option U256) (fun (e : Engagement) (b : Book) => earnedAt h e t) x
+def bkRec : History -> Time -> Escrow -> Option U256 := fun (h : History) (t : Time) (x : Escrow) => elim (fun (u : Escrow) => Option U256) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => Option U256) (fun (l : Funding) (w : U256) (c : Option Time) => recognizedAt h e l t) b) x
+def recAfter : History -> Time -> Step -> Option U256 := fun (h : History) (t : Time) (o : Step) => bind o (fun (p : Prod Escrow Payout) => bkRec h t (first p))
+def fundedAfter : Time -> Step -> Option U256 := fun (t : Time) (o : Step) => bind o (fun (p : Prod Escrow Payout) => some (bkFunded t (first p)))
+def xF : Step := escFund (sAt 10) 200u xE
+def runOf : History -> Step := fun (h : History) => andThen xF (escSettle h (sAt 20) 30u)
+def xS1 : Step := runOf hPush
+def xC : Step := andThen xS1 (escCancel hPush (sAt 30))
+def xDEnd : Step := andThen xS1 (escDispute hPush (sAt 60) 0)
+def xDCancel : Step := andThen xC (escDispute hPush (sAt 40) 1)
+def pullShort : Step := escSettle hPull (sAt 20) 20u xE
+
+-- L3: on a book funded above earned, push, pull and stream give the same
+-- earned, recognized and withdrawable (runOf h). A pull settle also adds 30
+-- to funded, so only funded changes.
+def Trip : Type 0 := Prod (Option U256) (Prod (Option U256) (Option U256))
+def tripAt : History -> Time -> Step -> Option Trip := fun (h : History) (t : Time) (o : Step) => bind o (fun (p : Prod Escrow Payout) => some (pair (bkEarned h t (first p)) (pair (bkRec h t (first p)) (withdrawableAt h (first p) t))))
+def l3Pull40 : Path (Option Trip) (tripAt hPush 40 xS1) (tripAt hPull 40 (runOf hPull)) := refl
+def l3Stream40 : Path (Option Trip) (tripAt hPush 40 xS1) (tripAt hStream 40 (runOf hStream)) := refl
+def l3Pull60 : Path (Option Trip) (tripAt hPush 60 xS1) (tripAt hPull 60 (runOf hPull)) := refl
+def l3Stream60 : Path (Option Trip) (tripAt hPush 60 xS1) (tripAt hStream 60 (runOf hStream)) := refl
+
+-- L4: inv h t x is verdictYes when recognized t = min (funded t) (earned t)
+-- and withdrawn <= recognized t <= funded t. invAfter is inv on the Escrow
+-- of a Step (verdictNo for none). Each row is the book after one op.
+def inv : History -> Time -> Escrow -> Verdict := fun (h : History) (t : Time) (x : Escrow) => option flagNo (fun (r : U256) => option flagNo (fun (g : U256) => flagIf (u256Eq r (u256Min (bkFunded t x) g)) (flagIf (u256Le (bkWithdrawn x) r) (u256Le r (bkFunded t x)) flagNo) flagNo) (bkEarned h t x)) (bkRec h t x)
+def invAfter : History -> Time -> Step -> Verdict := fun (h : History) (t : Time) (o : Step) => option flagNo (fun (p : Prod Escrow Payout) => inv h t (first p)) o
+def l4Fund : Path Verdict (invAfter hPush 10 xF) flagYes := refl
+def l4Settle : Path Verdict (invAfter hPush 20 xS1) flagYes := refl
+def l4SettlePull : Path Verdict (invAfter hPull 20 (runOf hPull)) flagYes := refl
+def l4SettleShort : Path Verdict (invAfter hPull 20 pullShort) flagYes := refl
+def l4Cancel : Path Verdict (invAfter hPush 30 xC) flagYes := refl
+def l4DisputeEnd : Path Verdict (invAfter hPush 60 xDEnd) flagYes := refl
+def l4DisputeCancel : Path Verdict (invAfter hPush 40 xDCancel) flagYes := refl
+
+-- L5: a dispute changes only the residual. Recognized at the dispute time
+-- is the same before and after it.
+def l5End : Path (Option U256) (recAfter hPush 60 xS1) (recAfter hPush 60 xDEnd) := refl
+def l5Cancel : Path (Option U256) (recAfter hPush 40 xC) (recAfter hPush 40 xDCancel) := refl
+
+-- escClose (Q-S5b-4 (a)). cl1 is the first close at T = 30 after xF:
+-- recognized 30 - 0 = 80 (40 of it is the mass at the start). cl2 then
+-- closes at T = 50: recognized 50 - recognized 30 = 40. The sum is
+-- recognized at the last close.
+def Closed : Type 0 := Option (Prod Escrow U256)
+def closeAt : History -> Time -> Time -> Step -> Closed := fun (h : History) (ts : Time) (tc : Time) (o : Step) => bind o (fun (p : Prod Escrow Payout) => escClose h (sAt ts) tc (first p))
+def closeThen : History -> Time -> Time -> Closed -> Closed := fun (h : History) (ts : Time) (tc : Time) (o : Closed) => bind o (fun (p : Prod Escrow U256) => escClose h (sAt ts) tc (first p))
+def valOf : Closed -> Option U256 := fun (o : Closed) => bind o (fun (p : Prod Escrow U256) => some (second p))
+def cl1 : Closed := closeAt hPush 30 30 xF
+def cl2 : Closed := closeThen hPush 50 50 cl1
+def lCloseSum : Path (Option U256) (plusO (valOf cl1) (valOf cl2)) (recAfter hPush 50 xF) := refl
+
+-- Eval rows. L3 at 40 and funded at 40 (230 for pull). A pull settle on an
+-- empty book (earned 60 > funded 0) adds 20 to funded and passes. Push and
+-- stream refuse it, and a pull settle of 70 (above earned) refuses.
+def l3Push : Option Trip := tripAt hPush 40 xS1
+def fundedPush : Option U256 := fundedAfter 40 xS1
+def fundedPull : Option U256 := fundedAfter 40 (runOf hPull)
+def shortPull : Option U256 := fundedAfter 20 pullShort
+def shortPullPay : Option Payout := payOf pullShort
+def shortPush : Step := escSettle hPush (sAt 20) 20u xE
+def shortStream : Step := escSettle hStream (sAt 20) 20u xE
+def shortPullOver : Step := escSettle hPull (sAt 20) 70u xE
+-- L4 at 40 after xS1: recognized 100 = min 200 100. L5 at 60: recognized
+-- before and after the dispute, and funded after.
+def recPush40 : Option U256 := recAfter hPush 40 xS1
+def earnedPush40 : Option U256 := bind xS1 (fun (p : Prod Escrow Payout) => bkEarned hPush 40 (first p))
+def recBefore60 : Option U256 := recAfter hPush 60 xS1
+def recAfter60 : Option U256 := recAfter hPush 60 xDEnd
+def fundedAfter60 : Option U256 := fundedAfter 60 xDEnd
+-- The Payout of each op: fund 0, settle 1, cancel 1, dispute 2.
+def payFund : Option Payout := payOf xF
+def paySettle : Option Payout := payOf xS1
+def payCancel : Option Payout := payOf xC
+def payDisputeEnd : Option Payout := payOf xDEnd
+def payDisputeV1 : Option Payout := payOf (andThen xS1 (escDispute hPush (sAt 60) 1))
+def payDisputeCancel : Option Payout := payOf xDCancel
+-- The guards. xF2 funds 200 at 10 and 50 at 30. An op at 20 after xF2 is
+-- before the last log entry, so logOk refuses it; its other guards pass.
+def xF2 : Step := andThen xF (escFund (sAt 30) 50u)
+def gFundBack : Step := andThen xF2 (escFund (sAt 20) 10u)
+def gFundSame : Option U256 := fundedAfter 30 (andThen xF2 (escFund (sAt 30) 10u))
+def gFundCancelled : Step := andThen xC (escFund (sAt 40) 10u)
+def gSettleBack : Step := andThen xF2 (escSettle hPush (sAt 20) 30u)
+def gSettleAll : Option Payout := payOf (andThen xF (escSettle hPush (sAt 20) 60u))
+def gSettleOver : Step := andThen xF (escSettle hPush (sAt 20) 61u)
+def gCancelBack : Step := andThen xF2 (escCancel hPush (sAt 20))
+def gCancelTwice : Step := andThen xC (escCancel hPush (sAt 40))
+def gDisputeOpen : Step := andThen xS1 (escDispute hPush (sAt 59) 0)
+def gDisputeBack : Step := andThen xC (escDispute hPush (sAt 25) 0)
+def gDisputeV : Step := andThen xS1 (escDispute hPush (sAt 60) 2)
+-- shareAt counts from 0.
+def share0 : Option U256 := shareAt dB 0
+def share1 : Option U256 := shareAt dB 1
+def share2 : Option U256 := shareAt dB 2
+def shareEmpty : Option U256 := shareAt (fmUnit U256) 0
+-- escClose: cl1, cl2, recognized at 50. cEarly: a first close at T = 11
+-- gives recognized 11 - 0 = 42. A close at T = 10 (the start), at T = 41
+-- with the stamp 40, or at T = 30 again after cl1 refuses. T = 31 after
+-- cl1 gives 82 - 80 = 2.
+def cFirst : Option U256 := valOf cl1
+def cSecond : Option U256 := valOf cl2
+def cRec50 : Option U256 := recAfter hPush 50 xF
+def cEarly : Option U256 := valOf (closeAt hPush 11 11 xF)
+def cStart : Option U256 := valOf (closeAt hPush 40 10 xF)
+def cAfterStamp : Option U256 := valOf (closeAt hPush 40 41 xF)
+def cAtLast : Option U256 := valOf (closeThen hPush 40 30 cl1)
+def cNext : Option U256 := valOf (closeThen hPush 40 31 cl1)
+
+-- engage and countersign (Q-S5-7 (a)). The keys and the signature words
+-- come from `build/frosttool engage` (test/frosttool.c): cK is the client
+-- key and fK the firm key (two 2 of 3 committees). engR engZ: the client on
+-- (tagEngage, engDigest eS); engZBad is engZ + 1. ctrR ctrZ: the firm on
+-- (tagCountersign, engDigest eS). ctrWrongR ctrWrongZ: the client key on the
+-- countersign message. eS has the asset 3u, the scope 4u and the window
+-- (10, 60), with no signed and no cancelled time.
+def cK : Point := 0xf2bb893b2497c632d4b2e1bcc9f3565efe400130e944ea3a4ba689a46220baa2u
+def fK : Point := 0xfa043432a49afe1c8e4ad857ee8935e7cae984e9f655fbd12117d48849d5727du
+def engR : U256 := 0xae00a0168cdcf5811726c150336492d5be4ebb5857965ddb7acde38ffca7a33cu
+def engZ : U256 := 0x2c8cc28029354ca5e4f7d87c6807bd594a4bb1ce4de3fb875bbfcf9dbb033828u
+def engZBad : U256 := 0x2c8cc28029354ca5e4f7d87c6807bd594a4bb1ce4de3fb875bbfcf9dbb033829u
+def ctrR : U256 := 0x04c496fbafa6f2c546472f4b21bceb13b71945c5b6e6339783a0db63be6b38cfu
+def ctrZ : U256 := 0x64e219dee5e8683ee2fb3f4ff4bb43f5a29b34a0393e883c6b88327e5f1c55cbu
+def ctrWrongR : U256 := 0xb664bfa2b6852efa52bbe7d6eeeb684950577e0edd5a9736b52419437e516acfu
+def ctrWrongZ : U256 := 0x661429f74adfe28045219f6fb49f423f935c6bf7e0be981dfd189b34dc4ddb77u
+def eS : Engagement := engagementOf cK fK 3u 4u (windowOf 10 60) none none
+def xS : Escrow := escrowOf eS (bookOf (fmUnit (Prod Time U256)) 0u none)
+def egDigest : Digest := engDigest eS
+def egGood : Option Escrow := engage cK fK 3u 4u (windowOf 10 60) (authOf engR engZ)
+def egBadZ : Option Escrow := engage cK fK 3u 4u (windowOf 10 60) (authOf engR engZBad)
+def csGood : Option Escrow := countersign (sAt 20) (authOf ctrR ctrZ) xS
+def csWrongKey : Option Escrow := countersign (sAt 20) (authOf ctrWrongR ctrWrongZ) xS
+def csTwice : Option Escrow := bind csGood (fun (x : Escrow) => countersign (sAt 25) (authOf ctrR ctrZ) x)
+
+-- Q-S5b-5 (a): an op that moves value needs its stamp time after the last
+-- close (strict). cbX closes xF at T 50. Each op at the stamp 40 (and fund
+-- at 50) gives none; the same op at 51 gives some. For dispute, cbY closes
+-- xF at T 65 (after the end 60): a dispute at 62 gives none, at 66 some.
+-- After a cancel at 51 the closes still sum to recognized at the last close.
+def cbOp : Closed -> (Escrow -> Step) -> Step := fun (o : Closed) (f : Escrow -> Step) => bind o (fun (p : Prod Escrow U256) => f (first p))
+def cbX : Closed := closeAt hPush 50 50 xF
+def cbY : Closed := closeAt hPush 65 65 xF
+def cbFund : Option Payout := payOf (cbOp cbX (escFund (sAt 40) 100u))
+def cbFundAt : Option Payout := payOf (cbOp cbX (escFund (sAt 50) 100u))
+def cbFundCtl : Option Payout := payOf (cbOp cbX (escFund (sAt 51) 100u))
+def cbSettle : Option Payout := payOf (cbOp cbX (escSettle hPush (sAt 40) 10u))
+def cbSettleCtl : Option Payout := payOf (cbOp cbX (escSettle hPush (sAt 51) 10u))
+def cbCancel : Option Payout := payOf (cbOp cbX (escCancel hPush (sAt 40)))
+def cbCancelCtl : Option Payout := payOf (cbOp cbX (escCancel hPush (sAt 51)))
+def cbDispute : Option Payout := payOf (cbOp cbY (escDispute hPush (sAt 62) 0))
+def cbDisputeCtl : Option Payout := payOf (cbOp cbY (escDispute hPush (sAt 66) 0))
+def cbC : Step := cbOp cbX (escCancel hPush (sAt 51))
+def cbClose : Closed := bind cbC (fun (p : Prod Escrow Payout) => escClose hPush (sAt 55) 55 (first p))
+def lCloseCancel : Path (Option U256) (plusO (valOf cbX) (valOf cbClose)) (recAfter hPush 55 cbC) := refl
+def cbSum : Option U256 := plusO (valOf cbX) (valOf cbClose)
+
+-- A push or stream withdrawal also fixes the operation time. Cancelling
+-- before it would refund cash already paid to the firm. At the same time
+-- the remaining 80 can be refunded and the book invariant still holds.
+def paidPush : Step := andThen xF (escSettle hPush (sAt 50) 120u)
+def paidStream : Step := andThen xF (escSettle hStream (sAt 50) 120u)
+def paidCancelPush : Option Payout := payOf (andThen paidPush (escCancel hPush (sAt 20)))
+def paidCancelStream : Option Payout := payOf (andThen paidStream (escCancel hStream (sAt 20)))
+def paidFundBack : Option Payout := payOf (andThen paidPush (escFund (sAt 20) 1u))
+def paidCancelSame : Option Payout := payOf (andThen paidPush (escCancel hPush (sAt 50)))
+def l4PaidCancel : Path Verdict (invAfter hPush 50 (andThen paidPush (escCancel hPush (sAt 50)))) flagYes := refl
+
+-- A signature cannot change a closed period or precede the funding log.
+-- The same valid signature works after those times and leaves the closed
+-- recognized value at zero.
+def csFunded : Step := escFund (sAt 10) 200u xS
+def csClosed : Closed := closeAt hPush 50 50 csFunded
+def csClosedAt : Time -> Option U256 := fun (t : Time) => bind csClosed (fun (p : Prod Escrow U256) => bind (countersign (sAt t) (authOf ctrR ctrZ) (first p)) (bkRec hPush 50))
+def csClosedBack : Option U256 := csClosedAt 20
+def csClosedCtl : Option U256 := csClosedAt 51
+def csLateFund : Step := escFund (sAt 30) 200u xS
+def csFundAt : Time -> Option U256 := fun (t : Time) => bind csLateFund (fun (p : Prod Escrow Payout) => bind (countersign (sAt t) (authOf ctrR ctrZ) (first p)) (bkRec hPush 50))
+def csFundBack : Option U256 := csFundAt 20
+def csFundCtl : Option U256 := csFundAt 40

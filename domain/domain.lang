@@ -412,6 +412,189 @@ def earnedFrom : Option Time -> History -> Engagement -> Time -> Option U256 :=
 def earnedAt : History -> Engagement -> Time -> Option U256 := fun (h : History) (e : Engagement) (t : Time) => earnedFrom none h e t
 def earnedBetween : History -> Engagement -> Time -> Time -> Option U256 :=
   fun (h : History) (e : Engagement) (t1 : Time) (t2 : Time) => earnedFrom (some t1) h e t2
+-- Part E books (S5b, Q-S5b-1 to Q-S5b-3 (a)). An Instruction is data only
+-- (Q-S5-2 (a)): pay ixAmount of the asset ixAsset to ixPayee, at the stamp
+-- ixAt. S7 adds the payment signature and the record. Funding is the
+-- funding log, each entry a time and the funded amount after the op at that
+-- time (retainer-lang O9). A Book holds the funding log, the withdrawn
+-- amount and the time of the last close (none before the first close). An
+-- Escrow is the engagement and its book. A Payout is the list of the
+-- Instructions of one op.
+family Instruction := instructionOf (ixPayee : Point) (ixAsset : Digest) (ixAmount : U256) (ixAt : Stamp)
+def Funding : Type 0 := FreeMon (Prod Time U256)
+family Book := bookOf (bookLog : Funding) (bookWithdrawn : U256) (bookClosed : Option Time)
+family Escrow := escrowOf (escEng : Engagement) (escBook : Book)
+def Payout : Type 0 := FreeMon Instruction
+-- The book words (S5b P2, retainer-lang SPEC 6.1 and section 5). stampTime s
+-- is the time of the stamp s. fundedAt l t is the funded amount of the last
+-- entry of l at t or before, or 0 when there is none. logOk l t is
+-- verdictYes when no entry of l is after t, so an op cannot go back in time.
+-- bookOk l c t also needs t after the last close c (Q-S5b-5 (a)), because an
+-- entry at c or before changes recognized at c after the close.
+def stampTime : Stamp -> Time :=
+  fun (s : Stamp) => elim (fun (u : Stamp) => Time) (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => t) s
+def fundedAt : Funding -> Time -> U256 :=
+  fun (l : Funding) (t : Time) => fmChain (Prod Time U256) U256 u256IsSet (fun (f : U256) (x : Prod Time U256) => flagIf (natLe (first x) t) (second x) f) 0u l
+def logOk : Funding -> Time -> Verdict :=
+  fun (l : Funding) (t : Time) => fmChain (Prod Time U256) Flag flagIsSet (fun (v : Flag) (x : Prod Time U256) => flagIf (natLe (first x) t) v flagNo) flagYes l
+def bookOk : Funding -> Option Time -> Time -> Verdict :=
+  fun (l : Funding) (c : Option Time) (t : Time) => flagIf (logOk l t) (later t c) flagNo
+def logPut : Funding -> Time -> U256 -> Funding :=
+  fun (l : Funding) (t : Time) (f : U256) => fmMul (Prod Time U256) l (fmEta (Prod Time U256) (pair t f))
+-- recognizedAt h e l t = min (funded t) (earned t) (SPEC 135). unearnedAt =
+-- funded t - recognized t (SPEC 136). withdrawableAt = recognized t -
+-- withdrawn (SPEC 137). A none earned or a none residual gives none.
+def recognizedAt : History -> Engagement -> Funding -> Time -> Option U256 :=
+  fun (h : History) (e : Engagement) (l : Funding) (t : Time) => bind (earnedAt h e t) (fun (x : U256) => some (u256Min (fundedAt l t) x))
+def unearnedAt : History -> Engagement -> Funding -> Time -> Option U256 :=
+  fun (h : History) (e : Engagement) (l : Funding) (t : Time) => bind (recognizedAt h e l t) (fun (r : U256) => u256Sub (fundedAt l t) r)
+def withdrawableAt : History -> Escrow -> Time -> Option U256 :=
+  fun (h : History) (x : Escrow) (t : Time) => elim (fun (u : Escrow) => Option U256) (fun (e : Engagement) (b : Book) =>
+    elim (fun (u : Book) => Option U256) (fun (l : Funding) (w : U256) (c : Option Time) => bind (recognizedAt h e l t) (fun (r : U256) => u256Sub r w)) b) x
+-- The engagement words. engIsOpen e: no cancelled time. engIsSigned e: a
+-- signed time. engCancel e t and engSign e t set the cancelled and the
+-- signed time.
+def engClientOf : Engagement -> Point :=
+  fun (e : Engagement) => elim (fun (u : Engagement) => Point) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => cl) e
+def engFirmOf : Engagement -> Point :=
+  fun (e : Engagement) => elim (fun (u : Engagement) => Point) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => fm) e
+def engAssetOf : Engagement -> Digest :=
+  fun (e : Engagement) => elim (fun (u : Engagement) => Digest) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => asset) e
+def engStartOf : Engagement -> Time :=
+  fun (e : Engagement) => elim (fun (u : Engagement) => Time) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) =>
+    elim (fun (u : Window) => Time) (fun (sE : Time) (eE : Time) => sE) we) e
+def engEndOf : Engagement -> Time :=
+  fun (e : Engagement) => elim (fun (u : Engagement) => Time) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) =>
+    elim (fun (u : Window) => Time) (fun (sE : Time) (eE : Time) => eE) we) e
+def engIsOpen : Engagement -> Verdict :=
+  fun (e : Engagement) => elim (fun (u : Engagement) => Flag) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => option flagYes (fun (k : Time) => flagNo) cn) e
+def engIsSigned : Engagement -> Verdict :=
+  fun (e : Engagement) => elim (fun (u : Engagement) => Flag) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => option flagNo (fun (k : Time) => flagYes) sg) e
+def engCancel : Engagement -> Time -> Engagement :=
+  fun (e : Engagement) (t : Time) => elim (fun (u : Engagement) => Engagement) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => engagementOf cl fm asset scope we sg (some t)) e
+def engSign : Engagement -> Time -> Engagement :=
+  fun (e : Engagement) (t : Time) => elim (fun (u : Engagement) => Engagement) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => engagementOf cl fm asset scope we (some t) cn) e
+-- The policy in force at t is the last entry (ti, p) of h with ti < t (an
+-- entry is in force on (ti, next]). pullAt h t: its grant holds instrPull
+-- (verdictNo when no entry is in force). disputeAt h t: its dispute list
+-- (the empty list when no entry is in force). shareAt d v: the entry v of d
+-- (from 0), or none when v is outside d; the run carries the count left.
+def isPull : Policy -> Verdict :=
+  fun (p : Policy) => elim (fun (u : Policy) => Flag) (fun (r : Rate) (wp : Window) (g : Grant) (d : Dispute) =>
+    elim (fun (u : Grant) => Flag) (fun (ins : Instrument) (paused : Flag) => elim (fun (u : Instrument) => Flag) flagNo flagYes flagNo ins) g) p
+def pullAt : History -> Time -> Verdict :=
+  fun (h : History) (t : Time) => fmChain (Prod Time Policy) Flag flagIsSet (fun (v : Flag) (x : Prod Time Policy) => flagIf (later t (some (first x))) (isPull (second x)) v) flagNo h
+def disputeOf : Policy -> Dispute :=
+  fun (p : Policy) => elim (fun (u : Policy) => Dispute) (fun (r : Rate) (wp : Window) (g : Grant) (d : Dispute) => d) p
+def disputeAt : History -> Time -> Dispute :=
+  fun (h : History) (t : Time) => fmChain (Prod Time Policy) Dispute (fmIsSet U256) (fun (d : Dispute) (x : Prod Time Policy) => flagIf (later t (some (first x))) (disputeOf (second x)) d) (fmUnit U256) h
+def ShareRun : Type 0 := Prod (Option Nat) Acc
+def shareAt : Dispute -> Nat -> Option U256 :=
+  fun (d : Dispute) (v : Nat) => accOut (second (fmChain U256 ShareRun (isSetProd (Option Nat) Acc optNatIsSet accIsSet)
+    (fun (st : ShareRun) (bps : U256) => option st (fun (k : Nat) => flagIf (natLe k 0) (pair none (pair flagYes bps)) (pair (natSub k 1) (second st))) (first st))
+    (pair (some v) (pair flagNo 0u)) d))
+def bpsDen : NonZero U256 := 10000u
+-- The ops (Q-S5b-3 (a)). t is the stamp time. Each op that moves value
+-- needs bookOk l c t and gives the Escrow after and its Payout, or none.
+-- escFund s a x: add a to funded (not after a cancel).
+def escFund : Stamp -> U256 -> Escrow -> Option (Prod Escrow Payout) :=
+  fun (s : Stamp) (a : U256) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) =>
+    elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) =>
+      flagIf (flagIf (engIsOpen e) (bookOk l c (stampTime s)) flagNo)
+        (bind (u256Add (fundedAt l (stampTime s)) a) (fun (f : U256) => some (pair (escrowOf e (bookOf (logPut l (stampTime s) f) w c)) (fmUnit Instruction))))
+        none) b) x
+-- escSettle h s v x: pay v to the firm. Every settle logs the funded amount
+-- at its time, so a later op cannot precede a withdrawal. A pull settle also
+-- adds v to funded (Q-S5-8 O1). The guard is on the book after (Q-S5b-2 (a)): withdrawn + v
+-- <= recognized after.
+def escSettle : History -> Stamp -> U256 -> Escrow -> Option (Prod Escrow Payout) :=
+  fun (h : History) (s : Stamp) (v : U256) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) =>
+    elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) =>
+      flagIf (bookOk l c (stampTime s))
+        (bind (flagIf (pullAt h (stampTime s)) (bind (u256Add (fundedAt l (stampTime s)) v) (fun (f : U256) => some (logPut l (stampTime s) f))) (some (logPut l (stampTime s) (fundedAt l (stampTime s))))) (fun (l2 : Funding) =>
+          bind (u256Add w v) (fun (w2 : U256) => bind (recognizedAt h e l2 (stampTime s)) (fun (r : U256) =>
+            flagIf (u256Le w2 r) (some (pair (escrowOf e (bookOf l2 w2 c)) (fmEta Instruction (instructionOf (engFirmOf e) (engAssetOf e) v s)))) none))))
+        none) b) x
+-- escCancel h s x: cancel at t (not after a cancel). The client gets
+-- unearned t, the log gets (t, funded - unearned) = (t, recognized).
+def escCancel : History -> Stamp -> Escrow -> Option (Prod Escrow Payout) :=
+  fun (h : History) (s : Stamp) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) =>
+    elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) =>
+      flagIf (flagIf (engIsOpen e) (bookOk l c (stampTime s)) flagNo)
+        (bind (unearnedAt h e l (stampTime s)) (fun (u : U256) => bind (u256Sub (fundedAt l (stampTime s)) u) (fun (f : U256) =>
+          some (pair (escrowOf (engCancel e (stampTime s)) (bookOf (logPut l (stampTime s) f) w c)) (fmEta Instruction (instructionOf (engClientOf e) (engAssetOf e) u s))))))
+        none) b) x
+-- escDispute h s v x: after a cancel, or at the end or later (O3). u =
+-- unearned t; the firm gets floor(u * bps / 10000) (bps = entry v of the
+-- dispute list in force at t), the client the rest (Q-S5-8 (a)). The log
+-- gets (t, funded - u). A v outside the list gives none.
+def escDispute : History -> Stamp -> Nat -> Escrow -> Option (Prod Escrow Payout) :=
+  fun (h : History) (s : Stamp) (v : Nat) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) =>
+    elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) =>
+      flagIf (flagIf (flagIf (engIsOpen e) (natLe (engEndOf e) (stampTime s)) flagYes) (bookOk l c (stampTime s)) flagNo)
+        (bind (unearnedAt h e l (stampTime s)) (fun (u : U256) => bind (shareAt (disputeAt h (stampTime s)) v) (fun (bps : U256) =>
+          bind (mulDiv u bps bpsDen) (fun (fs : U256) => bind (u256Sub u fs) (fun (cs : U256) => bind (u256Sub (fundedAt l (stampTime s)) u) (fun (f : U256) =>
+            some (pair (escrowOf e (bookOf (logPut l (stampTime s) f) w c))
+              (fmMul Instruction (fmEta Instruction (instructionOf (engFirmOf e) (engAssetOf e) fs s)) (fmEta Instruction (instructionOf (engClientOf e) (engAssetOf e) cs s))))))))))
+        none) b) x
+-- escClose h s T x: recognized T - recognized T^- (Q-S5-6 (a)); T^- is the
+-- last close. The first close gives recognized T - 0 (Q-S5b-4 (a)), so the
+-- closes sum to recognized at the last close. The bound is T^- < T <= t, and
+-- before the first close the bound uses the start for T^-. The book gets the
+-- close time T.
+def escClose : History -> Stamp -> Time -> Escrow -> Option (Prod Escrow U256) :=
+  fun (h : History) (s : Stamp) (tc : Time) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow U256)) (fun (e : Engagement) (b : Book) =>
+    elim (fun (u : Book) => Option (Prod Escrow U256)) (fun (l : Funding) (w : U256) (c : Option Time) =>
+      flagIf (flagIf (natLe tc (stampTime s)) (later tc (some (option (engStartOf e) (fun (k : Time) => k) c))) flagNo)
+        (bind (recognizedAt h e l tc) (fun (r1 : U256) => bind (option (some 0u) (fun (k : Time) => recognizedAt h e l k) c) (fun (r0 : U256) =>
+          bind (u256Sub r1 r0) (fun (d : U256) => some (pair (escrowOf e (bookOf l w (some tc))) d)))))
+        none) b) x
+-- engage and countersign (Q-S5-7 (a), PLAN 4.1). engDigest e: the digest
+-- of the client, the firm, the asset, the scope and the window. The tags
+-- are the ASCII bytes of "accrue-engage" and "accrue-countersign". engage
+-- makes an Escrow with an empty book only when the Auth is a Schnorr
+-- signature of the client on (tagEngage, engDigest). countersign sets the
+-- signed time to the stamp time only when e is not signed and the Auth is a
+-- Schnorr signature of the firm on (tagCountersign, engDigest). It also
+-- needs bookOk, so signing cannot change earned in a closed period or
+-- precede the funding log.
+def tagEngage : Digest := 0x6163637275652d656e67616765u
+def tagCountersign : Digest := 0x6163637275652d636f756e7465727369676eu
+def engDigest : Engagement -> Digest :=
+  fun (e : Engagement) => elim (fun (u : Engagement) => Digest) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) =>
+    elim (fun (u : Window) => Digest) (fun (sE : Time) (eE : Time) => H3 tagEngage (hash cl fm) (H3 tagEngage (hash asset scope) (hash (toU256 sE) (toU256 eE)))) we) e
+def engage : Point -> Point -> Digest -> Digest -> Window -> Auth -> Option Escrow :=
+  fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (wn : Window) (a : Auth) =>
+    elim (fun (u : Auth) => Option Escrow) (fun (rx : U256) (z : U256) =>
+      flagIf (schnorrOk cl rx z tagEngage (engDigest (engagementOf cl fm asset scope wn none none)))
+        (some (escrowOf (engagementOf cl fm asset scope wn none none) (bookOf (fmUnit (Prod Time U256)) 0u none))) none) a
+def countersign : Stamp -> Auth -> Escrow -> Option Escrow :=
+  fun (s : Stamp) (a : Auth) (x : Escrow) => elim (fun (u : Escrow) => Option Escrow) (fun (e : Engagement) (b : Book) =>
+    elim (fun (u : Book) => Option Escrow) (fun (l : Funding) (w : U256) (c : Option Time) =>
+      elim (fun (u : Auth) => Option Escrow) (fun (rx : U256) (z : U256) =>
+        flagIf (flagIf (bookOk l c (stampTime s)) (flagIf (engIsSigned e) flagNo (schnorrOk (engFirmOf e) rx z tagCountersign (engDigest e))) flagNo)
+          (some (escrowOf (engSign e (stampTime s)) b)) none) a) b) x
+-- The CC dual of the books (S5b P3, Q-S5-4 (a)). Books A is the cofree
+-- comonad on Stamp -> _: booksNow b is the value now (eps) and booksNext b
+-- s is the book after the stamp s (advance). booksPair A sA b c runs b
+-- along the stamps of c and takes the value now (the pairing with the free
+-- monad Stamps). A guest cannot name the positions type of Books, so the
+-- run folds the stamps into a map on the readers Books A -> A (each set by
+-- isSetFun), the first stamp first, and applies it to booksNow and b.
+-- booksLast is the corecursor of the step that keeps the time of the last
+-- stamp. The pairing law: the pairing of a corecursor with a chain is the
+-- fold of its step over the chain (refl on a closed chain).
+cofamily Books (A : Type 0) := booksCorec (booksNow : A) (booksNext : Stamp -> Books A)
+def booksPair : (A : Type 0) -> isSet A -> Books A -> Stamps -> A :=
+  fun (A : Type 0) => fun (sA : isSet A) => fun (b : Books A) => fun (c : Stamps) =>
+    fmChain Stamp ((Books A -> A) -> Books A -> A) (isSetFun (Books A -> A) (Books A -> A) (isSetFun (Books A) A sA))
+      (fun (t : (Books A -> A) -> Books A -> A) (s : Stamp) => fun (k : Books A -> A) => t (fun (y : Books A) => k (booksNext A y s)))
+      (fun (k : Books A -> A) => k) c (booksNow A) b
+def booksStep : Option Time -> Stamp -> Option Time := fun (o : Option Time) (s : Stamp) => some (stampTime s)
+def booksLast : Books (Option Time) := booksCorec (Option Time) (Option Time) (fun (o : Option Time) => o) booksStep none
+def booksChain : Stamps := fmMul Stamp (fmEta Stamp (stampOf 5 0u 0u 0u)) (fmEta Stamp (stampOf 9 0u 0u 0u))
+def booksLaw : Path (Option Time) (booksPair (Option Time) optNatIsSet booksLast booksChain) (fmChain Stamp (Option Time) optNatIsSet booksStep none booksChain) := refl
+def booksLawNine : Path (Option Time) (booksPair (Option Time) optNatIsSet booksLast booksChain) (some 9) := refl
 def Proposal : Type 0 := Polity
 def Bit : Enc Verdict -> Type 0 :=
   fun (c : Enc Verdict) => Sigma (v : Verdict) (Path (Enc Verdict) (encEta Verdict v) c)
