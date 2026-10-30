@@ -37,3 +37,5 @@ daokit.lang
 append.lang
 outlog.lang
 stamps.lang
+earned.lang
+causality.lang

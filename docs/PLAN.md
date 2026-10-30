@@ -23,8 +23,12 @@ S4 DONE: a program reads time only as a `Stamp` argument.
 `REFUSE_CLOCK` refuses a clock word, and `stampSnoc` adds a stamp to the
 chain only with a good signature, a later t and the right prev; L12
 (section 5, Q-S4-1 to Q-S4-5).
-Next: S5 (Part E: port the retainer-lang domain, L1 to L6, the CC dual
-and close at T; section 4.1).
+S5a DONE: Part E is data (Segment, Mass, Rate, Window, Instrument,
+Grant, Policy, Engagement, History). G (`gAt`) and `earnedAt` read
+retainer-lang SPEC 6.1. L1, L2 and L6 are refl on closed values
+(section 1, Q-S5-1 to Q-S5-10).
+Next: S5b (the books, fund, settle, cancel, dispute, close at T,
+Instruction data, the CC dual; L3 to L5; section 4.1).
 
 ## 1. Rulings
 
@@ -64,6 +68,17 @@ and close at T; section 4.1).
 | 2026-10-29 | Q-S4-5, verbatim: "(a) Remove it (Recommended)". The `var_core` clock test goes. `resolve_head` gives `var_core` only a local or a definition, so the test cannot run (mutant M3 survived: an equivalent mutant). `unknown_name` refuses each clock use (mutant M11 killed). | USER, S4 |
 | 2026-10-29 | Not asked, a recommendation (not a ruling): the stamp key is a `Point` argument of `stampSnoc`. Polity does not change. S6 puts `keyStamp` and `tStamp` in the `Constitution`. | S4 default |
 | 2026-10-29 | Not asked, a recommendation (not a ruling): an empty chain has no last t. The first stamp needs a good signature, and prev must be the stamp genesis digest. | S4 default |
+| 2026-10-29 | Q-S5-1, verbatim: "(a) Split S5a / S5b (Recommended)". S5a: the Part E types, G, earned and the policy history as data; L1, L2, L6. S5b: the books, fund, settle, cancel, dispute, close, Instruction, the CC dual and close at T; L3, L4, L5. | USER, S5 |
+| 2026-10-29 | Q-S5-2, verbatim: "(a) Instruction data now (Recommended)". S5b adds the family `Instruction` (payee : Point, asset : Digest, amount : U256, at : Stamp) as data only. S7 adds `PayAuth` and the record. | USER, S5 |
+| 2026-10-29 | Q-S5-3, verbatim: "(a) Refl on closed values, O8 open (Recommended)". L4 is refl on closed `Flag` results. The residual stays an `Option`, and O8 stays open. | USER, S5 |
+| 2026-10-29 | Q-S5-4, verbatim: "(a) Domain cofamily Books (Recommended)". `cofamily Books (A) := booksCorec (booksNow : A) (booksNext : Stamp -> Books A)`. eps is `booksNow` and advance is `booksNext`. The pairing walks `Stamps`, with a pairing law as refl. | USER, S5 |
+| 2026-10-29 | Q-S5-5, verbatim: "(a) S5a, history as data (Recommended)". `History := FreeMon (Prod Time Policy)` as data, and L6 is refl on closed values in S5a. Gov, `choice`, the append by ballot and the regime checks go to S6. | USER, S5 |
+| 2026-10-29 | Q-S5-6, verbatim: "(a) The previous close (Recommended)". T^- is the stamp of the previous close (retainer-lang T_prev). The first close uses the start. | USER, S5 |
+| 2026-10-29 | Q-S5-7, verbatim: "(a) New Part E names (Recommended)". `Auth` becomes `Grant` and `open` becomes `engage`. The `Instrument` constructors are `instrPush`, `instrPull` and `instrStream`. The S2 to S4 names stay. | USER, S5 |
+| 2026-10-29 | Q-S5-8, verbatim: "(a) O1 equal books, O3 split unearned (Recommended)". O1: a pull settle adds w to funded and to withdrawn. O3: a dispute splits unearned. The firm gets floor(u * bps / 10000) by `mulDiv` and the client gets the rest. A verdict outside the list gives `none`. | USER, S5 |
+| 2026-10-30 | Q-S5-9, verbatim: "(b) Prod Verdict U256 fold". Each sum of G and earned folds into `Acc := Prod Verdict U256` (an ok flag and a value). `accIsSet` is `isSetProd Flag U256 flagIsSet u256IsSet`, so no trusted row is necessary. `accOut` makes the `Option` at the end. | USER, S5 |
+| 2026-10-30 | Q-S5-10, verbatim: "(a) Add a killer row (Recommended)". The mutant M22 (no engagement end in hi) survived: in each row with t after the end of the engagement, the rate was flat. `eEndAt50` in examples/earned.lang (the engagement ends at 30, the rate of hA accrues to 60) kills it. | USER, S5 |
+| 2026-10-30 | Not asked, a recommendation (not a ruling): the earned word is `earnedAt h e t`, because `earned` is a `State` field in 13 test/check files and 2 examples (R4). `earnedBetween h e t1 t2` is earned on (t1, t2] (L1). | S5a default |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -151,12 +166,13 @@ internal to the kernel. There is no `Addr`, `Env`, `msg.sender`, ERC-20
 | Amount | defined | `U256` with the residual `a - b` for `b <= a` (N1). Q-S0-3. |
 | Rate | defined | `segments : FreeMon Segment` and `masses : FreeMon Mass`, as retainer-lang C6. `Segment = (from, until : Time, num : U256, den : NonZero)`. |
 | Window | defined | `(start, end : Time)` with `start <= end`. |
-| Auth | defined | `(instrument : push | pull | stream, paused : Flag)`. |
+| Grant | defined | `grantOf (grantInstrument : Instrument) (grantPaused : Flag)`, with `Instrument := instrPush | instrPull | instrStream` (Q-S5-7: the old name was Auth). |
 | Dispute | defined | `FreeMon Bps`: the firm share of the residual for each verdict, `Bps <= 10000`. A verdict outside the list gives `none` (in retainer-lang it reverts). |
-| Policy | defined | `Rate * Window * Auth * Dispute`. |
+| Policy | defined | `policyOf (Rate, Window, Grant, Dispute)`. |
+| History | defined | `FreeMon (Prod Time Policy)`: the policy history as data, each entry a time and a policy (Q-S5-5). |
 | Engagement | defined | `(client, firm : Point, asset : Digest, scopeHash : Digest, window : Window)`, plus `countersignedAt, cancelledAt : Option Time`. `asset` names the off-chain asset (Q-S0-4). |
-| open, countersign | defined | A Schnorr signature of the client, then of the firm, on the engagement digest. |
-| earned, recognized, unearned, withdrawable | defined | retainer-lang SPEC 6.1, without change: `G` from the segment start, the closed first interval, the open later intervals. |
+| engage, countersign | defined | A Schnorr signature of the client, then of the firm, on the engagement digest. |
+| earnedAt, recognized, unearned, withdrawable | defined | retainer-lang SPEC 6.1, without change: `G` from the segment start, the closed first interval, the open later intervals. S5a: `gAt`, `earnedAt h e t` and `earnedBetween h e t1 t2` (on (t1, t2]). |
 | fund, settle, cancel, dispute, close | defined | As retainer-lang, but each one that moves value gives an `Instruction` (4.3) and does not move it. |
 
 ### 4.2 Part D: the DAO (cairn-lang Part D plus retainer-lang Gov)
@@ -323,7 +339,8 @@ refusal or a law kills at least one mutant of it.
 | S2 | Port the cairn-lang kernel (7.1). Survey first: SAME, CHANGED, CAIRN-ONLY. | DONE |
 | S3 | R0: N1, N5 in the kernel and eval; `REFUSE_PARTIAL`; checked `U256`, `mulDiv`. | DONE |
 | S4 | Time: `Stamp`, the stamp chain, `REFUSE_CLOCK`; L12. | DONE |
-| S5 | Part E: port the retainer-lang domain (7.1); L1 to L6. The CC dual and close at T (Q-S4-4). | NEXT |
+| S5a | Part E (7.1): the types, G, `earnedAt`, the policy history as data; L1, L2, L6 (Q-S5-1). | DONE |
+| S5b | Part E: the books, fund, settle, cancel, dispute, close at T (Q-S5-6), Instruction data (Q-S5-2), the CC dual (Q-S5-4); L3 to L5. | NEXT |
 | S6 | Part D: PolicyBallot, Tally, `choice` table, `GovPi`, regimes, AmendBallot, reshare; L7 to L11. | |
 | S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | |
 | S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | |
@@ -356,7 +373,8 @@ refusal or a law kills at least one mutant of it.
   with no edit gives `fix: null` and a reason.
 - O8 The residual `a - b` with a proof `b <= a` (Q-S3-3). `flagIf` is
   not dependent, so only refl on closed values can make the proof now. A
-  dependent `Flag` eliminator comes first. S5 needs it for L4.
+  dependent `Flag` eliminator comes first. S5b takes L4 as refl on
+  closed values (Q-S5-3), so O8 stays open for a later slice.
 - O9 Rule N4 for the S8 writer (Q-S3-18): no trap flag, no
   `IR_STMT_TRAP` and no Wasm `unreachable`. How an entry with an
   `Option` result gives `none` to the host (the entry ABI) is an open S8

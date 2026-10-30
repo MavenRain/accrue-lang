@@ -1,0 +1,41 @@
+-- L6 (S5a, Q-S5-5 (a), PLAN 5): an amendment at t* is in force only after
+-- t*, so earned at each t <= t* stays the same. A kit file (NonZero). hA
+-- holds pA at 0 and pB at 30; hC is hA and then pC at t* = 45. pC accrues 5
+-- for each unit on the offsets 0 to 50.
+def rA : Rate := pair (fmMul Segment (fmEta Segment (segmentOf 0 20 3u 2u)) (fmEta Segment (segmentOf 20 40 1u 1u))) (fmMul Mass (fmEta Mass (massOf 0 50u)) (fmEta Mass (massOf 25 7u)))
+def rB : Rate := pair (fmEta Segment (segmentOf 0 50 2u 1u)) (fmEta Mass (massOf 30 9u))
+def grantOn : Grant := grantOf instrStream flagNo
+def pA : Policy := policyOf rA (windowOf 0 100) grantOn (fmUnit U256)
+def pB : Policy := policyOf rB (windowOf 0 100) grantOn (fmUnit U256)
+def pC : Policy := policyOf (pair (fmEta Segment (segmentOf 0 50 5u 1u)) (fmUnit Mass)) (windowOf 0 100) grantOn (fmUnit U256)
+def eA : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 60) (some 10) none
+def hA : History := fmMul (Prod Time Policy) (fmEta (Prod Time Policy) (pair 0 pA)) (fmEta (Prod Time Policy) (pair 30 pB))
+def hC : History := fmMul (Prod Time Policy) hA (fmEta (Prod Time Policy) (pair 45 pC))
+
+-- L6: the same earned at t <= t* (the start, the edge 30, 44 and t* = 45).
+def l6Start : Path (Option U256) (earnedAt hC eA 10) (earnedAt hA eA 10) := refl
+def l6Edge : Path (Option U256) (earnedAt hC eA 30) (earnedAt hA eA 30) := refl
+def l6Before : Path (Option U256) (earnedAt hC eA 44) (earnedAt hA eA 44) := refl
+def l6At : Path (Option U256) (earnedAt hC eA 45) (earnedAt hA eA 45) := refl
+-- After t* the amendment has an effect: at 50, pB gives 2 and pC gives 5
+-- for each unit on (45, 50].
+def l6After : Path Verdict (u256Eq (option 0u (fun (x : U256) => x) (earnedAt hC eA 50)) (option 0u (fun (x : U256) => x) (earnedAt hA eA 50))) flagNo := refl
+
+-- Eval rows: earned at t* and after t*, with and without the amendment.
+def cvAt : Option U256 := earnedAt hC eA 45
+def cvAfterOld : Option U256 := earnedAt hA eA 50
+def cvAfterNew : Option U256 := earnedAt hC eA 50
+
+-- An empty open interval must not evaluate G. This rate is well formed,
+-- but its cumulative amount overflows at the amendment offset, 35.
+-- The amendment still leaves earned through t* unchanged, and (t*, t*]
+-- earns zero. A nonempty interval keeps the checked overflow result.
+def pOverflow : Policy := policyOf (pair (fmEta Segment (segmentOf 0 100 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu 1u)) (fmUnit Mass)) (windowOf 0 100) grantOn (fmUnit U256)
+def hOverflow : History := fmMul (Prod Time Policy) hA (fmEta (Prod Time Policy) (pair 45 pOverflow))
+def cvOverflowBefore : Option U256 := earnedAt hOverflow eA 44
+def cvOverflowAt : Option U256 := earnedAt hOverflow eA 45
+def cvEmpty : Option U256 := earnedBetween hOverflow eA 45 45
+def cvOverflowAfter : Option U256 := earnedAt hOverflow eA 46
+def l6OverflowBefore : Path (Option U256) cvOverflowBefore (earnedAt hA eA 44) := refl
+def l6OverflowAt : Path (Option U256) cvOverflowAt (earnedAt hA eA 45) := refl
+def l1Empty : Path (Option U256) cvEmpty (some 0u) := refl

@@ -1,0 +1,97 @@
+-- L1 and L2 (S5a, Q-S5-1 (a), retainer-lang SPEC 6.1): earned under a
+-- policy history. A kit file (NonZero). eA runs from 10 to 60 and is signed
+-- at 10. hA has two entries: pA at 0 and pB at 30 (the edge of the first
+-- segment of pA). rA accrues 3/2 for each unit on the offsets 0 to 20 and 1
+-- for each unit on 20 to 40, with a mass of 50 at the offset 0 and 7 at 25.
+-- rB accrues 2 for each unit on 0 to 50, with a mass of 9 at the offset 30
+-- (the time 40).
+def rA : Rate := pair (fmMul Segment (fmEta Segment (segmentOf 0 20 3u 2u)) (fmEta Segment (segmentOf 20 40 1u 1u))) (fmMul Mass (fmEta Mass (massOf 0 50u)) (fmEta Mass (massOf 25 7u)))
+def rB : Rate := pair (fmEta Segment (segmentOf 0 50 2u 1u)) (fmEta Mass (massOf 30 9u))
+def grantOn : Grant := grantOf instrStream flagNo
+def pA : Policy := policyOf rA (windowOf 0 100) grantOn (fmUnit U256)
+def pB : Policy := policyOf rB (windowOf 0 100) grantOn (fmUnit U256)
+def eA : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 60) (some 10) none
+def hA : History := fmMul (Prod Time Policy) (fmEta (Prod Time Policy) (pair 0 pA)) (fmEta (Prod Time Policy) (pair 30 pB))
+-- plusO a b: the sum of two Option values. optLe a b: a <= b (no for a none).
+def plusO : Option U256 -> Option U256 -> Option U256 :=
+  fun (a : Option U256) (b : Option U256) => bind a (fun (x : U256) => bind b (fun (y : U256) => u256Add x y))
+def optLe : Option U256 -> Option U256 -> Verdict :=
+  fun (a : Option U256) (b : Option U256) => option flagNo (fun (x : U256) => option flagNo (fun (y : U256) => u256Le x y) b) a
+
+-- L1: earned t2 = earned t1 + earned (t1, t2]. The pairs: before the start
+-- to after it, the start to the segment edge (30), the edge to the mass
+-- point of rB (40), a pair across the amendment, and a pair past the end.
+def l1Start : Path (Option U256) (earnedAt hA eA 12) (plusO (earnedAt hA eA 9) (earnedBetween hA eA 9 12)) := refl
+def l1Edge : Path (Option U256) (earnedAt hA eA 30) (plusO (earnedAt hA eA 10) (earnedBetween hA eA 10 30)) := refl
+def l1Mass : Path (Option U256) (earnedAt hA eA 40) (plusO (earnedAt hA eA 30) (earnedBetween hA eA 30 40)) := refl
+def l1Across : Path (Option U256) (earnedAt hA eA 37) (plusO (earnedAt hA eA 13) (earnedBetween hA eA 13 37)) := refl
+def l1End : Path (Option U256) (earnedAt hA eA 70) (plusO (earnedAt hA eA 40) (earnedBetween hA eA 40 70)) := refl
+
+-- L2: earned is 0 before the start and does not go down.
+def l2Zero : Path (Option U256) (earnedAt hA eA 0) (some 0u) := refl
+def l2Before : Path (Option U256) (earnedAt hA eA 9) (some 0u) := refl
+def l2Up1 : Path Verdict (optLe (earnedAt hA eA 9) (earnedAt hA eA 10)) flagYes := refl
+def l2Up2 : Path Verdict (optLe (earnedAt hA eA 13) (earnedAt hA eA 37)) flagYes := refl
+def l2Up3 : Path Verdict (optLe (earnedAt hA eA 40) (earnedAt hA eA 70)) flagYes := refl
+
+-- SPEC 176-179: a closed linear stream of the deposit 1000 from 10 to 17
+-- is one segment (0, 7, 1000, 7), and earned at the end is 1000.
+def eL : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 17) (some 10) none
+def hL : History := fmEta (Prod Time Policy) (pair 0 (policyOf (pair (fmEta Segment (segmentOf 0 7 1000u 7u)) (fmUnit Mass)) (windowOf 0 100) grantOn (fmUnit U256)))
+def l2Stream : Path (Option U256) (earnedAt hL eL 17) (some 1000u) := refl
+-- SPEC 171-172: a mass of 100 at the offset 0 earns 100 at the start and
+-- stays 100.
+def rM : Rate := pair (fmUnit Segment) (fmEta Mass (massOf 0 100u))
+def eM : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 50) (some 10) none
+def hM : History := fmEta (Prod Time Policy) (pair 0 (policyOf rM (windowOf 0 100) grantOn (fmUnit U256)))
+def l2MassStart : Path (Option U256) (earnedAt hM eM 10) (some 100u) := refl
+def l2MassLater : Path (Option U256) (earnedAt hM eM 30) (some 100u) := refl
+
+-- The cuts of an entry. A paused grant, no signed time, a signed time after
+-- the start (the past mass does not earn again), a policy window that starts
+-- after the start, a cancel at 20, a bad Segment (none) and a sum past the
+-- U256 maximum (none).
+def hPaused : History := fmEta (Prod Time Policy) (pair 0 (policyOf rM (windowOf 0 100) (grantOf instrPush flagYes) (fmUnit U256)))
+def eUnsigned : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 50) none none
+def eLate : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 50) (some 12) none
+def hLateWin : History := fmEta (Prod Time Policy) (pair 0 (policyOf rA (windowOf 15 100) grantOn (fmUnit U256)))
+def eCancel : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 60) (some 10) (some 20)
+def hBad : History := fmEta (Prod Time Policy) (pair 0 (policyOf (pair (fmEta Segment (segmentOf 10 5 1u 1u)) (fmEta Mass (massOf 0 5u))) (windowOf 0 100) grantOn (fmUnit U256)))
+def hOver : History := fmEta (Prod Time Policy) (pair 0 (policyOf (pair (fmUnit Segment) (fmMul Mass (fmEta Mass (massOf 0 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu)) (fmEta Mass (massOf 0 1u)))) (windowOf 0 100) grantOn (fmUnit U256)))
+-- The bound guards. hEnd: a policy window that ends at 40, before the end
+-- of eA and before t. eSignSeg: a signed time in the first segment of hL
+-- (the open interval from 12 to 17). eSignEarly: a signed time before the
+-- start of eA (no accrual before the start).
+def hEnd : History := fmEta (Prod Time Policy) (pair 0 (policyOf rA (windowOf 0 40) grantOn (fmUnit U256)))
+def eSignSeg : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 17) (some 12) none
+def eSignEarly : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 60) (some 5) none
+-- eEndEarly: the engagement ends at 30, before the rate of hA stops.
+def eEndEarly : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 30) (some 10) none
+
+-- Eval rows: the values of earned at each point above.
+def ea9 : Option U256 := earnedAt hA eA 9
+def ea10 : Option U256 := earnedAt hA eA 10
+def ea13 : Option U256 := earnedAt hA eA 13
+def ea25 : Option U256 := earnedAt hA eA 25
+def ea30 : Option U256 := earnedAt hA eA 30
+def ea37 : Option U256 := earnedAt hA eA 37
+def ea40 : Option U256 := earnedAt hA eA 40
+def ea60 : Option U256 := earnedAt hA eA 60
+def ea70 : Option U256 := earnedAt hA eA 70
+def eb1030 : Option U256 := earnedBetween hA eA 10 30
+def eb1337 : Option U256 := earnedBetween hA eA 13 37
+def eStream12 : Option U256 := earnedAt hL eL 12
+def eStream17 : Option U256 := earnedAt hL eL 17
+def eMass10 : Option U256 := earnedAt hM eM 10
+def ePaused : Option U256 := earnedAt hPaused eM 30
+def eNoSign : Option U256 := earnedAt hM eUnsigned 30
+def eLateSign : Option U256 := earnedAt hM eLate 30
+def eLateWin : Option U256 := earnedAt hLateWin eA 30
+def eCancelled : Option U256 := earnedAt hA eCancel 37
+def eBadSeg : Option U256 := earnedAt hBad eA 30
+def eOverflow : Option U256 := earnedAt hOver eA 30
+def eEarlyEnd : Option U256 := earnedAt hEnd eA 50
+def eLateSignSeg : Option U256 := earnedAt hL eSignSeg 17
+def eEarlySign8 : Option U256 := earnedAt hA eSignEarly 8
+def eEarlySign30 : Option U256 := earnedAt hA eSignEarly 30
+def eEndAt50 : Option U256 := earnedAt hA eEndEarly 50

@@ -58,6 +58,7 @@ of each section gives its rule or ruling.
 | The free monoid | `FreeMon`, `fmCons`, `fmIsSet`, `fmFold`, `fmBind`, `fmMap`, `endoThen`, `fmChain`, `fmRun`, `len` |
 | Part R, the record | `Digest`, `Entry`, `Record`, `snoc`, `tagGenesis`, `tagAppend`, `H3`, `chainFrom`, `head`, `opSucc`, `Verdict`, `verdictYes`, `foundAt`, `verify`, `prefix`, `Inclusion`, `recTake`, `recDrop`, `inclusion`, `verifyAt`, `Auth`, `authOf`, `authR`, `authZ`, `authOk`, `append` |
 | S4, the stamp chain | `Time`, `Stamp`, `stampOf`, `stampT`, `stampPrev`, `stampR`, `stampZ`, `Stamps`, `tagStamp`, `tagStampGenesis`, `stampStep`, `stampHead`, `lastT`, `later`, `stampOk`, `stampSnoc` |
+| S5a, Part E | `Segment`, `segmentOf`, `segFrom`, `segUntil`, `segNum`, `segDen`, `Mass`, `massOf`, `massAt`, `massAmount`, `Rate`, `Window`, `windowOf`, `winStart`, `winEnd`, `Instrument`, `instrPush`, `instrPull`, `instrStream`, `Grant`, `grantOf`, `grantInstrument`, `grantPaused`, `Dispute`, `Policy`, `policyOf`, `polRate`, `polWindow`, `polGrant`, `polDispute`, `Engagement`, `engagementOf`, `engClient`, `engFirm`, `engAsset`, `engScope`, `engWindow`, `engSigned`, `engCancelled`, `History`, `u256Min`, `natMax`, `natMin`, `Acc`, `accIsSet`, `accZero`, `accAdd`, `accOut`, `segTerm`, `gAt`, `optMin`, `optMax`, `accrue`, `entryTerm`, `EarnRun`, `earnedFrom`, `earnedAt`, `earnedBetween` |
 | The encrypted values | the sealed family `Enc`, `encBind`, `encMap`, `encOp2`, the law defs `decrypt` and `observe` |
 | Quorum and proofs | `Quorum`, the law def `open`, `ZKProof`, the sealed family `Transcript`, the law def `verified` |
 | Part D, the DAO | `Point`, `Count`, `verdictNo`, `isSetProd`, `encEtaOf`, `encIsSet`, `Polity`, `makePolity`, `members`, `tAppend`, `tAmend`, `tOpen`, `keyOpen`, `keyAppend`, `polityIsSet`, `Proposal`, `Bit`, `SealedBallot`, `mkBallot`, `ballotVote`, `linkTag`, `Box`, `tagUsed`, `castBallot`, `tallyBox`, `countVotes`, `Decided`, `decideYes`, `enact`, `stepD`, `amendAll` |
@@ -86,6 +87,12 @@ of each section gives its rule or ruling.
 - `examples/stamps.lang` holds the law L12 (S4): a good first and second
   stamp go at the end of the chain, and a bad signature, an old or equal
   time, a wrong prev or another key gives none.
+- `examples/earned.lang` holds the laws L1 and L2 (S5a): earned at t2 is
+  earned at t1 plus earned on (t1, t2], earned is 0 before the start, and
+  earned does not go down. It also holds the cuts of an entry: each bound,
+  a pause, no signed time, a bad Segment and a sum past the U256 maximum.
+- `examples/causality.lang` holds the law L6 (S5a): an amendment at t*
+  does not change earned at a t <= t*.
 
 ## How to change the domain
 

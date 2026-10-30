@@ -329,6 +329,89 @@ def stampOk : Point -> Stamp -> Stamps -> Verdict :=
       (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => flagIf (u256Eq prev (stampHead c)) (flagIf (later t (lastT c)) (schnorrOk key rx z prev (toU256 t)) flagNo) flagNo) s
 def stampSnoc : Point -> Stamp -> Stamps -> Option Stamps :=
   fun (key : Point) (s : Stamp) (c : Stamps) => flagIf (stampOk key s c) (some (fmMul Stamp c (fmEta Stamp s))) none
+-- Part E (S5a, Q-S5-1 to Q-S5-9): the engagement of retainer-lang SPEC 5
+-- as data. Each time in a Segment or a Mass is an offset from the start of
+-- the engagement. A Segment accrues segNum / segDen for each time unit from
+-- segFrom to segUntil. A Mass adds massAmount at massAt. A Grant holds the
+-- instrument and the pause flag (Q-S5-7 (a): Auth is the append signature).
+-- A Dispute is the list of the firm shares in bps. History is the policy
+-- history as data, each entry a time and a policy (Q-S5-5 (a)).
+family Segment := segmentOf (segFrom : Time) (segUntil : Time) (segNum : U256) (segDen : NonZero U256)
+family Mass := massOf (massAt : Time) (massAmount : U256)
+def Rate : Type 0 := Prod (FreeMon Segment) (FreeMon Mass)
+family Window := windowOf (winStart : Time) (winEnd : Time)
+family Instrument := instrPush | instrPull | instrStream
+family Grant := grantOf (grantInstrument : Instrument) (grantPaused : Flag)
+def Dispute : Type 0 := FreeMon U256
+family Policy := policyOf (polRate : Rate) (polWindow : Window) (polGrant : Grant) (polDispute : Dispute)
+family Engagement := engagementOf (engClient : Point) (engFirm : Point) (engAsset : Digest) (engScope : Digest) (engWindow : Window) (engSigned : Option Time) (engCancelled : Option Time)
+def History : Type 0 := FreeMon (Prod Time Policy)
+-- The order words (the kit has no min or max word).
+def u256Min : U256 -> U256 -> U256 := fun (a : U256) (b : U256) => flagIf (u256Le a b) a b
+def natMax : Time -> Time -> Time := fun (a : Time) (b : Time) => flagIf (natLe a b) b a
+def natMin : Time -> Time -> Time := fun (a : Time) (b : Time) => flagIf (natLe a b) a b
+-- G and earnedAt (S5a, retainer-lang SPEC 6.1). Each sum folds into Acc,
+-- an ok flag and a value (Q-S5-9 (b): Acc is a set by isSetProd, so no
+-- trusted row is necessary). accOut makes the Option at the end. A none
+-- term clears the flag, and then the sum is none.
+def Acc : Type 0 := Prod Verdict U256
+def accIsSet : isSet Acc := isSetProd Flag U256 flagIsSet u256IsSet
+def accZero : Acc := pair flagYes 0u
+def accAdd : Acc -> Option U256 -> Acc :=
+  fun (a : Acc) (o : Option U256) => flagIf (first a) (option (pair flagNo 0u) (fun (v : U256) => option (pair flagNo 0u) (fun (w : U256) => pair flagYes w) (u256Add (second a) v)) o) a
+def accOut : Acc -> Option U256 := fun (a : Acc) => flagIf (first a) (some (second a)) none
+-- segTerm s x = floor(segNum * (clamp(x, segFrom, segUntil) - segFrom) / segDen).
+-- natSub gives none only when segUntil < segFrom (a bad Segment).
+def segTerm : Segment -> Time -> Option U256 :=
+  fun (s : Segment) (x : Time) => elim (fun (u : Segment) => Option U256)
+    (fun (sf : Time) (su : Time) (num : U256) (den : NonZero U256) => bind (natSub (natMin (natMax x sf) su) sf) (fun (d : Time) => mulDiv num (toU256 d) den)) s
+-- gAt r x: the sum of the segment terms at the offset x, and the amount of
+-- each mass at the offset x or before.
+def gAt : Rate -> Time -> Option U256 :=
+  fun (r : Rate) (x : Time) => accOut (fmChain Mass Acc accIsSet
+    (fun (a : Acc) (m : Mass) => elim (fun (u : Mass) => Acc) (fun (ma : Time) (amt : U256) => flagIf (natLe ma x) (accAdd a (some amt)) a) m)
+    (fmChain Segment Acc accIsSet (fun (a : Acc) (s : Segment) => accAdd a (segTerm s x)) accZero (first r)) (second r))
+-- optMin x o and optMax x o: a none bound has no effect.
+def optMin : Time -> Option Time -> Time := fun (x : Time) (o : Option Time) => option x (fun (k : Time) => natMin x k) o
+def optMax : Time -> Option Time -> Time := fun (x : Time) (o : Option Time) => option x (fun (k : Time) => natMax x k) o
+-- accrue r s lo hi closed: the term of one entry, G(hi - s) - G(lo - s) on
+-- (lo, hi], or G(hi - s) on the closed [s, hi]. An empty interval gives 0
+-- without evaluating G. The closed singleton [s, s] includes a mass at 0.
+def accrue : Rate -> Time -> Time -> Time -> Verdict -> Option U256 :=
+  fun (r : Rate) (s : Time) (lo : Time) (hi : Time) (closed : Verdict) =>
+    flagIf (flagIf closed (natLe lo hi) (later hi (some lo)))
+      (bind (natSub hi s) (fun (dh : Time) => flagIf closed (gAt r dh)
+        (bind (gAt r dh) (fun (gh : U256) => bind (natSub lo s) (fun (dl : Time) => bind (gAt r dl) (fun (gl : U256) => u256Sub gh gl))))))
+      (some 0u)
+-- entryTerm e lower t nxt ti p: the entry (ti, p) is in force on (ti, nxt].
+-- The window of e, the window of p, the signed and the cancelled times of e,
+-- the time t and the open lower bound lower cut it. A paused grant or no
+-- signed time adds 0. An entry in force at the start S of e (ti < S, the
+-- policy start at S or before, signed at S or before, and no lower bound at
+-- S or after) adds G on the closed [S, hi], so a mass at the offset 0 counts.
+def entryTerm : Engagement -> Option Time -> Time -> Option Time -> Time -> Policy -> Option U256 :=
+  fun (e : Engagement) (lower : Option Time) (t : Time) (nxt : Option Time) (ti : Time) (p : Policy) =>
+    elim (fun (u : Engagement) => Option U256) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg0 : Option Time) (cn : Option Time) =>
+      elim (fun (u : Window) => Option U256) (fun (sE : Time) (eE : Time) =>
+        elim (fun (u : Policy) => Option U256) (fun (r : Rate) (wp : Window) (g : Grant) (d : Dispute) =>
+          elim (fun (u : Window) => Option U256) (fun (sP : Time) (eP : Time) =>
+            elim (fun (u : Grant) => Option U256) (fun (ins : Instrument) (paused : Flag) =>
+              flagIf paused (some 0u) (option (some 0u) (fun (sg : Time) =>
+                accrue r sE (optMax (natMax (natMax ti sE) (natMax sP sg)) lower) (optMin (optMin (natMin (natMin eE eP) t) nxt) cn)
+                  (flagIf (natLe sE ti) flagNo (flagIf (natLe sP sE) (flagIf (natLe sg sE) (later sE lower) flagNo) flagNo))) sg0)) g) wp) p) we) e
+-- earnedFrom lower h e t: the sum of the entry terms of h. The run goes
+-- from the last entry to the first and carries the time of the next entry.
+-- earnedAt h e t is earned at t (SPEC 6.1). earnedBetween h e t1 t2 is
+-- earned on (t1, t2] (L1).
+def EarnRun : Type 0 := Prod Acc (Option Time)
+def earnedFrom : Option Time -> History -> Engagement -> Time -> Option U256 :=
+  fun (lower : Option Time) (h : History) (e : Engagement) (t : Time) =>
+    accOut (first (fmRun (Prod Time Policy) EarnRun (isSetProd Acc (Option Time) accIsSet optNatIsSet)
+      (fun (x : Prod Time Policy) (st : EarnRun) => pair (accAdd (first st) (entryTerm e lower t (second st) (first x) (second x))) (some (first x)))
+      (pair accZero none) h))
+def earnedAt : History -> Engagement -> Time -> Option U256 := fun (h : History) (e : Engagement) (t : Time) => earnedFrom none h e t
+def earnedBetween : History -> Engagement -> Time -> Time -> Option U256 :=
+  fun (h : History) (e : Engagement) (t1 : Time) (t2 : Time) => earnedFrom (some t1) h e t2
 def Proposal : Type 0 := Polity
 def Bit : Enc Verdict -> Type 0 :=
   fun (c : Enc Verdict) => Sigma (v : Verdict) (Path (Enc Verdict) (encEta Verdict v) c)
