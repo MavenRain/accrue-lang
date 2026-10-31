@@ -574,6 +574,74 @@ def escClose : History -> Stamp -> Time -> Escrow -> Option (Prod Escrow U256) :
         (bind (recognizedAt h e l tc) (fun (r1 : U256) => bind (option (some 0u) (fun (k : Time) => recognizedAt h e l k) c) (fun (r0 : U256) =>
           bind (u256Sub r1 r0) (fun (d : U256) => some (pair (escrowOf e (bookOf l w (some tc))) d)))))
         none) b) x
+-- Part S (S7, Q-S7-2 and Q-S7-4 (a)): the record of the instructions. A
+-- PayEntry is an op kind and an Instruction, and a PayLog is a list of
+-- PayEntry values. The tag is the ASCII bytes of "accrue-pay" as a
+-- big-endian U256. ixDigest p is the digest of the kind code (0, 1 or 2),
+-- the payee, the asset, the amount and the four stamp fields, with H3 and
+-- tagPay (the engDigest form). ixEntries log is the Part R record of the
+-- digests, and ixHead log is its head. payEntries k ps puts each
+-- Instruction of the Payout ps in a PayEntry of the kind k.
+family PayKind := kindSettle | kindCancel | kindDispute
+family PayEntry := payEntryOf (peKind : PayKind) (peIx : Instruction)
+def PayLog : Type 0 := FreeMon PayEntry
+def tagPay : Digest := 0x6163637275652d706179u
+def ixDigest : PayEntry -> Digest :=
+  fun (p : PayEntry) => elim (fun (u : PayEntry) => Digest) (fun (k : PayKind) (i : Instruction) =>
+    elim (fun (u : Instruction) => Digest) (fun (py : Point) (ast : Digest) (am : U256) (st : Stamp) =>
+      elim (fun (u : Stamp) => Digest) (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) =>
+        H3 tagPay (hash (elim (fun (u : PayKind) => U256) 0u 1u 2u k) py) (H3 tagPay (hash ast am) (H3 tagPay (hash (toU256 t) prev) (hash rx z)))) st) i) p
+def ixEntries : PayLog -> Record :=
+  fun (log : PayLog) => fmMap PayEntry Entry ixDigest log
+def ixHead : PayLog -> Digest :=
+  fun (log : PayLog) => head (ixEntries log)
+def payEntries : PayKind -> Payout -> PayLog :=
+  fun (k : PayKind) (ps : Payout) => fmMap Instruction PayEntry (fun (i : Instruction) => payEntryOf k i) ps
+-- The pay check (S7, Q-S7-1 and Q-S7-3 (a)). A PayAuth is a threshold
+-- Schnorr signature (R.x, z) of the keyPay committee on the message
+-- (ixHead log, ixDigest p), so the signature binds the position (the authOk
+-- form). keyAppend does not sign the pay log. paySnoc puts p at the end of
+-- log only when payOk holds and verify does not find ixDigest p in the
+-- record (valid once), else it gives none.
+family PayAuth := payAuthOf (payR : U256) (payZ : U256)
+def payOk : Polity -> PayAuth -> PayEntry -> PayLog -> Verdict :=
+  fun (s : Polity) (a : PayAuth) (p : PayEntry) (log : PayLog) =>
+    elim (fun (u : PayAuth) => Flag)
+      (fun (rx : U256) (z : U256) => schnorrOk (keyPay s) rx z (ixHead log) (ixDigest p)) a
+def paySnoc : Polity -> PayAuth -> PayEntry -> PayLog -> Option PayLog :=
+  fun (s : Polity) (a : PayAuth) (p : PayEntry) (log : PayLog) =>
+    flagIf (payOk s a p log) (option (some (fmMul PayEntry log (fmEta PayEntry p))) (fun (j : Nat) => none) (verify (ixDigest p) (ixEntries log))) none
+-- settledIn log is the sum of the amounts of the kindSettle entries of log
+-- (Acc, none on an overflow). A dispute pays the firm out of unearned, so
+-- its entry does not add to the settled sum (retainer-lang SPEC 139, 217).
+-- escSettleR restores withdrawn from the record before doing the op. For
+-- pull it pays earned minus withdrawn, since escSettle funds that payment.
+-- For push and stream it pays recognized minus withdrawn. A record behind
+-- the book or ahead of the stamp is refused.
+def settledIn : PayLog -> Option U256 :=
+  fun (log : PayLog) => accOut (fmChain PayEntry Acc accIsSet (fun (a : Acc) (p : PayEntry) => elim (fun (u : PayEntry) => Acc) (fun (k : PayKind) (i : Instruction) =>
+    elim (fun (u : PayKind) => Acc) (accAdd a (some (elim (fun (u : Instruction) => U256) (fun (py : Point) (ast : Digest) (am : U256) (st : Stamp) => am) i))) a a k) p) accZero log)
+-- payCarry h w t log skips the first w settled units already in the book
+-- and sums the remaining pull funding, using the policy at each payment.
+-- The first fold field is the amount still to skip; subtraction clamps at
+-- zero here. The second carries failure, including an entry after t.
+def payCarry : History -> U256 -> Time -> PayLog -> Option U256 :=
+  fun (h : History) (w : U256) (t : Time) (log : PayLog) => accOut (second (fmChain PayEntry (Prod U256 Acc) (isSetProd U256 Acc u256IsSet accIsSet)
+    (fun (st : Prod U256 Acc) (p : PayEntry) => elim (fun (u : PayEntry) => Prod U256 Acc) (fun (k : PayKind) (i : Instruction) =>
+      elim (fun (u : Instruction) => Prod U256 Acc) (fun (py : Point) (ast : Digest) (am : U256) (at : Stamp) =>
+        flagIf (natLe (stampTime at) t)
+          (elim (fun (u : PayKind) => Prod U256 Acc)
+            (pair (option 0u (fun (n : U256) => n) (u256Sub (first st) am))
+              (accAdd (second st) (flagIf (pullAt h (stampTime at)) (u256Sub am (u256Min am (first st))) (some 0u)))) st st k)
+          (pair (first st) (pair flagNo 0u))) i) p)
+    (pair w accZero) log))
+def escSettleR : History -> Stamp -> Escrow -> PayLog -> Option (Prod Escrow Payout) :=
+  fun (h : History) (s : Stamp) (x : Escrow) (log : PayLog) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) =>
+    elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) =>
+      bind (settledIn log) (fun (wl : U256) => flagIf (u256Le w wl)
+        (bind (payCarry h w (stampTime s) log) (fun (d : U256) => bind (u256Add (fundedAt l (stampTime s)) d) (fun (f : U256) =>
+          bind (flagIf (pullAt h (stampTime s)) (earnedAt h e (stampTime s)) (recognizedAt h e (logPut l (stampTime s) f) (stampTime s))) (fun (r : U256) =>
+            bind (u256Sub r wl) (fun (v : U256) => escSettle h s v (escrowOf e (bookOf (logPut l (stampTime s) f) wl c))))))) none)) b) x
 -- engage and countersign (Q-S5-7 (a), PLAN 4.1). engDigest e: the digest
 -- of the client, the firm, the asset, the scope and the window. The tags
 -- are the ASCII bytes of "accrue-engage" and "accrue-countersign". engage

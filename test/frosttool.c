@@ -13,7 +13,8 @@
    the argument `stamps` it prints the stamp words of examples/stamps.lang
    (slice S4, Q-S4-3 (a)) in the same form. With the argument `engage` it
    prints the engage words of examples/books.lang (slice S5b) in the same
-   form. */
+   form. With the argument `pay` it prints the pay words of
+   examples/pay.lang (slice S7, Q-S7-1 to Q-S7-4 (a)) in the same form. */
 #include <stdio.h>
 #include <string.h>
 
@@ -289,6 +290,106 @@ static int engage_words(void) {
          && signed_by("ctrWrongR", "ctrWrongZ", &sig, client, client_keys, &client_pk, &cx, &tag_countersign, &d, 540u);
 }
 
+/* H3 t x y = hash (hash t x) y of domain/domain.lang. OUT can be Y. */
+static void h3(U256 *out, const U256 *t, const U256 *x, const U256 *y) {
+  U256 m;
+  thr_hash(&m, t, x);
+  thr_hash(out, &m, y);
+}
+
+/* ixDigest of domain/domain.lang (slice S7) for a PayEntry with the kind
+   code KIND and the Instruction (PAYEE, ASSET, AMOUNT, sAt T) under TAG:
+   H3 tagPay (hash kind payee) (H3 tagPay (hash asset amount) (H3 tagPay
+   (hash t 0) (hash 0 0))). The stamp sAt t has prev, rx and z 0. */
+static void ix_digest(U256 *d, const U256 *tag, uint64_t kind, uint64_t payee, uint64_t asset, uint64_t amount, uint64_t t) {
+  U256 a;
+  U256 b;
+  U256 zero;
+  U256 kp;
+  U256 aa;
+  U256 in;
+  u256_from_u64(&zero, 0u);
+  u256_from_u64(&a, kind);
+  u256_from_u64(&b, payee);
+  thr_hash(&kp, &a, &b);
+  u256_from_u64(&a, asset);
+  u256_from_u64(&b, amount);
+  thr_hash(&aa, &a, &b);
+  u256_from_u64(&a, t);
+  thr_hash(&b, &a, &zero);
+  thr_hash(&in, &zero, &zero);
+  h3(&in, tag, &b, &in);
+  h3(&in, tag, &aa, &in);
+  h3(d, tag, &kp, &in);
+}
+
+/* One signature of members 1, 2 and 3 of the 3 of 4 committee SHARES
+   (KEYS) under PK on the message (HEAD, D), with the seeds from SEED. It
+   prints R_NAME and Z_NAME and puts the signature in SIG. 0 when the
+   session or the check fails. */
+static int pay_signed(const char *r_name, const char *z_name, AuthSig *sig, const ThrShare *shares, const GroupPoint *keys, const GroupPoint *pk, const U256 *px, const U256 *head, const U256 *d, uint64_t seed) {
+  static const uint32_t trio[3] = {1u, 2u, 3u};
+  AuthCommit list[THR_N_MAX];
+  AuthShare zs[THR_N_MAX];
+  if (session(sig, list, zs, shares, trio, 3u, keys, 3u, 4u, pk, head, d, seed) != AUTH_OK || schnorr_verify(px, sig, head, d) != AUTH_OK)
+    return fail(r_name);
+  word(r_name, &sig->rx);
+  word(z_name, &sig->z);
+  return 1;
+}
+
+/* The pay words (slice S7, Q-S7-1 to Q-S7-4 (a)): a 3 of 4 keyPay
+   committee from the seeds blsag_key(600 + i) and its key payKey. p is
+   iRes of examples/pay.lang as a kindSettle entry (code 0, payee 2, asset
+   3, amount 60, sAt 20) and q is iZero (amount 0) as a kindSettle entry.
+   G0 is the head of the empty record, and h1 = H3 tagAppend g0 (ixDigest
+   p) is the head of the record [p]. payDigest is ixDigest p. payR, payZ: p
+   at g0. payZBad is payZ plus 1. payReplayR, payReplayZ: p at h1. pay2R,
+   pay2Z: q at h1. payZBad must not verify, and the signature of p at g0
+   must not verify at h1. 0 on a failure. */
+static int pay_words(const U256 *g0) {
+  ThrShare shares[THR_N_MAX];
+  GroupPoint pk;
+  GroupPoint keys[THR_N_MAX];
+  U256 seeds[THR_N_MAX];
+  U256 tag;
+  U256 append;
+  U256 px;
+  U256 py;
+  U256 one;
+  U256 dp;
+  U256 dq;
+  U256 h1;
+  AuthSig sig;
+  AuthSig bad;
+  AuthSig x;
+  uint32_t i;
+  for (i = 0; i < 4u; i++)
+    blsag_key(&seeds[i], 600u + i);
+  if (!committee(shares, &pk, keys, seeds, 3u, 4u))
+    return fail("the keyPay committee");
+  group_to_words(&px, &py, &pk);
+  u256_from_u64(&tag, 0x637275652d706179ull);
+  tag.limb[1] = 0x6163ull;
+  u256_from_u64(&append, 0x652d617070656e64ull);
+  append.limb[1] = 0x6163637275ull;
+  u256_from_u64(&one, 1u);
+  ix_digest(&dp, &tag, 0u, 2u, 3u, 60u, 20u);
+  ix_digest(&dq, &tag, 0u, 2u, 3u, 0u, 20u);
+  h3(&h1, &append, g0, &dp);
+  word("payKey", &px);
+  word("payDigest", &dp);
+  if (!pay_signed("payR", "payZ", &sig, shares, keys, &pk, &px, g0, &dp, 610u))
+    return 0;
+  bad = sig;
+  u256_add(&bad.z, &sig.z, &one);
+  word("payZBad", &bad.z);
+  return holds("payZBad does not verify", schnorr_verify(&px, &bad, g0, &dp) != AUTH_OK)
+         && holds("payR does not verify at h1", schnorr_verify(&px, &sig, &h1, &dp) != AUTH_OK)
+         && pay_signed("payReplayR", "payReplayZ", &x, shares, keys, &pk, &px, &h1, &dp, 620u)
+         && pay_signed("pay2R", "pay2Z", &x, shares, keys, &pk, &px, &h1, &dq, 630u);
+}
+
 int main(int argc, char **argv) {
   static const uint32_t pair[2] = {1u, 2u};
   static const uint32_t append_q[2] = {1u, 3u};
@@ -416,6 +517,8 @@ int main(int argc, char **argv) {
     return stamp_words(old, old_keys, &pk, &px) ? 0 : 1;
   if (argc == 2 && strcmp(argv[1], "engage") == 0)
     return engage_words() ? 0 : 1;
+  if (argc == 2 && strcmp(argv[1], "pay") == 0)
+    return pay_words(&head) ? 0 : 1;
   if (argc == 2 && strcmp(argv[1], "words") == 0) {
     u256_add(&z_bad, &sig_a.z, &one);
     word("key", &px);

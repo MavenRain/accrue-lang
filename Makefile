@@ -112,6 +112,7 @@ check: build/langc build/fronttool build/blsagtool build/elgamaltool build/thres
 	build/dkgtool
 	build/sigmatool
 	build/frosttool
+	build/frosttool pay
 	build/ballottool
 	build/ballottool onehot
 	build/secptool

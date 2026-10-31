@@ -42,3 +42,4 @@ causality.lang
 books.lang
 gov.lang
 amend.lang
+pay.lang

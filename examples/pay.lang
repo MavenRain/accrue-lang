@@ -1,0 +1,114 @@
+-- L13 (S7, Q-S7-2 and Q-S7-4 (a)): the record of the instructions. A kit
+-- file. eB, rB, dB, hPush, xE and sAt are the examples/books.lang values:
+-- eB runs from 10 to 60 and is signed at 10, and earned at t is
+-- 40 + 2 (t - 10) on [10, 60]. sAt t is a stamp at t with no signature.
+-- x0 funds 200 at 10, so recognized at 20 is 60. log0 is the empty record.
+def rB : Rate := pair (fmEta Segment (segmentOf 0 50 2u 1u)) (fmEta Mass (massOf 0 40u))
+def dB : Dispute := fmMul U256 (fmEta U256 2500u) (fmEta U256 5000u)
+def hPush : History := fmEta (Prod Time Policy) (pair 0 (policyOf rB (windowOf 0 100) (grantOf instrPush flagNo) dB))
+def eB : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 60) (some 10) none
+def xE : Escrow := escrowOf eB (bookOf (fmUnit (Prod Time U256)) 0u none)
+def sAt : Time -> Stamp := fun (t : Time) => stampOf t 0u 0u 0u
+-- Step is the result of an op. andThen o f runs f on the Escrow of o (none
+-- stays none). payOf o is the Payout of o.
+def Step : Type 0 := Option (Prod Escrow Payout)
+def andThen : Step -> (Escrow -> Step) -> Step := fun (o : Step) (f : Escrow -> Step) => bind o (fun (p : Prod Escrow Payout) => f (first p))
+def payOf : Step -> Option Payout := fun (o : Step) => bind o (fun (p : Prod Escrow Payout) => some (second p))
+def x0 : Step := escFund (sAt 10) 200u xE
+def log0 : PayLog := fmUnit PayEntry
+-- iRes is the firm Instruction of the residual 60 at 20, and iZero is the
+-- same Instruction with the amount 0. log1 is log0 with iRes as a kindSettle
+-- entry. logD holds only a kindDispute firm entry of 10.
+def iRes : Instruction := instructionOf 2u 3u 60u (sAt 20)
+def iZero : Instruction := instructionOf 2u 3u 0u (sAt 20)
+def log1 : PayLog := fmMul PayEntry log0 (payEntries kindSettle (fmEta Instruction iRes))
+def logD : PayLog := payEntries kindDispute (fmEta Instruction (instructionOf 2u 3u 10u (sAt 20)))
+def x1 : Step := andThen x0 (fun (x : Escrow) => escSettleR hPush (sAt 20) x log0)
+def x2 : Step := andThen x1 (fun (x : Escrow) => escSettleR hPush (sAt 20) x log1)
+def xReplay : Step := andThen x0 (fun (x : Escrow) => escSettleR hPush (sAt 20) x log1)
+def xDispute : Step := andThen x0 (fun (x : Escrow) => escSettleR hPush (sAt 20) x logD)
+
+-- L13 (refl on closed values, the L12 form): the first settle pays the
+-- residual iRes, and a second settle at the same stamp with the record log1
+-- pays 0. The replay row runs the old book with the new record and also
+-- pays 0, so the record and not the book holds the withdrawn amount. A
+-- kindDispute entry does not lower the settle residual.
+def l13First : Path (Option Payout) (payOf x1) (some (fmEta Instruction iRes)) := refl
+def l13Second : Path (Option Payout) (payOf x2) (some (fmEta Instruction iZero)) := refl
+def l13Replay : Path (Option Payout) (payOf xReplay) (some (fmEta Instruction iZero)) := refl
+def l13Dispute : Path (Option Payout) (payOf xDispute) (some (fmEta Instruction iRes)) := refl
+def l13Settled : Path (Option U256) (settledIn log1) (some 60u) := refl
+def l13SettledD : Path (Option U256) (settledIn logD) (some 0u) := refl
+
+-- The returned book must agree with the record, including when the caller
+-- replays an older book. A stale record must never rewind withdrawn.
+def paidAfter : Step -> Option U256 := fun (o : Step) => bind o (fun (p : Prod Escrow Payout) => some (elim (fun (u : Escrow) => U256) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => U256) (fun (l : Funding) (w : U256) (c : Option Time) => w) b) (first p)))
+def fundedAfter : Time -> Step -> Option U256 := fun (t : Time) (o : Step) => bind o (fun (p : Prod Escrow Payout) => some (elim (fun (u : Escrow) => U256) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => U256) (fun (l : Funding) (w : U256) (c : Option Time) => fundedAt l t) b) (first p)))
+def l13ReplayBook : Path (Option U256) (paidAfter xReplay) (some 60u) := refl
+def l13ReplayNoPay : Path (Option Payout) (payOf (andThen xReplay (escSettle hPush (sAt 20) 1u))) none := refl
+def l13StaleLog : Path Step (andThen x1 (fun (x : Escrow) => escSettleR hPush (sAt 20) x log0)) none := refl
+def logFuture : PayLog := payEntries kindSettle (fmEta Instruction (instructionOf 2u 3u 60u (sAt 30)))
+def l13Future : Path Step (andThen x0 (fun (x : Escrow) => escSettleR hPush (sAt 20) x logFuture)) none := refl
+
+-- Pull funds each new payment. Restoring an old book also restores the
+-- missing pull funding, without counting payments already in that book.
+def hPull : History := fmEta (Prod Time Policy) (pair 0 (policyOf rB (windowOf 0 100) (grantOf instrPull flagNo) dB))
+def pullFirst : Step := escSettleR hPull (sAt 20) xE log0
+def pullReplay : Step := escSettleR hPull (sAt 20) xE log1
+def pullNext : Step := escSettleR hPull (sAt 30) xE log1
+def l13PullFirst : Path (Option Payout) (payOf pullFirst) (some (fmEta Instruction iRes)) := refl
+def l13PullSecond : Path (Option Payout) (payOf (andThen pullFirst (fun (x : Escrow) => escSettleR hPull (sAt 20) x log1))) (some (fmEta Instruction iZero)) := refl
+def l13PullCoveredFunded : Path (Option U256) (fundedAfter 20 (andThen pullFirst (fun (x : Escrow) => escSettleR hPull (sAt 20) x log1))) (some 60u) := refl
+def l13PullReplay : Path (Option Payout) (payOf pullReplay) (some (fmEta Instruction iZero)) := refl
+def l13PullBook : Path (Option U256) (paidAfter pullReplay) (some 60u) := refl
+def l13PullFunded : Path (Option U256) (fundedAfter 20 pullReplay) (some 60u) := refl
+def l13PullNext : Path (Option Payout) (payOf pullNext) (some (fmEta Instruction (instructionOf 2u 3u 20u (sAt 30)))) := refl
+def l13PullNextBook : Path (Option U256) (paidAfter pullNext) (some 80u) := refl
+def l13PullNextFunded : Path (Option U256) (fundedAfter 30 pullNext) (some 80u) := refl
+def pullPartial : Step := escSettle hPull (sAt 20) 20u xE
+def logPartial : PayLog := payEntries kindSettle (fmEta Instruction (instructionOf 2u 3u 20u (sAt 20)))
+def l13PullPartial : Path (Option Payout) (payOf (andThen pullPartial (fun (x : Escrow) => escSettleR hPull (sAt 20) x logPartial))) (some (fmEta Instruction (instructionOf 2u 3u 40u (sAt 20)))) := refl
+def hMixed : History := fmMul (Prod Time Policy) hPull (fmEta (Prod Time Policy) (pair 25 (policyOf rB (windowOf 0 100) (grantOf instrPush flagNo) dB)))
+def logMixed : PayLog := fmMul PayEntry log1 (payEntries kindSettle (fmEta Instruction (instructionOf 2u 3u 20u (sAt 30))))
+def mixedReplay : Step := andThen x0 (fun (x : Escrow) => escSettleR hMixed (sAt 40) x logMixed)
+def l13MixedPaid : Path (Option U256) (paidAfter mixedReplay) (some 100u) := refl
+def l13MixedFunded : Path (Option U256) (fundedAfter 40 mixedReplay) (some 260u) := refl
+def l13CarryCovered : Path (Option U256) (payCarry hPull 60u 20 log1) (some 0u) := refl
+def l13CarryPartial : Path (Option U256) (payCarry hPull 20u 20 log1) (some 40u) := refl
+def l13CarryDispute : Path (Option U256) (payCarry hPull 0u 20 logD) (some 0u) := refl
+def l13CarryFutureCancel : Path (Option U256) (payCarry hPull 0u 20 (payEntries kindCancel (fmEta Instruction (instructionOf 1u 3u 10u (sAt 30))))) none := refl
+def xMax : Step := escFund (sAt 10) 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu xE
+def l13CarryOverflow : Path Step (andThen xMax (fun (x : Escrow) => escSettleR hPull (sAt 20) x log1)) none := refl
+
+-- PayAuth (S7, Q-S7-1 and Q-S7-3 (a)): the words come from `build/frosttool
+-- pay` (test/frosttool.c). payKey is the key of a 3 of 4 keyPay committee,
+-- and kS is the keyAppend key of examples/append.lang. polPay has keyPay =
+-- payKey and keyAppend = kS, and polS has the two keys the other way. peRes
+-- is iRes and peZero is iZero, each as a kindSettle entry. aPay signs peRes
+-- at log0, aBadZ is aPay with z + 1, aReplay signs peRes at logR (the record
+-- that holds peRes) and a2 signs peZero at logR.
+def payKey : Point := 0x70c732fdab9d161a724352a54514860a1036003ff0de69b85878f29102225d9fu
+def payDigest : Digest := 0xeafb8f404e22e20ad902ed42f9e8bf87e8c4a88dd4a59dd3f7d9e943f8a4b9c0u
+def kS : Point := 0x3ded4fb781b4977c61b99911b4ac86e631601ffbbe49959b44c6c462ee92bceau
+def polPay : Polity := makePolity (fmUnit Point) 2 2 2 kS kS 2 3 kS payKey 0
+def polS : Polity := makePolity (fmUnit Point) 2 2 2 kS payKey 2 3 kS kS 0
+def peRes : PayEntry := payEntryOf kindSettle iRes
+def peZero : PayEntry := payEntryOf kindSettle iZero
+def logR : PayLog := fmMul PayEntry log0 (fmEta PayEntry peRes)
+def logZ : PayLog := fmMul PayEntry log0 (fmEta PayEntry peZero)
+def aPay : PayAuth := payAuthOf 0x8ccbb3de155974f5af8ada2184b2a322e30d5cc2fe82a3a76b4b94baa8627271u 0x614e1fb56abaec57364c3df53900ad758a98a01606446a2c9ad2f9e1cce04807u
+def aBadZ : PayAuth := payAuthOf 0x8ccbb3de155974f5af8ada2184b2a322e30d5cc2fe82a3a76b4b94baa8627271u 0x614e1fb56abaec57364c3df53900ad758a98a01606446a2c9ad2f9e1cce04808u
+def aReplay : PayAuth := payAuthOf 0x18c01dff3506d8f16deda62e0f1f8afdfedba2b95c22632e3d2c81d00e932736u 0x2a6fd31d15e749b4027d8e325fa63dd7c48ec18b91abca8b19f0818dc7ebba0du
+def a2 : PayAuth := payAuthOf 0x69a0e976bbdd2b1b0bf85c7eb8fca78b5fdbce1912a33120598097d37ea10f1eu 0xa0ad28de4c7f39b356f35d6fca64fb279119c38354c791b3ce69f8ad22677621u
+
+-- The PayAuth rows: the C digest is the guest digest. paySnoc accepts aPay
+-- at log0 and refuses it with z + 1 or under polS. aPay at logZ is refused
+-- (the head binds the position). aReplay has a good signature at logR, so
+-- only the replay check refuses it. a2 puts peZero after peRes.
+def payDig : Path Digest (ixDigest peRes) payDigest := refl
+def payFirst : Path (Option PayLog) (paySnoc polPay aPay peRes log0) (some logR) := refl
+def payBadZ : Path (Option PayLog) (paySnoc polPay aBadZ peRes log0) none := refl
+def payKeyS : Path (Option PayLog) (paySnoc polS aPay peRes log0) none := refl
+def payOld : Path (Option PayLog) (paySnoc polPay aPay peRes logZ) none := refl
+def payReplay : Path (Option PayLog) (paySnoc polPay aReplay peRes logR) none := refl
+def paySecond : Path (Option PayLog) (paySnoc polPay a2 peZero logR) (some (fmMul PayEntry logR (fmEta PayEntry peZero))) := refl

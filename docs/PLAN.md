@@ -53,8 +53,19 @@ choice for k = 1 to 4 decisions and gives each refusal of the one-hot
 proof. The dkgtool has the reshare rows `keyStamp` (3 of 4 to 4 of 5)
 and `keyPay` (4 of 5 to 3 of 4), and each run checks that t1 - 1 new
 shares do not open (section 1, Q-S6-10 to Q-S6-12). S6 DONE.
-Next: S7 (Part S: Instruction, PayAuth, the record of instructions;
-L13).
+S7 DONE: Part S. A `PayEntry` is a kind (`kindSettle`, `kindCancel`,
+`kindDispute`) and an `Instruction`. A `PayLog` is a list of entries, and
+`ixEntries` makes it a Part R record of the `ixDigest` values.
+`settledIn` adds only the settle amounts, and `escSettleR` pays the
+residual from the record. `paySnoc` adds an entry only with a `PayAuth`
+of the `keyPay` committee on (`ixHead log`, `ixDigest p`), and only once.
+`build/frosttool pay` signs the rows of examples/pay.lang (L13, section 1,
+Q-S7-1 to Q-S7-4).
+The record restores withdrawn and missing pull funding in an older book.
+Pull pays earned minus recorded settlements, since the payment itself
+adds funding. A record behind the book or ahead of the stamp is refused.
+Next: S8 (Wasm: the lowering, the prelude, N2 to N4,
+`test/notraptool.c`, the differential vectors).
 
 ## 1. Rulings
 
@@ -133,6 +144,14 @@ L13).
 | 2026-10-30 | Q-S6-11, verbatim: "(a) Full set (Recommended)". For each k: k 0 and k 9 (prove and verify), a choice of k, no yes bit, two yes bits (k 2 or more), k - 1 and k + 1 slots, a bad slot proof, a bad sum proof, and a slot of 2 with a slot of -1 (the sum is 1, so only the bit check refuses it). | S6c |
 | 2026-10-30 | Q-S6-12, verbatim: "(a) Both changes + t1-1 check (Recommended)". `keyStamp` 3 of 4 to 4 of 5 by the quorum {1,2,3,4} (member 5 joins, the threshold goes up); `keyPay` 4 of 5 to 3 of 4 by the quorum {1,3,4,5} (member 2 leaves, the threshold goes down). Each of the 4 key_run runs checks that t1 - 1 new shares do not open. | S6c |
 | 2026-10-30 | Not asked, a build default (not a ruling): S6c changes only test/ballottool.c, test/dkgtool.c and the Makefile `check` recipe. No guard in src/front changes. The onehot arrays have SIG_K_MAX + 1 entries, so the k 9 rows read only their own arrays. The 2 new key_run runs use the seed bases 30 and 40. | S6c default |
+| 2026-10-31 | Q-S7-1, verbatim: "(a) Guest family + schnorrOk (Recommended)". `family PayAuth := payAuthOf (payR : U256) (payZ : U256)`. `payOk` checks the signature with `schnorrOk` under `keyPay` on (`ixHead log`, `ixDigest p`), so the signature binds the position (the `authOk` form). | S7 |
+| 2026-10-31 | Q-S7-2, verbatim: "(a) Op kind + Instruction (Recommended)". `PayEntry := payEntryOf (peKind : PayKind) (peIx : Instruction)`, `PayLog := FreeMon PayEntry`. `ixDigest` hashes the kind code, the payee, the asset, the amount and the stamp under `tagPay`. `ixEntries` and `ixHead` use Part R. | S7 |
+| 2026-10-31 | Q-S7-3, verbatim: "(a) keyPay signs pay, keyAppend stays (Recommended)". `keyPay` signs the pay log. `keyAppend`, `tAppend` and `append` do not change, and `Polity` keeps 11 fields. | S7 |
+| 2026-10-31 | Q-S7-4, verbatim: "(a) New word + frosttool pay (Recommended)". `settledIn` adds the `kindSettle` amounts only (a dispute does not add to withdrawn). `escSettleR` pays recognized minus `settledIn log`, then `escSettle`. `build/frosttool pay` signs the PayAuth rows with a 3 of 4 `keyPay` key, and `make check` runs it. | S7 |
+| 2026-10-31 | Not asked, a build default (not a ruling): L13 is `refl` on closed values (the L12 and Q-S5-3 form). Free variables need the O8 eliminator. | S7 default |
+| 2026-10-31 | Not asked, a build default (not a ruling), D-S7-1: the `PayKind` constructors are `kindSettle`, `kindCancel` and `kindDispute`. `paySettle` and `payCancel` are eval names in examples/books.lang and test/eval/expect.txt (rule R4). | S7 default |
+| 2026-10-31 | Not asked, a build default (not a ruling): `settledIn` folds into `Acc`, because no isSet word exists for `Option U256` (`optNatIsSet` is a kernel builtin for `Option Nat` only). | S7 default |
+| 2026-10-31 | Review correction to the Q-S7-4 implementation: `escSettleR` restores withdrawn from the record, and `payCarry` restores missing pull funding using the policy at each payment. Pull settles earned minus withdrawn; push and stream settle recognized minus withdrawn. Records behind the book or containing an instruction after the stamp are refused. examples/pay.lang checks replayed books, pull funding, mixed policies, stale and future records, and carry overflow. | S7 review |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -261,8 +280,8 @@ or the zero rate if there was none).
 |---|---|---|
 | Stamp | defined | `(t : Time, prev : Digest, sig)`: a FROST threshold Schnorr signature under `keyStamp` on `(t, prev)`. `t` must be above the `t` of `prev` (law L12). Q-S0-2. |
 | Instruction | defined | `(payee : Point, asset : Digest, amount : U256, at : Stamp)`: the output of `settle`, `cancel` and `dispute`. |
-| PayAuth | primitive | A FROST threshold Schnorr signature under `keyPay` on the instruction digest (cairn-lang `src/front/frost.c`). |
-| Record | defined | `FreeMon Instruction` as a SHA-256 hash chain (cairn-lang Part R: `snoc`, `head`, `verify`, `Inclusion`). An instruction is valid once, at its position. |
+| PayAuth | primitive | A FROST threshold Schnorr signature under `keyPay` on (`ixHead log`, `ixDigest p`) by Q-S7-1 (cairn-lang `src/front/frost.c`). |
+| Record | defined | `PayLog := FreeMon PayEntry`, with an entry (`PayKind`, `Instruction`) by Q-S7-2, as a SHA-256 hash chain (cairn-lang Part R: `snoc`, `head`, `verify`, `Inclusion`). An instruction is valid once, at its position. |
 
 The protocol never holds money. A rail outside the language (a bank, a
 chain, a payment processor) pays each instruction that has a valid
@@ -400,8 +419,8 @@ refusal or a law kills at least one mutant of it.
 | S6a | Part D, the policy path (Q-S6-1): PolicyBallot, the tally, the `choice` table (`chooseD`), `govD`, `govPi`, the decision log, the freeze, the regimes; L7, L9, L10. | DONE |
 | S6b | Part D, the constitution (Q-S6-1, Q-S6-8): the Polity record, `rulePos`, `govC`, AmendBallot, the O4 secret marks; L8, L11. | DONE |
 | S6c | Part D, the host rows (Q-S6-8): the ballottool mode for k = decisions, the dkgtool reshare rows for `keyStamp` and `keyPay`. | DONE |
-| S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | NEXT |
-| S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | |
+| S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | DONE |
+| S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | NEXT |
 | S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | |
 | S10 | WGSL: `wgsl.c`, batch proof check and batch `earned`. | |
 | S11 | A1: canonical forms and `langc fmt`. | |
