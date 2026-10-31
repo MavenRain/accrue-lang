@@ -6,8 +6,8 @@
 -- has keyAppend kO (another key, so a signature under kA fails).
 def kA : Point := 0x3ded4fb781b4977c61b99911b4ac86e631601ffbbe49959b44c6c462ee92bceau
 def kO : Point := 0xf7f36a2ad3963a54863980b0ddf4c0cab710f2f1d88e3102eca3ec0429bc67e7u
-def pol : Polity := makePolity (fmUnit Point) 2 2 2 kO kA
-def polO : Polity := makePolity (fmUnit Point) 2 2 2 kA kO
+def pol : Polity := makePolity (fmUnit Point) 2 2 2 kO kA 2 2 kO kA 0
+def polO : Polity := makePolity (fmUnit Point) 2 2 2 kA kO 2 2 kA kO 0
 def r0 : Record := fmUnit Entry
 def r1 : Record := snoc 7u r0
 def goodA : Auth := authOf 0x581adab49a06a9997ca9c30c3908ef954ff51e92c0648f348169e2756dc4e029u 0x5c0b47bf4efb292b101fe06d049e11ce3cac04d370e5dbc60196def4e3849bf4u

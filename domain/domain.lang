@@ -246,9 +246,23 @@ def ZKProof : Type 0 -> Type 0 := fun (W : Type 0) => Trunc1 W
 sealed family Transcript (W : Type 0) := transcript (transcriptOf : W)
 law def verified : (W : Type 0) -> Transcript W -> ZKProof W :=
   fun (W : Type 0) (t : Transcript W) => trunc1 W (elim (fun (u : Transcript W) => W) (fun (w : W) => w) t)
+-- The secret marks (O4, Q-S6-9 (a)): a program can carry a Secret but not
+-- read it. Secret is a sealed family, so its elim, fold and projection are
+-- law-only, as for Enc. reveal is the law def that reads a Secret. A key
+-- share, a nonce and a decryption key are each a Secret Scalar. S9 refuses
+-- a target entry whose result holds a Secret (O4 stays open for that).
+def Scalar : Type 0 := U256
+sealed family Secret (A : Type 0) := secretEta (secretOf : A)
+law def reveal : (A : Type 0) -> Secret A -> A :=
+  fun (A : Type 0) (s : Secret A) => fold (fun (a : A) => a) s
+def KeyShare : Type 0 := Secret Scalar
+def Nonce : Type 0 := Secret Scalar
+def DecKey : Type 0 := Secret Scalar
 -- The DAO (S6, Q-S6-1 to Q-S6-12 (a)). A Point is a member key. A Polity
 -- is the constitution: the members, the thresholds tAppend, tAmend and
--- tOpen, and the keys keyOpen and keyAppend. isSetProd gives the set
+-- tOpen, and the keys keyOpen and keyAppend. S6b (Q-S6-5, Q-S6-6 (a))
+-- adds tStamp, tPay, keyStamp, keyPay and rulePos, the position of the
+-- choice rule in force; an amendment can change it. isSetProd gives the set
 -- proof of a product (a path in a product is a pair of paths). The
 -- checker has no eta rule for Enc, so encEtaOf proves it by elim, and
 -- encIsSet uses it in one hcomp (no trusted row). A SealedBallot holds an
@@ -269,20 +283,31 @@ def encIsSet : (A : Type 0) -> isSet A -> isSet (Enc A) :=
   fun (A : Type 0) (sA : isSet A) (x : Enc A) (y : Enc A) (p : Path (Enc A) x y) (q : Path (Enc A) x y) =>
     fun (i : I) => fun (j : I) => hcomp (Enc A) (~i \/ i \/ ~j \/ j) (fun (k : I) => [ ~i -> encEtaOf A (p @ j) @ k, i -> encEtaOf A (q @ j) @ k, ~j -> encEtaOf A x @ k, j -> encEtaOf A y @ k ])
       (encEta A ((sA (encOf x) (encOf y) (fun (k : I) => encOf (p @ k)) (fun (k : I) => encOf (q @ k)) @ i) @ j))
-def Polity : Type 0 := Prod (FreeMon Point) (Prod Nat (Prod Nat (Prod Nat (Prod Point Point))))
-def makePolity : FreeMon Point -> Nat -> Nat -> Nat -> Point -> Point -> Polity :=
-  fun (m : FreeMon Point) (a : Nat) (b : Nat) (c : Nat) (ko : Point) (ka : Point) => pair m (pair a (pair b (pair c (pair ko ka))))
+def Polity : Type 0 := Prod (FreeMon Point) (Prod Nat (Prod Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))))))))
+def makePolity : FreeMon Point -> Nat -> Nat -> Nat -> Point -> Point -> Nat -> Nat -> Point -> Point -> Nat -> Polity :=
+  fun (m : FreeMon Point) (a : Nat) (b : Nat) (c : Nat) (ko : Point) (ka : Point) (ts : Nat) (tp : Nat) (ks : Point) (kp : Point) (r : Nat) => pair m (pair a (pair b (pair c (pair ko (pair ka (pair ts (pair tp (pair ks (pair kp r)))))))))
 def members : Polity -> FreeMon Point := fun (s : Polity) => first s
 def tAppend : Polity -> Nat := fun (s : Polity) => first (second s)
 def tAmend : Polity -> Nat := fun (s : Polity) => first (second (second s))
 def tOpen : Polity -> Nat := fun (s : Polity) => first (second (second (second s)))
 def keyOpen : Polity -> Point := fun (s : Polity) => first (second (second (second (second s))))
-def keyAppend : Polity -> Point := fun (s : Polity) => second (second (second (second (second s))))
+def keyAppend : Polity -> Point := fun (s : Polity) => first (second (second (second (second (second s)))))
+def tStamp : Polity -> Nat := fun (s : Polity) => first (second (second (second (second (second (second s))))))
+def tPay : Polity -> Nat := fun (s : Polity) => first (second (second (second (second (second (second (second s)))))))
+def keyStamp : Polity -> Point := fun (s : Polity) => first (second (second (second (second (second (second (second (second s))))))))
+def keyPay : Polity -> Point := fun (s : Polity) => first (second (second (second (second (second (second (second (second (second s)))))))))
+def rulePos : Polity -> Nat := fun (s : Polity) => second (second (second (second (second (second (second (second (second (second s)))))))))
 def polityIsSet : isSet Polity :=
-  isSetProd (FreeMon Point) (Prod Nat (Prod Nat (Prod Nat (Prod Point Point)))) (fmIsSet Point)
-    (isSetProd Nat (Prod Nat (Prod Nat (Prod Point Point))) natIsSet
-      (isSetProd Nat (Prod Nat (Prod Point Point)) natIsSet
-        (isSetProd Nat (Prod Point Point) natIsSet (isSetProd Point Point u256IsSet u256IsSet))))
+  isSetProd (FreeMon Point) (Prod Nat (Prod Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat))))))))) (fmIsSet Point)
+    (isSetProd Nat (Prod Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))))))) natIsSet
+      (isSetProd Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat))))))) natIsSet
+      (isSetProd Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))))) natIsSet
+      (isSetProd Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat))))) u256IsSet
+      (isSetProd Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))) u256IsSet
+      (isSetProd Nat (Prod Nat (Prod Point (Prod Point Nat))) natIsSet
+      (isSetProd Nat (Prod Point (Prod Point Nat)) natIsSet
+      (isSetProd Point (Prod Point Nat) u256IsSet
+      (isSetProd Point Nat u256IsSet natIsSet)))))))))
 -- The append check (S7, Q-S7-1, Q-S7-2 and Q-S7-6 (a)). An Auth is a
 -- threshold Schnorr signature (R.x, z) of the keyAppend committee on the
 -- message (head r, e). The host signs with FROST (src/front/frost.c), and
@@ -697,6 +722,9 @@ def govD : Nat -> Nat -> PolicyTally -> Option Nat :=
   fun (n : Nat) (r : Nat) (t : PolicyTally) => bind (chooseD r t) (fun (d : Nat) => flagIf (natLe n d) none (some d))
 def govPi : (Nat -> Policy) -> Nat -> Nat -> PolicyTally -> Option Policy :=
   fun (pa : Nat -> Policy) (n : Nat) (r : Nat) (t : PolicyTally) => bind (govD n r t) (fun (d : Nat) => some (pa d))
+-- govC (S6b, Q-S6-6 (a)): the decision under the rule of the Polity in force.
+def govC : Polity -> Nat -> PolicyTally -> Option Nat :=
+  fun (s : Polity) (n : Nat) (t : PolicyTally) => govD n (rulePos s) t
 -- Part D decision log, freeze and regimes (S6a, Q-S6-3 (a), Q-S6-4 (a)).
 -- A DecLog holds (t, d) for each change of decision (retainer-lang C12).
 -- lastD gives the last decision (none for an empty log). govStep adds (t,

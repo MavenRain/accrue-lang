@@ -42,9 +42,14 @@ decision log `DecLog` adds an entry only for a new decision (the
 dedupe), and no decision adds no entry (the freeze). `regimeD` gives
 `regimeAD` or `regimeAI`. L7, L9 and L10 are refl on closed values
 (section 1, Q-S6-1 to Q-S6-4).
-Next: S6b (the Polity record with `tStamp`, `tPay`, `keyStamp`,
-`keyPay` and the rule position, AmendBallot on it, L8 and L11, the
-ballottool and dkgtool reshare rows, the O4 secret marks; section 4.2).
+S6b DONE: the Polity record has 11 fields (`tStamp`, `tPay`,
+`keyStamp`, `keyPay` and `rulePos` at the end). `govC` reads the rule
+position of the Polity in force. AmendBallot is SealedBallot on the
+record. examples/amend.lang holds L8 and L11 on real kit words and the
+self-reference rows. `Secret`, `KeyShare`, `Nonce` and `DecKey` mark the
+secrets in the types (section 1, Q-S6-5 to Q-S6-9).
+Next: S6c (the host rows, Q-S6-8: a ballottool mode for k = decisions,
+the dkgtool reshare rows for `keyStamp` and `keyPay`).
 
 ## 1. Rulings
 
@@ -112,6 +117,13 @@ ballottool and dkgtool reshare rows, the O4 secret marks; section 4.2).
 | 2026-10-30 | Not asked, a build default (not a ruling): a plurality with zero votes gives none, because no count is above 0 (`zeroPlur`, `one0Plur`). | S6a default |
 | 2026-10-30 | Not asked, a build default (not a ruling): `Tally` and `gov` give `REFUSE_SIG`, so the words are `PolicyTally`, `govD` and `govPi`. A guest file has no `Nat` literal, so examples/gov.lang is a kit file. | S6a default |
 | 2026-10-30 | Not asked, a build default (not a ruling): the plan part P4 (the laws and the rows) went into the P2 and P3 blocks of examples/gov.lang, so S6a has no P4. | S6a default |
+| 2026-10-30 | Q-S6-5, verbatim: "(a) Extend Polity in place (Recommended)". `Polity` gets 5 fields at the end: `tStamp`, `tPay`, `keyStamp`, `keyPay : Point` and `rulePos : Nat`. Each `makePolity` caller gets 5 more arguments. `tAppend` and `keyAppend` stay (S7 decides if `keyPay` replaces `keyAppend`). | S6b |
+| 2026-10-30 | Q-S6-6, verbatim: "(a) Record, amendable (Recommended)". `govC s n t = govD n (rulePos s) t`: the rule position comes from the Polity in force, and an amendment can change `rulePos` and `tAmend`. | S6b |
+| 2026-10-30 | Q-S6-7, verbatim: "(a) Reuse SealedBallot, new kit file (Recommended)". AmendBallot = `SealedBallot` on the extended record (no new type). examples/amend.lang: cast, tally, open with a quorum, decide, `stepD`, `amendAll`; L8 on the real `tallyBox`; L11 with free ps, qs and s, and closed splits. | S6b |
+| 2026-10-30 | Q-S6-8, verbatim: "(a) S6b guest, S6c host (Recommended)". S6b: the record, `rulePos`, `govC`, amend.lang with L8 and L11, the O4 marks. S6c: the ballottool mode for k = decisions and the dkgtool reshare rows for `keyStamp` and `keyPay` (C only). | S6b |
+| 2026-10-30 | Q-S6-9, verbatim: "(a) Sealed family Secret (Recommended)". `sealed family Secret (A)` with one constructor; `KeyShare`, `Nonce`, `DecKey := Secret Scalar`; the law def `reveal` reads one. A guest def that reads a Secret outside a law gets `REFUSE_LAW`. S9 refuses a target entry whose result holds a Secret (O4 stays open). | S6b |
+| 2026-10-30 | Not asked, a build default (not a ruling): `Scalar := U256` is new in the domain (the name was free). | S6b default |
+| 2026-10-30 | Not asked, a build default (not a ruling): the PLAN numbers L8 and L11 go on the examples/polity.lang comments. The def names `l7` and `l9` stay (test/check rows name them). The comment of the G4 step `l8` does not say L8 now. The new law names are `l8Box`, `l8Two` and `l11Amend` (`l8` and `l11` are taken). | S6b default |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -215,14 +227,15 @@ internal to the kernel. There is no `Addr`, `Env`, `msg.sender`, ERC-20
 |---|---|---|
 | Member | defined | `Point`: one public key. |
 | D | defined | `Nat` below `decisions` (retainer-lang C10). `policyOf : D -> Policy` is a total program definition. S6a: `govD n` refuses a decision d with n <= d; the policy map `pa : Nat -> Policy` is an argument of `govPi` and `logHistory`. |
-| Constitution | defined record | `members : FreeMon Member`; the thresholds `tOpen`, `tAmend`, `tStamp`, `tPay`; the keys `keyOpen`, `keyStamp`, `keyPay : Point`; `rule : Nat`, the position of the choice rule in force in the program list `rules` (Q-S0-6). |
+| Constitution | defined record | `members : FreeMon Member`; the thresholds `tOpen`, `tAmend`, `tStamp`, `tPay`; the keys `keyOpen`, `keyStamp`, `keyPay : Point`; `rule : Nat`, the position of the choice rule in force in the program list `rules` (Q-S0-6). S6b (Q-S6-5, Q-S6-6): the guest `Polity` has 11 fields: `members`, `tAppend`, `tAmend`, `tOpen`, `keyOpen`, `keyAppend`, `tStamp`, `tPay`, `keyStamp`, `keyPay`, and `rulePos : Nat` (the rule) at the end. `govC s n t = govD n (rulePos s) t`. |
 | PolicyBallot | defined | One-hot over `D`: `decisions` exponential ElGamal ciphertexts under `keyOpen`, a disjunctive Chaum-Pedersen proof that each one is 0 or 1, a proof that their sum is 1, and a bLSAG ring signature over `members`. S6a, the ideal Enc model (Q-S6-1): `PolicyBallot` = the bits under `Enc`, a `ZKProof (HotOk cs)` and a link tag; `castPolicy` refuses a used tag and a wrong bit count. The ElGamal form and the bLSAG are S6b. |
 | Tally | defined | `FreeMon Nat` of length `decisions`, the opened homomorphic sum. This is the orbit quotient of retainer-lang: the counts, never who voted what. S6a: `PolicyTally := FreeMon (Option Count)`; `tallyAt`, `tallyAll`, `openTally`. |
 | choice | slot | `Tally -> Option D`, a program definition. The compiler makes its table over each tally (retainer-lang C10). S6a: the guest def `chooseD` (Q-S6-2); the table is the choice rows of examples/gov.lang. |
 | Gov, GovPi | defined | `Gov` = the table of the rule in force; `GovPi = map policyOf . Gov`. S6a: `govD`, `govPi`; the log `DecLog`, `lastD`, `govStep`, `logHistory`; `RegimeD`, `regimeD` (Q-S6-3, Q-S6-4). |
-| AmendBallot | defined | cairn-lang `Ballot`: `Enc Bool` with its proof and its bLSAG, on a whole new `Constitution`. `decide` = `yes >= tAmend`. |
+| AmendBallot | defined | cairn-lang `Ballot`: `Enc Bool` with its proof and its bLSAG, on a whole new `Constitution`. `decide` = `yes >= tAmend`. S6b (Q-S6-7): AmendBallot = `SealedBallot` on the 11-field `Polity`; `decideYes`, `stepD`, `amendAll` (examples/amend.lang). |
 | Share, open | primitive | Partial decryption with a DLEQ proof; `tOpen` valid shares combined by Lagrange (MPC). |
 | Deal, Reshare | primitive | cairn-lang `src/front/dkg.c`: Pedersen DKG with Feldman commitments, and reshare when `members` or a threshold changes. No trusted dealer. |
+| Secret | defined (S6b) | `sealed family Secret (A)`; `KeyShare`, `Nonce`, `DecKey := Secret Scalar`; the law def `reveal`. A program can carry a Secret but not read it (Q-S6-9, O4). |
 
 Self-reference: an amendment is a whole `Constitution`, so the DAO can
 amend `tAmend` and `rule` (the rule that turns a tally into a policy).
@@ -376,7 +389,8 @@ refusal or a law kills at least one mutant of it.
 | S5a | Part E (7.1): the types, G, `earnedAt`, the policy history as data; L1, L2, L6 (Q-S5-1). | DONE |
 | S5b | Part E: the books, fund, settle, cancel, dispute, close at T (Q-S5-6), Instruction data (Q-S5-2), the CC dual (Q-S5-4); L3 to L5. | DONE |
 | S6a | Part D, the policy path (Q-S6-1): PolicyBallot, the tally, the `choice` table (`chooseD`), `govD`, `govPi`, the decision log, the freeze, the regimes; L7, L9, L10. | DONE |
-| S6b | Part D, the constitution (Q-S6-1): the Polity record, AmendBallot, the ballottool and dkgtool reshare rows, the O4 secret marks; L8, L11. | NEXT |
+| S6b | Part D, the constitution (Q-S6-1, Q-S6-8): the Polity record, `rulePos`, `govC`, AmendBallot, the O4 secret marks; L8, L11. | DONE |
+| S6c | Part D, the host rows (Q-S6-8): the ballottool mode for k = decisions, the dkgtool reshare rows for `keyStamp` and `keyPay`. | NEXT |
 | S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | |
 | S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | |
 | S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | |
@@ -399,7 +413,8 @@ refusal or a law kills at least one mutant of it.
   accrue-lang takes only the domain, so this does not apply here.
 - O4 The secret marks for `REFUSE_TARGET_SECRET` (S9): the key shares,
   the nonces and the decryption key. S6b marks them in the types
-  (Q-S6-1).
+  (Q-S6-9 (a): `Secret`, `KeyShare`, `Nonce`, `DecKey`). The S9 refusal
+  stays open.
 - O5 The test vectors come from the published standards (NIST CAVP for
   SHA-256, SEC 2 for secp256k1, the FROST RFC 9591 vectors), not from an
   implementation that the gate would trust.

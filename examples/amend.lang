@@ -1,0 +1,92 @@
+-- Part D constitution (S6b, Q-S6-5 to Q-S6-7 (a)). A kit file: the records
+-- have Nat and Point literals. Q-S6-5: Polity has 11 fields, and tStamp,
+-- tPay, keyStamp, keyPay and rulePos are at the end. Q-S6-6: govC reads
+-- rulePos from the Polity in force, and an amendment can change rulePos
+-- and tAmend. Q-S6-7: an AmendBallot is a SealedBallot on this record (no
+-- new type). s0 has the plurality rule (rulePos 0) and tAmend 2. pMaj is
+-- the same record with the majority rule (rulePos 1). pAmend1 lowers
+-- tAmend to 1. Each field has a different value, so a swap of two fields
+-- changes a row.
+def crew : FreeMon Point := fmMul Point (fmMul Point (fmEta Point 1u) (fmEta Point 2u)) (fmEta Point 3u)
+def s0 : Polity := makePolity crew 2 2 2 1u 2u 3 4 5u 6u 0
+def pMaj : Proposal := makePolity crew 2 2 2 1u 2u 3 4 5u 6u 1
+def pAmend1 : Proposal := makePolity crew 2 1 2 1u 2u 3 4 5u 6u 0
+def s0Stamp : Nat := tStamp s0
+def s0Pay : Nat := tPay s0
+def s0KeyStamp : Point := keyStamp s0
+def s0KeyPay : Point := keyPay s0
+def s0Rule : Nat := rulePos s0
+def s0KeyOpen : Point := keyOpen s0
+def s0KeyAppend : Point := keyAppend s0
+-- AmendBallot = SealedBallot (Q-S6-7 (a)): two yes ballots and one no
+-- ballot, each with a different link tag. A ballot with a used tag gives
+-- none.
+def ab1 : SealedBallot := mkBallot verdictYes 21u
+def ab2 : SealedBallot := mkBallot verdictYes 22u
+def ab3 : SealedBallot := mkBallot verdictNo 23u
+def abAgain : SealedBallot := mkBallot verdictNo 21u
+def castBox : Option Box := bind (castBallot pMaj ab1 (fmUnit SealedBallot)) (fun (x : Box) => bind (castBallot pMaj ab2 x) (fun (y : Box) => castBallot pMaj ab3 y))
+def castLen : Option Count := bind castBox (fun (x : Box) => len SealedBallot x)
+def box3 : Box := fmMul SealedBallot (fmMul SealedBallot (fmEta SealedBallot ab1) (fmEta SealedBallot ab2)) (fmEta SealedBallot ab3)
+def castUsed : Option Box := castBallot pMaj abAgain box3
+def tally3 : Enc (Option Count) := tallyBox box3
+-- L8 (PLAN 6; cairn-lang L7, Q-S6-2 (a)) on the real tally of box3: the
+-- opened tally is the decrypted tally for each quorum, and it is 2.
+def l8Box : (q : Quorum) -> Path (Option Count) (open (Option Count) q (tallyBox box3)) (decrypt (Option Count) (tallyBox box3)) :=
+  fun (q : Quorum) => refl
+def l8Two : (q : Quorum) -> Path (Option Count) (open (Option Count) q (tallyBox box3)) (some 2) :=
+  fun (q : Quorum) => refl
+def count3 : Option Count := countVotes (fmMul Verdict (fmMul Verdict (fmEta Verdict verdictYes) (fmEta Verdict verdictYes)) (fmEta Verdict verdictNo))
+def decide2 : Verdict := decideYes s0 2
+def decide1 : Verdict := decideYes s0 1
+-- Self-reference (Q-S6-6 (a)): a yes count of 2 enacts pMaj. tSplit has a
+-- plurality (3 at the decision 0) but no majority (3 of 7), so govC gives
+-- some 0 under s0 and none under the enacted pMaj. tWin has a majority (4
+-- of 6 at the decision 1), so govC gives the same decision under both. A
+-- yes count of 1 keeps s0. After pAmend1, a yes count of 1 enacts pMaj.
+def mkT3 : Option Count -> Option Count -> Option Count -> PolicyTally :=
+  fun (a : Option Count) (b : Option Count) (c : Option Count) => fmMul (Option Count) (fmMul (Option Count) (fmEta (Option Count) a) (fmEta (Option Count) b)) (fmEta (Option Count) c)
+def tSplit : PolicyTally := mkT3 (some 3) (some 2) (some 2)
+def tWin : PolicyTally := mkT3 (some 1) (some 4) (some 1)
+def sMaj : Polity := stepD s0 (pair pMaj 2)
+def sShort : Polity := stepD s0 (pair pMaj 1)
+def sLow : Polity := stepD s0 (pair pAmend1 2)
+def sLowMaj : Polity := stepD sLow (pair pMaj 1)
+def sMajRule : Nat := rulePos sMaj
+def sShortRule : Nat := rulePos sShort
+def sLowAmend : Nat := tAmend sLow
+def sLowMajRule : Nat := rulePos sLowMaj
+def govSplit0 : Option Nat := govC s0 3 tSplit
+def govSplitMaj : Option Nat := govC sMaj 3 tSplit
+def govSplitShort : Option Nat := govC sShort 3 tSplit
+def govWin0 : Option Nat := govC s0 3 tWin
+def govWinMaj : Option Nat := govC sMaj 3 tWin
+-- L11 (PLAN 6; cairn-lang L9, Q-S6-6 (a)): amendAll folds the left factor
+-- first, for each ps, qs and s. The closed rows split the chain (pMaj yes
+-- 2, pAmend1 yes 2) at 0, 1 and 2; each split gives the same rulePos and
+-- tAmend.
+def l11Amend : (ps : FreeMon Decided) -> (qs : FreeMon Decided) -> (s : Polity) -> Path Polity (amendAll (fmMul Decided ps qs) s) (amendAll qs (amendAll ps s)) :=
+  fun (ps : FreeMon Decided) (qs : FreeMon Decided) (s : Polity) => refl
+def dMaj : Decided := pair pMaj 2
+def dLow : Decided := pair pAmend1 2
+def chain2 : FreeMon Decided := fmMul Decided (fmEta Decided dMaj) (fmEta Decided dLow)
+def split0 : Polity := amendAll chain2 (amendAll (fmUnit Decided) s0)
+def split1 : Polity := amendAll (fmEta Decided dLow) (amendAll (fmEta Decided dMaj) s0)
+def split2 : Polity := amendAll (fmUnit Decided) (amendAll chain2 s0)
+def split0Rule : Nat := rulePos split0
+def split1Rule : Nat := rulePos split1
+def split2Rule : Nat := rulePos split2
+def split0Amend : Nat := tAmend split0
+def split1Amend : Nat := tAmend split1
+def split2Amend : Nat := tAmend split2
+def midRule : Nat := rulePos (amendAll (fmEta Decided dMaj) s0)
+-- The secret marks (O4, Q-S6-9 (a)): a def can carry a KeyShare through a
+-- function and give the public part. The read of the share is a law (a
+-- Path), so the law-only reveal is allowed there.
+def share7 : KeyShare := secretEta Scalar 7u
+def keepShare : KeyShare -> Point -> Prod KeyShare Point := fun (k : KeyShare) (p : Point) => pair k p
+def carried : Point := second (keepShare share7 9u)
+def carriedShare : KeyShare := first (keepShare share7 9u)
+def nonce5 : Nonce := secretEta Scalar 5u
+def decKey3 : DecKey := secretEta Scalar 3u
+def revealShare : Path Scalar (reveal Scalar (first (keepShare share7 9u))) 7u := refl

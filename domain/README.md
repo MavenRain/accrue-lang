@@ -64,6 +64,7 @@ of each section gives its rule or ruling.
 | Quorum and proofs | `Quorum`, the law def `open`, `ZKProof`, the sealed family `Transcript`, the law def `verified` |
 | Part D, the DAO | `Point`, `Count`, `verdictNo`, `isSetProd`, `encEtaOf`, `encIsSet`, `Polity`, `makePolity`, `members`, `tAppend`, `tAmend`, `tOpen`, `keyOpen`, `keyAppend`, `polityIsSet`, `Proposal`, `Bit`, `SealedBallot`, `mkBallot`, `ballotVote`, `linkTag`, `Box`, `tagUsed`, `castBallot`, `tallyBox`, `countVotes`, `Decided`, `decideYes`, `enact`, `stepD`, `amendAll` |
 | S6a, Part D policy | `encAll`, `HotOk`, `PolicyBallot`, `mkPolicyBallot`, `pbVotes`, `pbTag`, `PolicyBox`, `pbTagUsed`, `castPolicy`, `slotOf`, `slotPlain`, `tallyAt`, `countD`, `pbPlain`, `PolicyTally`, `tallyAll`, `openTally`, `tallyMax`, `tallySum`, `atCount`, `posOf`, `rulePlurality`, `ruleMajority`, `chooseD`, `govD`, `govPi`, `DecLog`, `lastD`, `govStep`, `logHistory`, `RegimeD`, `regimeAD`, `regimeAI`, `regimeD` |
+| S6b, Part D constitution | `tStamp`, `tPay`, `keyStamp`, `keyPay`, `rulePos`, `govC`, `Scalar`, `Secret`, `KeyShare`, `Nonce`, `DecKey`, `reveal` (the reader, a law def) |
 | Positions, words and orbits | `Pos`, `Word`, `sizePred`, `consP`, `swapFront`, `actW`, `ChoiceBag`, `OrbitN` |
 | The charter | `Charter` (an inductive-inductive family) |
 | Equivalences | `isContr`, `fiber`, `isEquiv`, `Equiv`, `idEquiv`, `isoCap`, `isoPath`, `isoToEquiv`, `ua`, `uaArrow` |
@@ -119,6 +120,13 @@ of each section gives its rule or ruling.
   dedupe), a tie adds no entry (logATLen, the freeze), and earnedAt on
   the History of the log (earnA to earnEmpty; an empty log gives 0u).
   The regime rows: regAD to regADLong.
+- `examples/amend.lang` holds L8 and L11 on the extended Polity (S6b,
+  Q-S6-5 to Q-S6-7). L8: the opened tally of a real box is the decrypted
+  tally (l8Box, l8Two). L11: amendAll of a product is the fold of each
+  factor (l11Amend), and closed splits give the same record. The
+  self-reference rows: one tally gives a plurality decision under s0 and
+  none after an amendment to the majority rule (govC). The Secret rows
+  carry a KeyShare; only the Path revealShare reads it, through reveal.
 
 ## How to change the domain
 

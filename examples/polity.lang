@@ -14,10 +14,10 @@ def k3 : Point := head r2
 def r3 : Record := snoc k3 r2
 def k4 : Point := head r3
 def crew : FreeMon Point := fmMul Point (fmMul Point (fmEta Point k1) (fmEta Point k2)) (fmEta Point k3)
-def s0 : Option Polity := bind two (fun (t : Count) => some (makePolity crew t t t k1 k2))
-def pAppend : Option Proposal := bind three (fun (a : Count) => map (fun (t : Count) => makePolity crew a t t k1 k3) two)
-def pLower : Option Proposal := bind two (fun (t : Count) => map (fun (u : Count) => makePolity crew t u t k1 k2) one)
-def pOpen : Option Proposal := bind two (fun (t : Count) => bind one (fun (u : Count) => map (fun (h : Count) => makePolity crew t u h k1 k2) three))
+def s0 : Option Polity := bind two (fun (t : Count) => some (makePolity crew t t t k1 k2 t t k1 k2 t))
+def pAppend : Option Proposal := bind three (fun (a : Count) => map (fun (t : Count) => makePolity crew a t t k1 k3 t t k1 k3 t) two)
+def pLower : Option Proposal := bind two (fun (t : Count) => map (fun (u : Count) => makePolity crew t u t k1 k2 t t k1 k2 t) one)
+def pOpen : Option Proposal := bind two (fun (t : Count) => bind one (fun (u : Count) => map (fun (h : Count) => makePolity crew t u h k1 k2 t t k1 k2 t) three))
 def b1 : SealedBallot := mkBallot verdictYes k2
 def b2 : SealedBallot := mkBallot verdictNo k3
 def b3 : SealedBallot := mkBallot verdictYes k4
@@ -33,14 +33,17 @@ def l6One : (q : Quorum) -> Path (Option Count) (open (Option Count) q (tallyBox
   fun (q : Quorum) => refl
 def l6Three : (q : Quorum) -> Path (Option Count) (open (Option Count) q (tallyBox box3)) (countVotes (fmMap SealedBallot Verdict (fun (x : SealedBallot) => decrypt Verdict (ballotVote x)) box3)) :=
   fun (q : Quorum) => refl
--- L7 (Q-S6-2 (a)): open is decrypt for each quorum and ciphertext.
+-- L8 (PLAN 6; cairn-lang L7, Q-S6-2 (a)): open is decrypt for each quorum
+-- and ciphertext. The def name l7 stays.
 def l7 : (q : Quorum) -> (c : Enc Count) -> Path Count (open Count q c) (decrypt Count c) :=
   fun (q : Quorum) (c : Enc Count) => refl
--- L8 on the closed s0 (tAmend two): a yes count of two meets the threshold,
+-- The G4 step (def l8) on the closed s0 (tAmend two): a yes count of two
+-- meets the threshold,
 -- so the step enacts p.
 def l8 : (p : Proposal) -> Path (Option Polity) (bind s0 (fun (s : Polity) => map (fun (t : Count) => stepD s (pair p t)) two)) (some p) :=
   fun (p : Proposal) => refl
--- L9 (Q-S6-6 (a)): amendAll folds the left factor first.
+-- L11 (PLAN 6; cairn-lang L9, Q-S6-6 (a)): amendAll folds the left factor
+-- first. The def name l9 stays.
 def l9 : (ps : FreeMon Decided) -> (qs : FreeMon Decided) -> (s : Polity) -> Path Polity (amendAll (fmMul Decided ps qs) s) (amendAll qs (amendAll ps s)) :=
   fun (ps : FreeMon Decided) (qs : FreeMon Decided) (s : Polity) => refl
 

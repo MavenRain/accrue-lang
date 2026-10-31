@@ -199,3 +199,5 @@ clock-now.lang REFUSE_CLOCK
 clock-block.lang REFUSE_CLOCK
 clock-timestamp.lang REFUSE_CLOCK
 clock-clock.lang REFUSE_CLOCK
+secret-reveal.lang REFUSE_LAW
+secret-proj.lang REFUSE_LAW
