@@ -113,6 +113,7 @@ check: build/langc build/fronttool build/blsagtool build/elgamaltool build/thres
 	build/sigmatool
 	build/frosttool
 	build/ballottool
+	build/ballottool onehot
 	build/secptool
 	build/shatool
 	build/u256tool

@@ -48,8 +48,13 @@ position of the Polity in force. AmendBallot is SealedBallot on the
 record. examples/amend.lang holds L8 and L11 on real kit words and the
 self-reference rows. `Secret`, `KeyShare`, `Nonce` and `DecKey` mark the
 secrets in the types (section 1, Q-S6-5 to Q-S6-9).
-Next: S6c (the host rows, Q-S6-8: a ballottool mode for k = decisions,
-the dkgtool reshare rows for `keyStamp` and `keyPay`).
+S6c DONE: `build/ballottool onehot` proves, verifies and opens each
+choice for k = 1 to 4 decisions and gives each refusal of the one-hot
+proof. The dkgtool has the reshare rows `keyStamp` (3 of 4 to 4 of 5)
+and `keyPay` (4 of 5 to 3 of 4), and each run checks that t1 - 1 new
+shares do not open (section 1, Q-S6-10 to Q-S6-12). S6 DONE.
+Next: S7 (Part S: Instruction, PayAuth, the record of instructions;
+L13).
 
 ## 1. Rulings
 
@@ -124,6 +129,10 @@ the dkgtool reshare rows for `keyStamp` and `keyPay`).
 | 2026-10-30 | Q-S6-9, verbatim: "(a) Sealed family Secret (Recommended)". `sealed family Secret (A)` with one constructor; `KeyShare`, `Nonce`, `DecKey := Secret Scalar`; the law def `reveal` reads one. A guest def that reads a Secret outside a law gets `REFUSE_LAW`. S9 refuses a target entry whose result holds a Secret (O4 stays open). | S6b |
 | 2026-10-30 | Not asked, a build default (not a ruling): `Scalar := U256` is new in the domain (the name was free). | S6b default |
 | 2026-10-30 | Not asked, a build default (not a ruling): the PLAN numbers L8 and L11 go on the examples/polity.lang comments. The def names `l7` and `l9` stay (test/check rows name them). The comment of the G4 step `l8` does not say L8 now. The new law names are `l8Box`, `l8Two` and `l11Amend` (`l8` and `l11` are taken). | S6b default |
+| 2026-10-30 | Q-S6-10, verbatim: "(a) One run, K 1..4 (Recommended)". One recipe line `build/ballottool onehot` runs k = 1 to 4 and each choice c < k (prove, verify, open each slot to its bit). It prints one count line `onehot regressions: 10 checked`. | S6c |
+| 2026-10-30 | Q-S6-11, verbatim: "(a) Full set (Recommended)". For each k: k 0 and k 9 (prove and verify), a choice of k, no yes bit, two yes bits (k 2 or more), k - 1 and k + 1 slots, a bad slot proof, a bad sum proof, and a slot of 2 with a slot of -1 (the sum is 1, so only the bit check refuses it). | S6c |
+| 2026-10-30 | Q-S6-12, verbatim: "(a) Both changes + t1-1 check (Recommended)". `keyStamp` 3 of 4 to 4 of 5 by the quorum {1,2,3,4} (member 5 joins, the threshold goes up); `keyPay` 4 of 5 to 3 of 4 by the quorum {1,3,4,5} (member 2 leaves, the threshold goes down). Each of the 4 key_run runs checks that t1 - 1 new shares do not open. | S6c |
+| 2026-10-30 | Not asked, a build default (not a ruling): S6c changes only test/ballottool.c, test/dkgtool.c and the Makefile `check` recipe. No guard in src/front changes. The onehot arrays have SIG_K_MAX + 1 entries, so the k 9 rows read only their own arrays. The 2 new key_run runs use the seed bases 30 and 40. | S6c default |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -390,8 +399,8 @@ refusal or a law kills at least one mutant of it.
 | S5b | Part E: the books, fund, settle, cancel, dispute, close at T (Q-S5-6), Instruction data (Q-S5-2), the CC dual (Q-S5-4); L3 to L5. | DONE |
 | S6a | Part D, the policy path (Q-S6-1): PolicyBallot, the tally, the `choice` table (`chooseD`), `govD`, `govPi`, the decision log, the freeze, the regimes; L7, L9, L10. | DONE |
 | S6b | Part D, the constitution (Q-S6-1, Q-S6-8): the Polity record, `rulePos`, `govC`, AmendBallot, the O4 secret marks; L8, L11. | DONE |
-| S6c | Part D, the host rows (Q-S6-8): the ballottool mode for k = decisions, the dkgtool reshare rows for `keyStamp` and `keyPay`. | NEXT |
-| S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | |
+| S6c | Part D, the host rows (Q-S6-8): the ballottool mode for k = decisions, the dkgtool reshare rows for `keyStamp` and `keyPay`. | DONE |
+| S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | NEXT |
 | S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | |
 | S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | |
 | S10 | WGSL: `wgsl.c`, batch proof check and batch `earned`. | |

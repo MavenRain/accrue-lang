@@ -1,9 +1,12 @@
-/* Host DKG regressions (slice S6 b5, Q-S6-4 (a)): one code, two runs, for
+/* Host DKG regressions (slice S6 b5, Q-S6-4 (a)): one code, four runs, for
    keyOpen (3 of 4 to 2 of 3: member 3 leaves) and keyAppend (2 of 3 to 3 of
-   4: tAppend 2 -> 3 of G4, member 4 joins). Each run: the DKG key is the
-   sum of the dealt secrets, a DKG quorum opens a ciphertext through
-   thr_open, the reshare keeps the key and a reshared quorum opens the old
-   ciphertext. Refused: a bad share, a bad proof, a dealing without the
+   4: tAppend 2 -> 3 of G4, member 4 joins), and (slice S6c, Q-S6-12 (a))
+   keyStamp (3 of 4 to 4 of 5 by all 4 members: member 5 joins) and keyPay
+   (4 of 5 to 3 of 4: member 2 leaves). Each run: the DKG key is the sum of
+   the dealt secrets, a DKG quorum opens a ciphertext through thr_open, the
+   reshare keeps the key, a reshared quorum opens the old ciphertext and
+   t1 - 1 new shares do not. Refused: a bad share, a bad proof, a dealing
+   without the
    Lagrange weight, a quorum below the old threshold, a reshare against
    another key (the sum) and a dealer outside the quorum. The seeds are
    fixed for reproducible vectors only. Initial DKG admission also checks
@@ -135,6 +138,9 @@ static int key_run(const char *name, uint32_t t0, uint32_t n0, const uint32_t *q
   }
   if (!opens(fresh, n1 - t1, t1, new_keys, n1, &ct))
     ok = fail(name, "a reshared quorum does not open the old ciphertext");
+  /* The new threshold: t1 - 1 new shares do not open. */
+  if (t1 > 1u && opens(fresh, n1 - t1 + 1u, t1 - 1u, new_keys, n1, &ct))
+    ok = fail(name, "t1 - 1 new shares open the old ciphertext");
   /* The refusals, for new member 1. */
   u256_from_u64(&one, 1u);
   column(col, dealt, q, 0u);
@@ -217,10 +223,14 @@ static int initial_admission(void) {
 int main(void) {
   static const uint32_t open_q[3] = {1u, 2u, 4u};
   static const uint32_t append_q[2] = {1u, 3u};
+  static const uint32_t stamp_q[4] = {1u, 2u, 3u, 4u};
+  static const uint32_t pay_q[4] = {1u, 3u, 4u, 5u};
   int ok = 1;
   ok &= initial_admission();
   ok &= key_run("keyOpen", 3u, 4u, open_q, 3u, 2u, 3u, 10u);
   ok &= key_run("keyAppend", 2u, 3u, append_q, 2u, 3u, 4u, 20u);
+  ok &= key_run("keyStamp", 3u, 4u, stamp_q, 4u, 4u, 5u, 30u);
+  ok &= key_run("keyPay", 4u, 5u, pay_q, 4u, 3u, 4u, 40u);
   if (!ok)
     return 1;
   puts("dkg regressions: passed");

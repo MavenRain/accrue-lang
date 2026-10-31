@@ -6,7 +6,10 @@
    the slot ciphertexts. With the argument `words` it prints the chain
    constants of examples/ballot.lang, one `name 0x<word>` per line. With
    `dao` (slice S10 b2) it prints the constants of examples/daokit.lang: the
-   full words of the 3 ballots and the slot 0 opening of the tally. */
+   full words of the 3 ballots and the slot 0 opening of the tally. With
+   `onehot` (slice S6c, Q-S6-10 and Q-S6-11 (a)) it checks the ballots of
+   k = 1 to 4 decisions: each choice proves, verifies and opens, and each
+   bad ballot gets its refusal. */
 #include <stdio.h>
 #include <string.h>
 
@@ -291,6 +294,154 @@ static void words(const GroupPoint *pk, const GroupPoint *ring, const ThrShare *
   open_words("tn", shares, &no, &l1, &l2);
 }
 
+/* The onehot mode: k = 1 to KMAX decisions. SLOTS is one above SIG_K_MAX,
+   so a row of k = SIG_K_MAX + 1 reads only its own arrays. */
+#define KMAX 4u
+#define SLOTS (SIG_K_MAX + 1u)
+
+typedef struct {
+  ElgCipher cts[SLOTS];
+  SigOr slots[SLOTS];
+  SigDleq sum;
+} Onehot;
+
+static int fail_k(uint32_t k, const char *what) {
+  fprintf(stderr, "FAIL ballot onehot k %u: %s\n", k, what);
+  return 0;
+}
+
+/* The ballot of K slots for the plaintexts M[j] (-1 to 2), for the rows
+   that sig_onehot_prove does not make: slot j encrypts M[j] with the nonce
+   r_j = thr_nonce(SEED, j) (-1 as the negation of the ciphertext of 1,
+   with the nonce -r_j), its bit proof claims 1 for M[j] above 0 and 0
+   else, and SUM is the proof of randomness of the pointwise sum for m = 1
+   with the sum of the nonces. 1 when sig_rand_prove gives SIG_OK. */
+static int forge(Onehot *o, const GroupPoint *pk, uint32_t k, const int *m, const U256 *seed, const U256 *ctx) {
+  U256 r;
+  U256 w;
+  U256 one;
+  U256 total_r;
+  Fe acc;
+  Fe fr;
+  Fe next;
+  GroupPoint p;
+  ElgCipher total;
+  uint32_t j;
+  fe_from_u64(&acc, 0u);
+  for (j = 0; j < k; j++) {
+    thr_nonce(&r, seed, j);
+    u256_from_u64(&w, (uint64_t)(m[j] < 0 ? -m[j] : m[j]));
+    elg_encrypt(&o->cts[j], pk, &w, &r);
+    fe_from_u256(&fr, &r, &GROUP_N);
+    if (m[j] < 0) {
+      group_neg(&p, &o->cts[j].c1);
+      o->cts[j].c1 = p;
+      group_neg(&p, &o->cts[j].c2);
+      o->cts[j].c2 = p;
+      fe_neg(&next, &fr, &GROUP_N);
+      fr = next;
+    }
+    sig_or_prove(&o->slots[j], pk, &o->cts[j], (uint32_t)(m[j] > 0), &r, ctx, j);
+    fe_add(&next, &acc, &fr, &GROUP_N);
+    acc = next;
+  }
+  fe_to_u256(&total_r, &acc);
+  total = o->cts[0];
+  for (j = 1u; j < k; j++)
+    elg_add(&total, &total, &o->cts[j]);
+  u256_from_u64(&one, 1u);
+  return sig_rand_prove(&o->sum, pk, &total, &one, &total_r, ctx) == SIG_OK;
+}
+
+/* 1 when the quorum {1, 2} opens CT to BIT. */
+static int opens_bit(const ThrShare *shares, const GroupPoint *keys, const ElgCipher *ct, uint64_t bit) {
+  ThrPart parts[2];
+  uint64_t m = 0;
+  quorum(parts, shares, ct);
+  return thr_open(&m, parts, 2u, keys, T, N, ct, BITS) == THR_FOUND && m == bit;
+}
+
+/* The rows of K slots under the context word 70 + K. Each choice c below K
+   proves and verifies, and the quorum {1, 2} opens slot j to 1 for j = c
+   and to 0 else. Then the refusals, on the ballot of choice 0 or on a
+   forged ballot. 1, or 0 when a row fails. */
+static int onehot_rows(const GroupPoint *pk, const ThrShare *shares, const GroupPoint *keys, uint32_t k) {
+  static const int none[SLOTS] = {0};
+  static const int yes[SLOTS] = {1};
+  static const int two[SLOTS] = {1, 1};
+  static const int split[SLOTS] = {2, -1};
+  Onehot o;
+  Onehot bad;
+  Onehot extra;
+  U256 seed;
+  U256 ctx;
+  U256 one;
+  uint32_t c;
+  uint32_t j;
+  int ok = 1;
+  u256_from_u64(&ctx, 70u + k);
+  u256_from_u64(&one, 1u);
+  for (c = 0; c < k; c++) {
+    blsag_key(&seed, 50u + 10u * k + c);
+    ok &= (sig_onehot_prove(o.cts, o.slots, &o.sum, pk, k, c, &seed, &ctx) == SIG_OK
+           && sig_onehot_verify(o.cts, o.slots, &o.sum, pk, k, &ctx) == SIG_OK)
+          || fail_k(k, "a choice does not prove and verify");
+    for (j = 0; j < k; j++)
+      ok &= opens_bit(shares, keys, &o.cts[j], j == c) || fail_k(k, "a slot does not open to its bit");
+  }
+  blsag_key(&seed, 50u + 10u * k);
+  ok &= sig_onehot_prove(o.cts, o.slots, &o.sum, pk, k, k, &seed, &ctx) == SIG_REFUSED || fail_k(k, "a choice of k is not refused");
+  ok &= (sig_onehot_prove(o.cts, o.slots, &o.sum, pk, 0u, 0u, &seed, &ctx) == SIG_REFUSED
+         && sig_onehot_prove(o.cts, o.slots, &o.sum, pk, SIG_K_MAX + 1u, 0u, &seed, &ctx) == SIG_REFUSED)
+        || fail_k(k, "a k out of range proves");
+  ok &= (forge(&bad, pk, SIG_K_MAX + 1u, yes, &seed, &ctx)
+         && sig_onehot_verify(bad.cts, bad.slots, &bad.sum, pk, SIG_K_MAX + 1u, &ctx) == SIG_REFUSED
+         && sig_onehot_verify(bad.cts, bad.slots, &bad.sum, pk, 0u, &ctx) == SIG_REFUSED)
+        || fail_k(k, "a k out of range verifies");
+  ok &= (forge(&bad, pk, k, yes, &seed, &ctx) && sig_onehot_verify(bad.cts, bad.slots, &bad.sum, pk, k, &ctx) == SIG_OK)
+        || fail_k(k, "the forge of one yes bit does not verify");
+  ok &= (forge(&bad, pk, k, none, &seed, &ctx) && sig_onehot_verify(bad.cts, bad.slots, &bad.sum, pk, k, &ctx) == SIG_BAD_SUM)
+        || fail_k(k, "no yes bit is not refused");
+  ok &= sig_onehot_prove(o.cts, o.slots, &o.sum, pk, k, 0u, &seed, &ctx) == SIG_OK || fail_k(k, "choice 0 does not prove");
+  bad = o;
+  u256_add(&bad.slots[k - 1u].e0, &bad.slots[k - 1u].e0, &one);
+  ok &= sig_onehot_verify(bad.cts, bad.slots, &bad.sum, pk, k, &ctx) == SIG_BAD_SLOT || fail_k(k, "a bad slot proof is not refused");
+  bad = o;
+  u256_add(&bad.sum.z, &bad.sum.z, &one);
+  ok &= sig_onehot_verify(bad.cts, bad.slots, &bad.sum, pk, k, &ctx) == SIG_BAD_SUM || fail_k(k, "a bad sum proof is not refused");
+  /* k + 1 slots: the ballot of choice 0 and a valid 0 slot at index k. */
+  bad = o;
+  ok &= forge(&extra, pk, k + 1u, none, &seed, &ctx) || fail_k(k, "the forge of k + 1 slots refused");
+  bad.cts[k] = extra.cts[k];
+  bad.slots[k] = extra.slots[k];
+  ok &= sig_onehot_verify(bad.cts, bad.slots, &bad.sum, pk, k + 1u, &ctx) == SIG_BAD_SUM || fail_k(k, "k + 1 slots are not refused");
+  if (k >= 2u) {
+    ok &= sig_onehot_verify(o.cts, o.slots, &o.sum, pk, k - 1u, &ctx) == SIG_BAD_SUM || fail_k(k, "k - 1 slots are not refused");
+    ok &= (forge(&bad, pk, k, two, &seed, &ctx) && sig_onehot_verify(bad.cts, bad.slots, &bad.sum, pk, k, &ctx) == SIG_BAD_SUM)
+          || fail_k(k, "two yes bits are not refused");
+    /* The sum is 1, so only the bit check refuses. */
+    ok &= (forge(&bad, pk, k, split, &seed, &ctx) && sig_onehot_verify(bad.cts, bad.slots, &bad.sum, pk, k, &ctx) == SIG_BAD_SLOT)
+          || fail_k(k, "a slot of 2 and a slot of -1 are not refused");
+  }
+  return ok;
+}
+
+/* `ballottool onehot`: the rows of k = 1 to KMAX; prints the count of the
+   choices. */
+static int onehot(const GroupPoint *pk, const ThrShare *shares, const GroupPoint *keys) {
+  uint32_t k;
+  uint32_t n = 0;
+  int ok = 1;
+  for (k = 1u; k <= KMAX; k++) {
+    ok &= onehot_rows(pk, shares, keys, k);
+    n += k;
+  }
+  if (!ok)
+    return 1;
+  printf("onehot regressions: %u checked\n", n);
+  return 0;
+}
+
 int main(int argc, char **argv) {
   static const uint32_t choice[3] = {0u, 0u, 1u};
   Ballot b[3];
@@ -335,6 +486,8 @@ int main(int argc, char **argv) {
   }
   if (argc == 2 && strcmp(argv[1], "dao") == 0)
     return dao(&pk, shares, b);
+  if (argc == 2 && strcmp(argv[1], "onehot") == 0)
+    return onehot(&pk, shares, keys);
   /* The ctx binding: voter 0's ctx is the pinned word and the ballot
      verifies under it. */
   hex(text, sizeof text, &b[0].ctx);
