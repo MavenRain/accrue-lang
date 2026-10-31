@@ -620,6 +620,106 @@ def stepD : Polity -> Decided -> Polity :=
   fun (s : Polity) (d : Decided) => flagIf (decideYes s (second d)) (enact (first d) s) s
 def amendAll : FreeMon Decided -> Polity -> Polity :=
   fun (ds : FreeMon Decided) (s : Polity) => fmChain Decided Polity polityIsSet stepD s ds
+-- Part D policy ballots (S6a, Q-S6-1 and Q-S6-2 (a)). A decision is a Nat
+-- below the count of decisions of the program (retainer-lang C10). A
+-- PolicyBallot holds one encrypted bit for each decision, a ZKProof that
+-- the bits encrypt a plain list with exactly one yes (HotOk), and a link
+-- tag. The number of bits is public. castPolicy refuses a used link tag and
+-- a ballot with the wrong number of bits. slotOf k gives the bit of
+-- decision k (a no after the end). tallyAt k adds the bits of decision k
+-- under Enc, and countD k adds the plain bits; pbPlain decrypts each bit
+-- of each ballot (L7).
+def encAll : FreeMon Verdict -> FreeMon (Enc Verdict) :=
+  fun (vs : FreeMon Verdict) => fmMap Verdict (Enc Verdict) (fun (v : Verdict) => encEta Verdict v) vs
+def HotOk : FreeMon (Enc Verdict) -> Type 0 :=
+  fun (cs : FreeMon (Enc Verdict)) => Sigma (vs : FreeMon Verdict) (Prod (Path (FreeMon (Enc Verdict)) (encAll vs) cs) (Path (Option Count) (countVotes vs) (some 1)))
+def PolicyBallot : Type 0 := Sigma (cs : FreeMon (Enc Verdict)) (Prod (ZKProof (HotOk cs)) Digest)
+def mkPolicyBallot : (vs : FreeMon Verdict) -> Path (Option Count) (countVotes vs) (some 1) -> Digest -> PolicyBallot :=
+  fun (vs : FreeMon Verdict) (p : Path (Option Count) (countVotes vs) (some 1)) (t : Digest) =>
+    pack (encAll vs) (pair (trunc1 (HotOk (encAll vs)) (pack vs (pair refl p))) t)
+def pbVotes : PolicyBallot -> FreeMon (Enc Verdict) := fun (b : PolicyBallot) => witness b
+def pbTag : PolicyBallot -> Digest := fun (b : PolicyBallot) => second (payload b)
+def PolicyBox : Type 0 := FreeMon PolicyBallot
+def pbTagUsed : Digest -> PolicyBox -> Flag :=
+  fun (t : Digest) (box : PolicyBox) => fmChain PolicyBallot Flag flagIsSet (fun (f : Flag) (x : PolicyBallot) => flagIf (u256Eq (pbTag x) t) flagYes f) flagNo box
+def castPolicy : Nat -> PolicyBallot -> PolicyBox -> Option PolicyBox :=
+  fun (n : Nat) (b : PolicyBallot) (box : PolicyBox) =>
+    flagIf (pbTagUsed (pbTag b) box) none
+      (option none (fun (m : Nat) => flagIf (natEq m n) (some (fmMul PolicyBallot box (fmEta PolicyBallot b))) none) (len (Enc Verdict) (pbVotes b)))
+def slotOf : Nat -> FreeMon (Enc Verdict) -> Enc Verdict :=
+  fun (k : Nat) (cs : FreeMon (Enc Verdict)) => fmRun (Enc Verdict) (Nat -> Enc Verdict) (isSetFun Nat (Enc Verdict) (encIsSet Verdict flagIsSet))
+    (fun (x : Enc Verdict) (b : Nat -> Enc Verdict) (j : Nat) => option x (fun (i : Nat) => b i) (natSub j 1))
+    (fun (j : Nat) => encEta Verdict verdictNo) cs k
+def slotPlain : Nat -> FreeMon Verdict -> Verdict :=
+  fun (k : Nat) (vs : FreeMon Verdict) => fmRun Verdict (Nat -> Verdict) (isSetFun Nat Verdict flagIsSet)
+    (fun (x : Verdict) (b : Nat -> Verdict) (j : Nat) => option x (fun (i : Nat) => b i) (natSub j 1))
+    (fun (j : Nat) => verdictNo) vs k
+def tallyAt : Nat -> PolicyBox -> Enc (Option Count) :=
+  fun (k : Nat) (box : PolicyBox) => fmChain PolicyBallot (Enc (Option Count)) (encIsSet (Option Count) optNatIsSet)
+    (fun (t : Enc (Option Count)) (b : PolicyBallot) => encOp2 (Option Count) Flag (Option Count) (fun (n : Option Count) (f : Flag) => flagIf f (bind n opSucc) n) t (slotOf k (pbVotes b))) (encEta (Option Count) (some 0)) box
+def countD : Nat -> FreeMon (FreeMon Verdict) -> Option Count :=
+  fun (k : Nat) (hs : FreeMon (FreeMon Verdict)) => fmChain (FreeMon Verdict) (Option Count) optNatIsSet (fun (n : Option Count) (h : FreeMon Verdict) => flagIf (slotPlain k h) (bind n opSucc) n) (some 0) hs
+def pbPlain : PolicyBox -> FreeMon (FreeMon Verdict) :=
+  fun (box : PolicyBox) => fmMap PolicyBallot (FreeMon Verdict) (fun (b : PolicyBallot) => fmMap (Enc Verdict) Verdict (fun (c : Enc Verdict) => decrypt Verdict c) (pbVotes b)) box
+-- Part D choice and Gov (S6a, Q-S6-2 (a), L10). A PolicyTally holds the
+-- opened count of each decision in order. tallyAll ds box gives the tally
+-- of each decision in the list ds, and openTally q opens each one. tallyMax
+-- gives the largest count, tallySum the ballot count (each ballot has
+-- exactly one yes), atCount m the number of decisions with the count m,
+-- and posOf m the first decision with the count m. A none count gives
+-- none. The rules by position (Q-S0-6): rule 0 is plurality (a unique
+-- largest count above 0; a tie gives none), rule 1 is absolute majority (a
+-- count c with 2c above the ballot count). chooseD gives none for a rule
+-- position out of the list. govD n refuses a decision d with n <= d. govPi
+-- pa gives the policy of the decision (pa is the policyAt of the program,
+-- retainer-lang C10).
+def PolicyTally : Type 0 := FreeMon (Option Count)
+def tallyAll : FreeMon Nat -> PolicyBox -> FreeMon (Enc (Option Count)) :=
+  fun (ds : FreeMon Nat) (box : PolicyBox) => fmMap Nat (Enc (Option Count)) (fun (k : Nat) => tallyAt k box) ds
+def openTally : Quorum -> FreeMon Nat -> PolicyBox -> PolicyTally :=
+  fun (q : Quorum) (ds : FreeMon Nat) (box : PolicyBox) => fmMap (Enc (Option Count)) (Option Count) (fun (c : Enc (Option Count)) => open (Option Count) q c) (tallyAll ds box)
+def tallyMax : PolicyTally -> Option Count :=
+  fun (t : PolicyTally) => fmChain (Option Count) (Option Count) optNatIsSet (fun (m : Option Count) (c : Option Count) => bind m (fun (a : Count) => bind c (fun (b : Count) => some (natMax a b)))) (some 0) t
+def tallySum : PolicyTally -> Option Count :=
+  fun (t : PolicyTally) => fmChain (Option Count) (Option Count) optNatIsSet (fun (m : Option Count) (c : Option Count) => bind m (fun (a : Count) => bind c (fun (b : Count) => natAdd a b))) (some 0) t
+def atCount : Count -> PolicyTally -> Option Count :=
+  fun (m : Count) (t : PolicyTally) => fmChain (Option Count) (Option Count) optNatIsSet (fun (n : Option Count) (c : Option Count) => bind c (fun (b : Count) => flagIf (natEq b m) (bind n opSucc) n)) (some 0) t
+def posOf : Count -> PolicyTally -> Option Nat :=
+  fun (m : Count) (t : PolicyTally) =>
+    bind (fmRun (Option Count) (Option Nat) optNatIsSet (fun (c : Option Count) (f : Option Nat) => bind c (fun (b : Count) => bind f (fun (g : Nat) => flagIf (natEq b m) (some 1) (flagIf (natEq g 0) (some 0) (natAdd g 1))))) (some 0) t) foundAt
+def rulePlurality : PolicyTally -> Option Nat :=
+  fun (t : PolicyTally) => bind (tallyMax t) (fun (m : Count) => flagIf (natEq m 0) none (bind (atCount m t) (fun (k : Count) => flagIf (natEq k 1) (posOf m t) none)))
+def ruleMajority : PolicyTally -> Option Nat :=
+  fun (t : PolicyTally) => bind (tallyMax t) (fun (m : Count) => bind (tallySum t) (fun (s : Count) => bind (natSub s m) (fun (rest : Count) => flagIf (natLe m rest) none (posOf m t))))
+def chooseD : Nat -> PolicyTally -> Option Nat :=
+  fun (r : Nat) (t : PolicyTally) => flagIf (natEq r 0) (rulePlurality t) (flagIf (natEq r 1) (ruleMajority t) none)
+def govD : Nat -> Nat -> PolicyTally -> Option Nat :=
+  fun (n : Nat) (r : Nat) (t : PolicyTally) => bind (chooseD r t) (fun (d : Nat) => flagIf (natLe n d) none (some d))
+def govPi : (Nat -> Policy) -> Nat -> Nat -> PolicyTally -> Option Policy :=
+  fun (pa : Nat -> Policy) (n : Nat) (r : Nat) (t : PolicyTally) => bind (govD n r t) (fun (d : Nat) => some (pa d))
+-- Part D decision log, freeze and regimes (S6a, Q-S6-3 (a), Q-S6-4 (a)).
+-- A DecLog holds (t, d) for each change of decision (retainer-lang C12).
+-- lastD gives the last decision (none for an empty log). govStep adds (t,
+-- d) only when govD gives some d and d is not the last decision (the
+-- dedupe). No decision adds no entry (the freeze): the last policy stays,
+-- and an empty log gives an empty History, so earnedAt gives 0. logHistory
+-- pa maps the log to the History of earnedAt; the S5 words do not change.
+-- regimeD n r over a closed table of tallies gives regimeAD when each
+-- tally gives a decision and regimeAI when one gives none. govD gives at
+-- most one decision, so Schelling-Ising cannot occur and
+-- REFUSE_BIFURCATION has no reach.
+def DecLog : Type 0 := FreeMon (Prod Time Nat)
+def lastD : DecLog -> Option Nat :=
+  fun (log : DecLog) => fmChain (Prod Time Nat) (Option Nat) optNatIsSet (fun (o : Option Nat) (x : Prod Time Nat) => some (second x)) none log
+def govStep : Nat -> Nat -> Time -> PolicyTally -> DecLog -> DecLog :=
+  fun (n : Nat) (r : Nat) (t : Time) (tl : PolicyTally) (log : DecLog) =>
+    option log (fun (d : Nat) => flagIf (option flagNo (fun (l : Nat) => natEq l d) (lastD log)) log (fmMul (Prod Time Nat) log (fmEta (Prod Time Nat) (pair t d)))) (govD n r tl)
+def logHistory : (Nat -> Policy) -> DecLog -> History :=
+  fun (pa : Nat -> Policy) (log : DecLog) => fmMap (Prod Time Nat) (Prod Time Policy) (fun (x : Prod Time Nat) => pair (first x) (pa (second x))) log
+family RegimeD := regimeAD | regimeAI
+def regimeD : Nat -> Nat -> FreeMon PolicyTally -> RegimeD :=
+  fun (n : Nat) (r : Nat) (tab : FreeMon PolicyTally) =>
+    flagIf (fmChain PolicyTally Flag flagIsSet (fun (f : Flag) (tl : PolicyTally) => option flagNo (fun (d : Nat) => f) (govD n r tl)) flagYes tab) regimeAD regimeAI
 -- The positions of a bag (S7 B3, Q4): Pos n has n values, the first
 -- position at each szS and a lift of each position of the tail. No
 -- constructor gives Pos sz0. A domain family, so Fin stays internal (O23).

@@ -33,8 +33,18 @@ close. The ops `escFund`, `escSettle`, `escCancel`, `escDispute` and
 `Instruction` data and does not move it. The CC dual is the cofamily
 `Books` and `booksPair`. L3, L4 and L5 are refl on closed values
 (section 1, Q-S5b-1 to Q-S5b-5). S5 DONE.
-Next: S6 (Part D: PolicyBallot, Tally, the `choice` table, `GovPi`, the
-regimes, AmendBallot, reshare; L7 to L11; section 4.2).
+S6a DONE: a `PolicyBallot` holds one encrypted bit for each decision
+and a proof that exactly one bit is yes. `castPolicy` refuses a used
+link tag and a ballot with the wrong number of bits. `tallyAt`,
+`openTally`, `chooseD` (the rules by position: 0 plurality, 1 absolute
+majority), `govD` and `govPi` give the decision and its policy. The
+decision log `DecLog` adds an entry only for a new decision (the
+dedupe), and no decision adds no entry (the freeze). `regimeD` gives
+`regimeAD` or `regimeAI`. L7, L9 and L10 are refl on closed values
+(section 1, Q-S6-1 to Q-S6-4).
+Next: S6b (the Polity record with `tStamp`, `tPay`, `keyStamp`,
+`keyPay` and the rule position, AmendBallot on it, L8 and L11, the
+ballottool and dkgtool reshare rows, the O4 secret marks; section 4.2).
 
 ## 1. Rulings
 
@@ -94,6 +104,14 @@ regimes, AmendBallot, reshare; L7 to L11; section 4.2).
 | 2026-10-30 | Not asked, a build default (not a ruling): the survey form `isSetFun Books.pos A sA` does not lex (`LEX_CHAR` 0x2e). `booksPair A sA b c` folds the stamps of c (`fmChain`, the first stamp first) into a map on the readers `Books A -> A`, set by `isSetFun (Books A -> A) (Books A -> A) (isSetFun (Books A) A sA)`, and applies the map to `booksNow A` and b. booksLaw: the pairing of a corecursor with a chain is the fold of its step (refl). booksLawNine: the value is some 9. | S5b default |
 | 2026-10-30 | Not asked, a build default (not a ruling): the test signer `build/frosttool engage` prints the words of the engage and countersign rows (the client and the firm committees, the good and bad signatures). It is test data only, as the `stamps` mode (S4). | S5b default |
 | 2026-10-30 | Review fix: every settle logs `(t, funded after)`, including push and stream when funded is unchanged, so `logOk` also prevents operations before a withdrawal. Countersign checks `bookOk` before setting the signed time, so a signature cannot change a closed period or precede the funding log. The paid and cs regression rows in examples/books.lang cover both cases and valid controls. | S5b review |
+| 2026-10-30 | Q-S6-1, verbatim: "(a) S6a policy path first (Recommended)". S6a: D, the policy of each decision, PolicyBallot (one-hot, the ideal Enc model), the tally of each decision, `chooseD` and its table, `govD` and `govPi`, the regimes, the freeze, the decision log; L7, L9 and L10 as refl. S6b: the Polity record (`tStamp`, `tPay`, `keyStamp`, `keyPay`, the rule position), AmendBallot on it, L8 and L11 on real kit words, a ballottool mode for k = decisions, the dkgtool reshare rows, the O4 secret marks. | S6a |
+| 2026-10-30 | Q-S6-2, verbatim: "(a) Guest def chooseD (Recommended)". D is a `Nat` below the decision count of the program. `chooseD : Nat -> PolicyTally -> Option Nat` cases on the rule position in a fixed guest list (Q-S0-6). `govD n` refuses a decision d with n <= d. The table is one eval row for each closed tally of the fixture. No kernel change. | S6a |
+| 2026-10-30 | Q-S6-3, verbatim: "(a) Decision log, dedupe (Recommended)". `DecLog := FreeMon (Prod Time Nat)` (retainer-lang C12). `govStep` adds (t, d) only when d is not the last decision (`natEq`). `logHistory` maps the log to the History of `earnedAt` by the policy of each decision. The S5 words do not change. | S6a |
+| 2026-10-30 | Q-S6-4, verbatim: "(a) Guest regimeD, no-entry freeze (Recommended)". `regimeD` over the closed table gives `regimeAD` when each tally gives a decision and `regimeAI` when one gives none. Schelling-Ising cannot occur, so `REFUSE_BIFURCATION` stays a documented refusal with no reach. The freeze: no decision adds no entry, and the last policy stays. An empty History gives the zero rate. | S6a |
+| 2026-10-30 | Not asked, a build default (not a ruling): the rule list by position is 0 plurality (a unique largest count above 0; a tie gives none) and 1 absolute majority (a count c with 2c above the ballot count, the sum of the tally). A rule position out of the list gives none. | S6a default |
+| 2026-10-30 | Not asked, a build default (not a ruling): a plurality with zero votes gives none, because no count is above 0 (`zeroPlur`, `one0Plur`). | S6a default |
+| 2026-10-30 | Not asked, a build default (not a ruling): `Tally` and `gov` give `REFUSE_SIG`, so the words are `PolicyTally`, `govD` and `govPi`. A guest file has no `Nat` literal, so examples/gov.lang is a kit file. | S6a default |
+| 2026-10-30 | Not asked, a build default (not a ruling): the plan part P4 (the laws and the rows) went into the P2 and P3 blocks of examples/gov.lang, so S6a has no P4. | S6a default |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -196,12 +214,12 @@ internal to the kernel. There is no `Addr`, `Env`, `msg.sender`, ERC-20
 | Name | Kind | Reading |
 |---|---|---|
 | Member | defined | `Point`: one public key. |
-| D | defined | `Nat` below `decisions` (retainer-lang C10). `policyOf : D -> Policy` is a total program definition. |
+| D | defined | `Nat` below `decisions` (retainer-lang C10). `policyOf : D -> Policy` is a total program definition. S6a: `govD n` refuses a decision d with n <= d; the policy map `pa : Nat -> Policy` is an argument of `govPi` and `logHistory`. |
 | Constitution | defined record | `members : FreeMon Member`; the thresholds `tOpen`, `tAmend`, `tStamp`, `tPay`; the keys `keyOpen`, `keyStamp`, `keyPay : Point`; `rule : Nat`, the position of the choice rule in force in the program list `rules` (Q-S0-6). |
-| PolicyBallot | defined | One-hot over `D`: `decisions` exponential ElGamal ciphertexts under `keyOpen`, a disjunctive Chaum-Pedersen proof that each one is 0 or 1, a proof that their sum is 1, and a bLSAG ring signature over `members`. |
-| Tally | defined | `FreeMon Nat` of length `decisions`, the opened homomorphic sum. This is the orbit quotient of retainer-lang: the counts, never who voted what. |
-| choice | slot | `Tally -> Option D`, a program definition. The compiler makes its table over each tally (retainer-lang C10). |
-| Gov, GovPi | defined | `Gov` = the table of the rule in force; `GovPi = map policyOf . Gov`. |
+| PolicyBallot | defined | One-hot over `D`: `decisions` exponential ElGamal ciphertexts under `keyOpen`, a disjunctive Chaum-Pedersen proof that each one is 0 or 1, a proof that their sum is 1, and a bLSAG ring signature over `members`. S6a, the ideal Enc model (Q-S6-1): `PolicyBallot` = the bits under `Enc`, a `ZKProof (HotOk cs)` and a link tag; `castPolicy` refuses a used tag and a wrong bit count. The ElGamal form and the bLSAG are S6b. |
+| Tally | defined | `FreeMon Nat` of length `decisions`, the opened homomorphic sum. This is the orbit quotient of retainer-lang: the counts, never who voted what. S6a: `PolicyTally := FreeMon (Option Count)`; `tallyAt`, `tallyAll`, `openTally`. |
+| choice | slot | `Tally -> Option D`, a program definition. The compiler makes its table over each tally (retainer-lang C10). S6a: the guest def `chooseD` (Q-S6-2); the table is the choice rows of examples/gov.lang. |
+| Gov, GovPi | defined | `Gov` = the table of the rule in force; `GovPi = map policyOf . Gov`. S6a: `govD`, `govPi`; the log `DecLog`, `lastD`, `govStep`, `logHistory`; `RegimeD`, `regimeD` (Q-S6-3, Q-S6-4). |
 | AmendBallot | defined | cairn-lang `Ballot`: `Enc Bool` with its proof and its bLSAG, on a whole new `Constitution`. `decide` = `yes >= tAmend`. |
 | Share, open | primitive | Partial decryption with a DLEQ proof; `tOpen` valid shares combined by Lagrange (MPC). |
 | Deal, Reshare | primitive | cairn-lang `src/front/dkg.c`: Pedersen DKG with Feldman commitments, and reshare when `members` or a threshold changes. No trusted dealer. |
@@ -357,7 +375,8 @@ refusal or a law kills at least one mutant of it.
 | S4 | Time: `Stamp`, the stamp chain, `REFUSE_CLOCK`; L12. | DONE |
 | S5a | Part E (7.1): the types, G, `earnedAt`, the policy history as data; L1, L2, L6 (Q-S5-1). | DONE |
 | S5b | Part E: the books, fund, settle, cancel, dispute, close at T (Q-S5-6), Instruction data (Q-S5-2), the CC dual (Q-S5-4); L3 to L5. | DONE |
-| S6 | Part D: PolicyBallot, Tally, `choice` table, `GovPi`, regimes, AmendBallot, reshare; L7 to L11. | NEXT |
+| S6a | Part D, the policy path (Q-S6-1): PolicyBallot, the tally, the `choice` table (`chooseD`), `govD`, `govPi`, the decision log, the freeze, the regimes; L7, L9, L10. | DONE |
+| S6b | Part D, the constitution (Q-S6-1): the Polity record, AmendBallot, the ballottool and dkgtool reshare rows, the O4 secret marks; L8, L11. | NEXT |
 | S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | |
 | S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | |
 | S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | |
@@ -379,7 +398,8 @@ refusal or a law kills at least one mutant of it.
 - O3 retainer-lang SPEC.md 82 still says EVM output PLANNED (its O-d16-1).
   accrue-lang takes only the domain, so this does not apply here.
 - O4 The secret marks for `REFUSE_TARGET_SECRET` (S9): the key shares,
-  the nonces and the decryption key. S6 marks them in the types.
+  the nonces and the decryption key. S6b marks them in the types
+  (Q-S6-1).
 - O5 The test vectors come from the published standards (NIST CAVP for
   SHA-256, SEC 2 for secp256k1, the FROST RFC 9591 vectors), not from an
   implementation that the gate would trust.
@@ -403,6 +423,9 @@ refusal or a law kills at least one mutant of it.
   `NAME_UNKNOWN` return at the end of `var_core` cannot run for the same
   reason (before S4 too): `resolve_head` gives `var_core` only a local or
   a definition. It stays as a guard. A later slice can remove it.
+- O11 `govStep` takes the time t as given, so the time order of the
+  decision log is the order of the caller, as for the S5 History. A
+  later slice can add a time guard (as `later` for the stamps).
 
 ## 12. Questions for the USER (S0)
 

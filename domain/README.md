@@ -63,6 +63,7 @@ of each section gives its rule or ruling.
 | The encrypted values | the sealed family `Enc`, `encBind`, `encMap`, `encOp2`, the law defs `decrypt` and `observe` |
 | Quorum and proofs | `Quorum`, the law def `open`, `ZKProof`, the sealed family `Transcript`, the law def `verified` |
 | Part D, the DAO | `Point`, `Count`, `verdictNo`, `isSetProd`, `encEtaOf`, `encIsSet`, `Polity`, `makePolity`, `members`, `tAppend`, `tAmend`, `tOpen`, `keyOpen`, `keyAppend`, `polityIsSet`, `Proposal`, `Bit`, `SealedBallot`, `mkBallot`, `ballotVote`, `linkTag`, `Box`, `tagUsed`, `castBallot`, `tallyBox`, `countVotes`, `Decided`, `decideYes`, `enact`, `stepD`, `amendAll` |
+| S6a, Part D policy | `encAll`, `HotOk`, `PolicyBallot`, `mkPolicyBallot`, `pbVotes`, `pbTag`, `PolicyBox`, `pbTagUsed`, `castPolicy`, `slotOf`, `slotPlain`, `tallyAt`, `countD`, `pbPlain`, `PolicyTally`, `tallyAll`, `openTally`, `tallyMax`, `tallySum`, `atCount`, `posOf`, `rulePlurality`, `ruleMajority`, `chooseD`, `govD`, `govPi`, `DecLog`, `lastD`, `govStep`, `logHistory`, `RegimeD`, `regimeAD`, `regimeAI`, `regimeD` |
 | Positions, words and orbits | `Pos`, `Word`, `sizePred`, `consP`, `swapFront`, `actW`, `ChoiceBag`, `OrbitN` |
 | The charter | `Charter` (an inductive-inductive family) |
 | Equivalences | `isContr`, `fiber`, `isEquiv`, `Equiv`, `idEquiv`, `isoCap`, `isoPath`, `isoToEquiv`, `ua`, `uaArrow` |
@@ -106,6 +107,18 @@ of each section gives its rule or ruling.
   cannot precede a withdrawal. Countersign also checks `bookOk` to preserve
   closed periods and the order of the funding log. The paid and cs rows
   cover these guards and their valid controls.
+- `examples/gov.lang` holds the laws L7, L9 and L10 (S6a). L7: the
+  tally of each decision under Enc is the count of the plain bits
+  (l7Slot0 to l7Slot2, q free). L9: each other order of the three
+  ballots gives the same tally (tallyAll and openTally). L10: govPi is
+  the policy of the choice at a constant rule (l10Plur, l10Maj,
+  l10Choice, l10Tie). The choice rows (boxPlur to longGovCtl): a unique
+  largest count, a tie, a plurality with no majority, no votes, a none
+  count, a bad rule position and a decision out of the decision count.
+  The log rows: the same decision twice adds one entry (logAALen, the
+  dedupe), a tie adds no entry (logATLen, the freeze), and earnedAt on
+  the History of the log (earnA to earnEmpty; an empty log gives 0u).
+  The regime rows: regAD to regADLong.
 
 ## How to change the domain
 

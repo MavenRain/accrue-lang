@@ -1,0 +1,143 @@
+-- Part D policy ballots and L7 (S6a, Q-S6-1 and Q-S6-2 (a)): three
+-- decisions (0, 1 and 2). hot0, hot1 and hot2 have one yes; hotTwo has two,
+-- so no PolicyBallot holds it (countVotes is some 2, not some 1).
+def hot0 : FreeMon Verdict := fmMul Verdict (fmMul Verdict (fmEta Verdict flagYes) (fmEta Verdict flagNo)) (fmEta Verdict flagNo)
+def hot1 : FreeMon Verdict := fmMul Verdict (fmMul Verdict (fmEta Verdict flagNo) (fmEta Verdict flagYes)) (fmEta Verdict flagNo)
+def hot2 : FreeMon Verdict := fmMul Verdict (fmMul Verdict (fmEta Verdict flagNo) (fmEta Verdict flagNo)) (fmEta Verdict flagYes)
+def hotTwo : Option Count := countVotes (fmMul Verdict (fmMul Verdict (fmEta Verdict flagYes) (fmEta Verdict flagYes)) (fmEta Verdict flagNo))
+def pbA : PolicyBallot := mkPolicyBallot hot1 refl 11u
+def pbB : PolicyBallot := mkPolicyBallot hot1 refl 12u
+def pbC : PolicyBallot := mkPolicyBallot hot2 refl 13u
+def pbShort : PolicyBallot := mkPolicyBallot (fmMul Verdict (fmEta Verdict flagYes) (fmEta Verdict flagNo)) refl 14u
+def pbAgain : PolicyBallot := mkPolicyBallot hot0 refl 11u
+def pbBox3 : PolicyBox := fmMul PolicyBallot (fmMul PolicyBallot (fmEta PolicyBallot pbA) (fmEta PolicyBallot pbB)) (fmEta PolicyBallot pbC)
+-- The cast guards: three good casts give the box; a used tag and a short
+-- ballot give none.
+def castThree : Option PolicyBox := bind (castPolicy 3 pbA (fmUnit PolicyBallot)) (fun (x : PolicyBox) => bind (castPolicy 3 pbB x) (fun (y : PolicyBox) => castPolicy 3 pbC y))
+def castLen : Option Count := bind castThree (fun (x : PolicyBox) => len PolicyBallot x)
+def castUsed : Option PolicyBox := castPolicy 3 pbAgain pbBox3
+def castShort : Option PolicyBox := castPolicy 3 pbShort pbBox3
+def castShortCtl : Option Count := bind (castPolicy 2 pbShort (fmUnit PolicyBallot)) (fun (x : PolicyBox) => len PolicyBallot x)
+-- L7 for each decision of the closed box: the opened tally is the count of
+-- the plain bits.
+def l7Slot0 : (q : Quorum) -> Path (Option Count) (open (Option Count) q (tallyAt 0 pbBox3)) (countD 0 (pbPlain pbBox3)) := fun (q : Quorum) => refl
+def l7Slot1 : (q : Quorum) -> Path (Option Count) (open (Option Count) q (tallyAt 1 pbBox3)) (countD 1 (pbPlain pbBox3)) := fun (q : Quorum) => refl
+def l7Slot2 : (q : Quorum) -> Path (Option Count) (open (Option Count) q (tallyAt 2 pbBox3)) (countD 2 (pbPlain pbBox3)) := fun (q : Quorum) => refl
+def l7Two : Path (Option Count) (countD 1 (pbPlain pbBox3)) (some 2) := refl
+def tally0 : Enc (Option Count) := tallyAt 0 pbBox3
+def tally1 : Enc (Option Count) := tallyAt 1 pbBox3
+def tally2 : Enc (Option Count) := tallyAt 2 pbBox3
+def tallyEnd : Enc (Option Count) := tallyAt 3 pbBox3
+-- Part D choice, Gov, L9 and L10 (S6a, Q-S6-2 (a)). decs3 lists the
+-- decisions 0, 1 and 2. pbBox3 opens to the tally 0, 2, 1 (tBox).
+def decs3 : FreeMon Nat := fmMul Nat (fmMul Nat (fmEta Nat 0) (fmEta Nat 1)) (fmEta Nat 2)
+def q22 : Quorum := quorum (szS (szS sz0)) (szS (szS sz0))
+def tBox : PolicyTally := openTally q22 decs3 pbBox3
+-- L9: each order of pbA, pbB and pbC gives the same tally and the same
+-- opened tally.
+def mkBox3 : PolicyBallot -> PolicyBallot -> PolicyBallot -> PolicyBox :=
+  fun (x : PolicyBallot) (y : PolicyBallot) (z : PolicyBallot) => fmMul PolicyBallot (fmMul PolicyBallot (fmEta PolicyBallot x) (fmEta PolicyBallot y)) (fmEta PolicyBallot z)
+def l9ACB : Path (FreeMon (Enc (Option Count))) (tallyAll decs3 (mkBox3 pbA pbC pbB)) (tallyAll decs3 pbBox3) := refl
+def l9BAC : Path (FreeMon (Enc (Option Count))) (tallyAll decs3 (mkBox3 pbB pbA pbC)) (tallyAll decs3 pbBox3) := refl
+def l9BCA : Path (FreeMon (Enc (Option Count))) (tallyAll decs3 (mkBox3 pbB pbC pbA)) (tallyAll decs3 pbBox3) := refl
+def l9CAB : Path (FreeMon (Enc (Option Count))) (tallyAll decs3 (mkBox3 pbC pbA pbB)) (tallyAll decs3 pbBox3) := refl
+def l9CBA : Path (FreeMon (Enc (Option Count))) (tallyAll decs3 (mkBox3 pbC pbB pbA)) (tallyAll decs3 pbBox3) := refl
+def l9OpenACB : (q : Quorum) -> Path PolicyTally (openTally q decs3 (mkBox3 pbA pbC pbB)) (openTally q decs3 pbBox3) := fun (q : Quorum) => refl
+def l9OpenBAC : (q : Quorum) -> Path PolicyTally (openTally q decs3 (mkBox3 pbB pbA pbC)) (openTally q decs3 pbBox3) := fun (q : Quorum) => refl
+def l9OpenBCA : (q : Quorum) -> Path PolicyTally (openTally q decs3 (mkBox3 pbB pbC pbA)) (openTally q decs3 pbBox3) := fun (q : Quorum) => refl
+def l9OpenCAB : (q : Quorum) -> Path PolicyTally (openTally q decs3 (mkBox3 pbC pbA pbB)) (openTally q decs3 pbBox3) := fun (q : Quorum) => refl
+def l9OpenCBA : (q : Quorum) -> Path PolicyTally (openTally q decs3 (mkBox3 pbC pbB pbA)) (openTally q decs3 pbBox3) := fun (q : Quorum) => refl
+-- The choice table: a unique largest count, a tie, a plurality with no
+-- majority, no votes, a none count, a bad rule position, and a decision
+-- out of the 3 decisions (tLong: the count 3 at the decision 3).
+def mkT3 : Option Count -> Option Count -> Option Count -> PolicyTally :=
+  fun (a : Option Count) (b : Option Count) (c : Option Count) => fmMul (Option Count) (fmMul (Option Count) (fmEta (Option Count) a) (fmEta (Option Count) b)) (fmEta (Option Count) c)
+def tTie : PolicyTally := mkT3 (some 1) (some 1) (some 0)
+def tPlur : PolicyTally := mkT3 (some 2) (some 1) (some 1)
+def tZero : PolicyTally := mkT3 (some 0) (some 0) (some 0)
+def tBad : PolicyTally := mkT3 (some 1) none (some 0)
+def tOne0 : PolicyTally := fmEta (Option Count) (some 0)
+def tOne1 : PolicyTally := fmEta (Option Count) (some 1)
+def tLong : PolicyTally := fmMul (Option Count) tZero (fmEta (Option Count) (some 3))
+def boxPlur : Option Nat := chooseD 0 tBox
+def boxMaj : Option Nat := chooseD 1 tBox
+def tiePlur : Option Nat := chooseD 0 tTie
+def tieMaj : Option Nat := chooseD 1 tTie
+def plurPlur : Option Nat := chooseD 0 tPlur
+def plurMaj : Option Nat := chooseD 1 tPlur
+def zeroPlur : Option Nat := chooseD 0 tZero
+def one0Plur : Option Nat := chooseD 0 tOne0
+def one1Plur : Option Nat := chooseD 0 tOne1
+def badPlur : Option Nat := chooseD 0 tBad
+def ruleBad : Option Nat := chooseD 2 tBox
+def longPlur : Option Nat := chooseD 0 tLong
+def longGov : Option Nat := govD 3 0 tLong
+def longGovCtl : Option Nat := govD 4 0 tLong
+-- Unknown counts propagate through the tally helpers, whether the missing
+-- count is before or after a match.
+def badAt : Option Count := atCount 1 tBad
+def badPos : Option Nat := posOf 1 tBad
+def badZeroPos : Option Nat := posOf 0 tBad
+-- Majority compares the winner with the rest of the votes. The totals
+-- below fit in Nat even when twice the winning count does not.
+def tHigh : PolicyTally := mkT3 (some 9223372036854775808) (some 9223372036854775807) (some 0)
+def tHighRev : PolicyTally := mkT3 (some 9223372036854775807) (some 9223372036854775808) (some 0)
+def tHighTie : PolicyTally := mkT3 (some 9223372036854775807) (some 9223372036854775807) (some 0)
+def tHighSplit : PolicyTally := mkT3 (some 9223372036854775807) (some 9223372036854775807) (some 1)
+def tMax : PolicyTally := mkT3 (some 18446744073709551615) (some 0) (some 0)
+def tSumOverflow : PolicyTally := mkT3 (some 18446744073709551615) (some 1) (some 0)
+def highMaj : Option Nat := govD 3 1 tHigh
+def highRevMaj : Option Nat := govD 3 1 tHighRev
+def highTieMaj : Option Nat := chooseD 1 tHighTie
+def highSplitMaj : Option Nat := chooseD 1 tHighSplit
+def maxMaj : Option Nat := chooseD 1 tMax
+def sumOverflowMaj : Option Nat := chooseD 1 tSumOverflow
+-- L10 (GovPi = policyOf . choice at a constant constitution): for each
+-- policy map pa and each quorum, the opened box gives the policy of the
+-- decision 1 under each rule; a tie gives none.
+def l10Plur : (q : Quorum) -> (pa : Nat -> Policy) -> Path (Option Policy) (govPi pa 3 0 (openTally q decs3 pbBox3)) (some (pa 1)) := fun (q : Quorum) (pa : Nat -> Policy) => refl
+def l10Maj : (q : Quorum) -> (pa : Nat -> Policy) -> Path (Option Policy) (govPi pa 3 1 (openTally q decs3 pbBox3)) (some (pa 1)) := fun (q : Quorum) (pa : Nat -> Policy) => refl
+def l10Choice : (pa : Nat -> Policy) -> Path (Option Policy) (govPi pa 3 0 tPlur) (bind (chooseD 0 tPlur) (fun (d : Nat) => some (pa d))) := fun (pa : Nat -> Policy) => refl
+def l10Tie : (pa : Nat -> Policy) -> Path (Option Policy) (govPi pa 3 0 tTie) none := fun (pa : Nat -> Policy) => refl
+-- Part D decision log, freeze, history and regimes (S6a, Q-S6-3 (a),
+-- Q-S6-4 (a)). rA, rB, grantOn, pA, pB and eA are copies from
+-- examples/earned.lang; pC has a paused grant. pa3 is the policy of each
+-- decision.
+def rA : Rate := pair (fmMul Segment (fmEta Segment (segmentOf 0 20 3u 2u)) (fmEta Segment (segmentOf 20 40 1u 1u))) (fmMul Mass (fmEta Mass (massOf 0 50u)) (fmEta Mass (massOf 25 7u)))
+def rB : Rate := pair (fmEta Segment (segmentOf 0 50 2u 1u)) (fmEta Mass (massOf 30 9u))
+def grantOn : Grant := grantOf instrStream flagNo
+def pA : Policy := policyOf rA (windowOf 0 100) grantOn (fmUnit U256)
+def pB : Policy := policyOf rB (windowOf 0 100) grantOn (fmUnit U256)
+def pC : Policy := policyOf rB (windowOf 0 100) (grantOf instrPush flagYes) (fmUnit U256)
+def eA : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 60) (some 10) none
+def pa3 : Nat -> Policy := fun (d : Nat) => flagIf (natEq d 0) pA (flagIf (natEq d 1) pB pC)
+-- logA: tBox gives the decision 1 at 5. The same decision at 9 adds no
+-- entry (logAA, the dedupe). tPlur gives the decision 0 at 9 (logAP). A
+-- tie gives no decision and adds no entry (logAT, the freeze).
+def logE : DecLog := fmUnit (Prod Time Nat)
+def logA : DecLog := govStep 3 0 5 tBox logE
+def logAA : DecLog := govStep 3 0 9 tBox logA
+def logAP : DecLog := govStep 3 0 9 tPlur logA
+def logAT : DecLog := govStep 3 0 9 tTie logA
+def logALen : Option Count := len (Prod Time Nat) logA
+def logAALen : Option Count := len (Prod Time Nat) logAA
+def logAPLen : Option Count := len (Prod Time Nat) logAP
+def logATLen : Option Count := len (Prod Time Nat) logAT
+def lastAP : Option Nat := lastD logAP
+def lastEmpty : Option Nat := lastD logE
+-- earnedAt at 40 on the History of each log. earnA: pB is in force from
+-- 5, so the closed [10, 40] under rB gives 2 * 30 + 9 = 69. earnAP: pB
+-- on (5, 9] adds 0 (the start of eA is 10), and pA from 9 gives 30 + 10 +
+-- 50 + 7 = 97. earnAT (the freeze) is earnA. An empty log gives 0.
+def earnA : Option U256 := earnedAt (logHistory pa3 logA) eA 40
+def earnAP : Option U256 := earnedAt (logHistory pa3 logAP) eA 40
+def earnAT : Option U256 := earnedAt (logHistory pa3 logAT) eA 40
+def earnEmpty : Option U256 := earnedAt (logHistory pa3 logE) eA 40
+def freezeLaw : Path (Option U256) (earnedAt (logHistory pa3 logAT) eA 40) (earnedAt (logHistory pa3 logA) eA 40) := refl
+-- The regimes over closed tables: each tally gives a decision (AD), a tie
+-- gives none (AI), and a decision out of the n decisions gives none (AI)
+-- with its control at n = 4 (AD).
+def regAD : RegimeD := regimeD 3 0 (fmMul PolicyTally (fmEta PolicyTally tBox) (fmEta PolicyTally tPlur))
+def regAI : RegimeD := regimeD 3 0 (fmMul PolicyTally (fmEta PolicyTally tBox) (fmEta PolicyTally tTie))
+def regAILong : RegimeD := regimeD 3 0 (fmEta PolicyTally tLong)
+def regADLong : RegimeD := regimeD 4 0 (fmEta PolicyTally tLong)

@@ -40,3 +40,4 @@ stamps.lang
 earned.lang
 causality.lang
 books.lang
+gov.lang
