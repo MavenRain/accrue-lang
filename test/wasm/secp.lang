@@ -1,0 +1,9 @@
+-- ecAdd and ecMul give an Option point (A has no trap, rule R0). Each entry
+-- takes the Option apart with option. The none path (a point that is not on
+-- the curve or a coordinate equal to p) gives 2^256 - 1, which is not a
+-- coordinate, so a none row differs from the point at infinity (0, 0).
+def addX : (a b c d : U256) -> U256 := fun (a b c d : U256) => option 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu (fun (q : Prod U256 U256) => first q) (ecAdd (pair a b) (pair c d))
+def addY : (a b c d : U256) -> U256 := fun (a b c d : U256) => option 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu (fun (q : Prod U256 U256) => second q) (ecAdd (pair a b) (pair c d))
+def mulX : (x y k : U256) -> U256 := fun (x y k : U256) => option 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu (fun (q : Prod U256 U256) => first q) (ecMul (pair x y) k)
+def mulY : (x y k : U256) -> U256 := fun (x y k : U256) => option 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffu (fun (q : Prod U256 U256) => second q) (ecMul (pair x y) k)
+def sigOk : (k r z m e : U256) -> Flag := fun (k r z m e : U256) => schnorrOk k r z m e

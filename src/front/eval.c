@@ -1339,10 +1339,11 @@ static int word_zero(const U256 *x) {
 }
 
 /* nonZero x (S3, Q-S3-4): some x when x is not 0, else none. The NonZero
-   value is the base value. */
-static const Value *nonzero_of(Machine *m, const Value *const *a, uint32_t n) {
+   value is the base value. A stuck value keeps the inst (the width, Q-S8-16:
+   0 for a Nat, 1 for a U256). */
+static const Value *nonzero_of(Machine *m, uint32_t inst, const Value *const *a, uint32_t n) {
   const Value *out;
-  if (blocked(m, a[0], OP_NONZERO_OF, 0, 0, a, n, &out))
+  if (blocked(m, a[0], OP_NONZERO_OF, inst, 0, a, n, &out))
     return out;
   if (a[0]->kind == VAL_NAT)
     return a[0]->nat == 0 ? constant(m, OP_NONE) : make(m, VAL_OP, OP_SOME, 0, 1, a[0], NULL, NULL);
@@ -3447,7 +3448,7 @@ static const Value *reduce_op(Machine *m, Op op, uint32_t inst, uint32_t field, 
   case OP_NAT_MOD:
     return nat_divmod(m, op, a, n);
   case OP_NONZERO_OF:
-    return nonzero_of(m, a, n);
+    return nonzero_of(m, inst, a, n);
   case OP_NONZERO_VALUE:
     return nonzero_value(m, a, n);
   case OP_MUL_DIV:

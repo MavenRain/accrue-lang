@@ -129,6 +129,23 @@ of each section gives its rule or ruling.
   none after an amendment to the majority rule (govC). The Secret rows
   carry a KeyShare; only the Path revealShare reads it, through reveal.
 
+## The domain on Wasm (S8)
+
+- `langc build` writes a program to one Wasm MVP module. S8 adds no
+  domain word.
+- An entry with an `Option` result returns the address of its payload.
+  The address 0 is `none` (Q-S8-2 (c)). A `Flag` argument reads as
+  `x != 0` (D10).
+- A list walk, an unfold limit or the heap of a loop must have a static
+  bound, else `REFUSE_CAPACITY` (HOST-LIMIT). The memory has min = max =
+  P + 1 pages. P is the least power of two pages that holds the heap of
+  each entry, at most 16384 (Q-S8-3, Q-S8-14 to Q-S8-16).
+- No module can trap (R0, N4). Each load and store address is masked
+  with P * 65536 - 1, and page P is a guard page (Q-S8-18 (a)). Each
+  div, rem and carry divisor is `X | (X == 0)`. `build/notraptool`
+  checks each module that the gate builds. `docs/host/README.md` has
+  the details.
+
 ## How to change the domain
 
 1. Edit `domain/domain.lang`. Keep each new name apart from the core

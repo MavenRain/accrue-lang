@@ -3,7 +3,9 @@
 -- isSet Nat, sumTo feeds ones to sumList, and unfold has no FreeMon form.
 def sumList : (xs : List Nat) -> Option Nat :=
   fun (xs : List Nat) => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) xs
-def square : (n : Nat) -> Option Nat := fun (n : Nat) => fold (fun (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd a n)) (some 0) n
+-- 3 n with a literal fold count (S8 P3): the form with the count n (square)
+-- is in test/ir/capacity.lang.
+def triple : (n : Nat) -> Option Nat := fun (n : Nat) => fold (fun (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd a n)) (some 0) 3
 def ones : (n : Nat) -> List Nat := fun (n : Nat) => fold (fun (acc : List Nat) => cons 1 acc) nil n
 def lengthOf : (xs : List Nat) -> Option Nat := fun (xs : List Nat) => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd a 1)) (some 0) xs
 def sumTo : Option Nat := sumList (ones 3)

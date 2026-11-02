@@ -1,20 +1,26 @@
--- The spine lowerings. Each list or Stack here exists only at run time, so
+-- The spine lowerings. Each list here exists only at run time, so
 -- `langc ir` walks its spine. The gate compares `langc eval` results.
+-- natAdd gives Option Nat, so a sum folds an Option Nat with bind and the
+-- entry takes it apart with option (default 0).
+-- Each list has a static length bound (S8 P3, Q-S8-14 (a)): upFrom and
+-- upTrap stop after 6 items (the items above n do not go on the list), and
+-- foldOnes has 4 items. The forms with a length from n are in
+-- test/ir/capacity.lang.
 def noNats : List Nat := nil
 -- The list 1, 2, ..., n.
-def upFrom : (n : Nat) -> List Nat := fun (n : Nat) => unfold (fun (k : Nat) => map (fun (j : Nat) => pair k j) (natAdd k 1)) n 1
--- At seed 3 the step gives some(trap), so the list gets a trap tail.
-def upTrap : (n : Nat) -> List Nat := fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natEq k 3) (some (fold (fun (p : Prod Nat Nat) => p) (pair 0 0) (natMul 18446744073709551615 2))) (map (fun (j : Nat) => pair k j) (natAdd k 1))) n 1
-def foldOnes : (n : Nat) -> Option Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (fold (fun (acc : List Nat) => cons 2 acc) noNats n)
-def mapUp : (n : Nat) -> Option Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (map (fun (x : Nat) => natMul x 3) (upFrom n))
-def bindUp : (n : Nat) -> Option Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (bind (upFrom n) (fun (x : Nat) => cons x (cons 10 noNats)))
-def filterUp : (n : Nat) -> Option Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => natLe x 2) (upFrom n))
+def upFrom : (n : Nat) -> List Nat := fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natLe k n) (map (fun (j : Nat) => pair k j) (natAdd k 1)) none) 6 1
+-- At seed 3 the step takes apart an overflow (natAdd gives none), so the
+-- step gives none and the list stops after 1 and 2.
+def upTrap : (n : Nat) -> List Nat := fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natLe k n) (flagIf (natEq k 3) (bind (natAdd 18446744073709551615 1) (fun (m : Nat) => some (fold (fun (p : Prod Nat Nat) => p) (pair 0 0) m))) (map (fun (j : Nat) => pair k j) (natAdd k 1))) none) 6 1
+def foldOnes : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (fold (fun (acc : List Nat) => cons n acc) noNats 4))
+def mapUp : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (map (fun (x : Nat) => option 0 (fun (t : Nat) => t) (bind (natAdd x x) (fun (y : Nat) => natAdd y x))) (upFrom n)))
+def bindUp : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (bind (upFrom n) (fun (x : Nat) => cons x (cons 10 noNats))))
+def filterUp : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => natLe x 2) (upFrom n)))
 def trapHead : (n : Nat) -> Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Nat) => x) 0 (upTrap n)
-def trapSum : (n : Nat) -> Option Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (upTrap n)
--- The test of item 3 traps.
-def filterTrap : (n : Nat) -> Option Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => flagIf (natEq x 3) (natEq (natMul 18446744073709551615 2) 0) (natLe x 5)) (upFrom n))
--- The result of F for item 2 has a trap tail.
-def bindTrap : (n : Nat) -> Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Nat) => x) 0 (bind (upFrom n) (fun (x : Nat) => flagIf (natEq x 2) (fold (fun (o : List Nat) => o) noNats (natMul 18446744073709551615 2)) (cons x noNats)))
-def stackSum : (n : Nat) -> Option Nat := fun (n : Nat) => fold (some 0) (fun (top : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd top a)) (fold (fun (s : Stack) => push 5 s) bottom n)
--- The last push has a trapped rest.
-def stackTrap : (n : Nat) -> Nat := fun (n : Nat) => fold 0 (fun (top : Nat) (acc : Nat) => top) (fold (fun (s : Stack) => push 5 s) (push 7 (fold (fun (s : Stack) => s) bottom (natMul 18446744073709551615 2))) n)
+def trapSum : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (upTrap n))
+-- The test of item 3 overflows (natAdd gives none, and option gives flagNo),
+-- so the filter drops item 3.
+def filterTrap : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => flagIf (natEq x 3) (option flagNo (fun (m : Nat) => natEq m 0) (natAdd 18446744073709551615 1)) (natLe x 5)) (upFrom n)))
+-- The result of F for item 2 takes apart an overflow (natAdd gives none),
+-- so F gives nil for item 2.
+def bindTrap : (n : Nat) -> Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Nat) => x) 0 (bind (upFrom n) (fun (x : Nat) => flagIf (natEq x 2) (option noNats (fun (m : Nat) => fold (fun (o : List Nat) => o) noNats m) (natAdd 18446744073709551615 1)) (cons x noNats)))

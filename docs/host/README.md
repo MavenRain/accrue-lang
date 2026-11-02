@@ -119,6 +119,8 @@ programs with a HOST-LIMIT code (see `docs/CAPABILITY.md`):
 
 - `REFUSE_RUNTIME_CLOSURE`: a function value must exist at run time.
 - `REFUSE_RUNTIME_TREE`: a fold walks a tree that exists only at run time.
+- `REFUSE_CAPACITY`: a list walk, an unfold limit or the heap of a loop has
+  no static bound (S8 P3).
 
 ## No trap form
 
@@ -172,6 +174,9 @@ problems.
 - `langc eval` stops after 20000000 steps (`EVAL_FUEL`). The Wasm module
   has no step limit, so a large loop count can run on Wasm and stop in
   `eval`. The grid uses large values only for entries with no loop.
-- The arena of `langc` and the Wasm memory each stop at 1 GiB.
+- The arena of `langc` stops at 1 GiB. The Wasm memory has a static size (min = max, Q-S8-16): P + 1
+  pages, where P is the least power of two pages that holds the heap of each entry, at most 16384 pages
+  (1 GiB). An entry above that refuses with REFUSE_CAPACITY (HOST-LIMIT). Each load and store address is
+  masked with P * 65536 - 1, and page P is a guard page (Q-S8-18 (a)), so no load or store traps.
 - Source files are at most 1 MiB. `Nat` literals are at most
   18446744073709551615.

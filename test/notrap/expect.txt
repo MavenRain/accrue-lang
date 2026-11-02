@@ -1,0 +1,19 @@
+good: ok
+good_call: ok
+unreachable: unreachable
+memory_grow: memory.grow
+call_indirect: call_indirect
+float: a float op
+prefix: a 0xFC or 0xFD prefix op
+signed_div: a signed div or rem
+div_no_idiom: a div or rem whose divisor is not X | (X == 0)
+div_two_locals: a div or rem whose divisor is not X | (X == 0)
+rem32_no_idiom: a div or rem whose divisor is not X | (X == 0)
+load_no_bound: a load or store address that is not i32.const C or i32.and with i32.const C
+load_past_memory: a load or store past the memory (C + offset + width > the memory size)
+store_no_bound: a load or store address that is not i32.const C or i32.and with i32.const C
+store_bound_on_value: a load or store address that is not i32.const C or i32.and with i32.const C
+memory_max: a memory whose max is not its min (N3)
+data_past_memory: a data segment past the memory
+self_call: a call-graph cycle (N2)
+call_cycle: a call-graph cycle (N2)

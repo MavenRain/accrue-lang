@@ -64,8 +64,18 @@ Q-S7-1 to Q-S7-4).
 The record restores withdrawn and missing pull funding in an older book.
 Pull pays earned minus recorded settlements, since the payment itself
 adds funding. A record behind the book or ahead of the stamp is refused.
-Next: S8 (Wasm: the lowering, the prelude, N2 to N4,
-`test/notraptool.c`, the differential vectors).
+S8 DONE: the Wasm target. S8 ports the cairn-lang 024c4cd writer
+(Q-S8-1). An `Option` entry returns the address of its payload, and 0 is
+none (Q-S8-2). Each list walk and each entry heap has a static bound,
+else `REFUSE_CAPACITY`. The memory has min = max = P + 1 pages. P is the
+least power of two that holds the heap, at most 16384, and page P is a
+guard page. Each load and store address is masked with P * 65536 - 1,
+and each div, rem and carry divisor is `X | (X == 0)`.
+`build/notraptool` checks that each of the 68 gate modules has no trap
+form (N2 to N4; section 1: Q-S8-1 to Q-S8-4, Q-S8-14 to Q-S8-21, D1 to
+D14).
+Next: S9 (ES module + JSON: `js.c`, `json.c`, the BigInt prelude,
+`REFUSE_TARGET_SECRET`).
 
 ## 1. Rulings
 
@@ -152,6 +162,31 @@ Next: S8 (Wasm: the lowering, the prelude, N2 to N4,
 | 2026-10-31 | Not asked, a build default (not a ruling), D-S7-1: the `PayKind` constructors are `kindSettle`, `kindCancel` and `kindDispute`. `paySettle` and `payCancel` are eval names in examples/books.lang and test/eval/expect.txt (rule R4). | S7 default |
 | 2026-10-31 | Not asked, a build default (not a ruling): `settledIn` folds into `Acc`, because no isSet word exists for `Option U256` (`optNatIsSet` is a kernel builtin for `Option Nat` only). | S7 default |
 | 2026-10-31 | Review correction to the Q-S7-4 implementation: `escSettleR` restores withdrawn from the record, and `payCarry` restores missing pull funding using the policy at each payment. Pull settles earned minus withdrawn; push and stream settle recognized minus withdrawn. Records behind the book or containing an instruction after the stamp are refused. examples/pay.lang checks replayed books, pull funding, mixed policies, stale and future records, and carry overflow. | S7 review |
+| 2026-10-31 | Q-S8-1, verbatim: "(a) cairn 024c4cd (Recommended)". S8 ports the Wasm writer and the lowering of the cairn-lang S8 USER commit. Done in S8 P1. | S8 |
+| 2026-10-31 | Q-S8-2, verbatim: "(c) Return payload address". An `Option` entry returns the address of its payload, and 0 is none, so the heap starts above 0. Done in S8 P2. | S8 |
+| 2026-10-31 | Q-S8-3, verbatim: "(a) Static bound per entry (Recommended)". Each entry has a static heap bound, and no module has `memory.grow`. Done in S8 P3. | S8 |
+| 2026-10-31 | Q-S8-4, verbatim: "(a) Syntactic certificates (Recommended)". `test/notraptool.c` checks each built module for each trap form. Done in S8 P5. | S8 |
+| 2026-11-01 | Note (not a ruling): the comments that S8 ported from cairn-lang name the cairn-lang rulings Q-S8-5 to Q-S8-13 (for example in `src/front/lower.c` and `test/wasm/hash.txt`). No accrue-lang S8 ruling has these numbers. | S8 note |
+| 2026-11-01 | Q-S8-14 (a) (chat): each list value has a static length bound (nil 0, cons adds 1, a literal fold count or unfold limit, map and filter keep it, bind multiplies). No bound gives `REFUSE_CAPACITY`. Done in S8 P3a. | S8 |
+| 2026-11-01 | Q-S8-15 (a) (chat): an entry that still refuses moves to `test/ir/capacity.lang`. A copy with a literal count stays in its module. Done in S8 P3a. | S8 |
+| 2026-11-01 | Q-S8-16 (a), P3 (chat): P = the least power of two pages at or above ceil((32 + B) / 65536), min = max, `REFUSE_CAPACITY` above 16384 pages. Done in S8 P3b. | S8 |
+| 2026-11-01 | Q-S8-16 (a), P4 (the number was used again): `nonZero` on a `U256` has inst 1, so the lowering tests the 4 limbs. Done in S8 P4b. | S8 |
+| 2026-11-01 | Q-S8-17 (a): the edge rows have the empty list and a 4-item list from a fold with a literal count. Done in S8 P4d. | S8 |
+| 2026-11-01 | Q-S8-18 RULED (a) 11-01: a guard page. The memory has min = max = P + 1 pages, and MASK = P * 65536 - 1. The cap stays on P. Done in S8 P5. | S8 |
+| 2026-11-01 | Q-S8-19 RULED (a) 11-01: `test/wasm/hash.lang` has `flagId : Flag -> Flag`, and `test/wasm/hash.txt` has the row `flagId 2 => 1`, so a `Flag` argument of 2 reads as 1 on Wasm (D10). Done in S8 (the mutant follow-up). | S8 |
+| 2026-11-01 | Q-S8-20 RULED (a) 11-01: the build refusal row `test/ir/heapif.lang` (`capIf`: a `flagIf` with the arms 0 and a fold over `upFrom n`). The heap bound of a `flagIf` takes the larger arm, so the build gives `REFUSE_CAPACITY`. Done in S8 (the mutant follow-up). | S8 |
+| 2026-11-01 | Q-S8-21 RULED (a) 11-01: the same `test/ir/heapif.lang` row also checks that the heap bound of a loop multiplies the count by the heap of the body. Done in S8 (the mutant follow-up). | S8 |
+| 2026-10-31 | Not asked, a build default (not a ruling), D1: no trap flag, no `IR_STMT_TRAP`, no `OP_UNREACHABLE`. A body ends in a value or a `return`. Done in S8 P1 and P2. | S8 default |
+| 2026-10-31 | D2: the switch default goes to the last arm. Done in S8 P2. | S8 default |
+| 2026-10-31 | D3: the `OP_NAT_MUL` cases go. check-clang compiles the target files. Done in S8 P1. | S8 default |
+| 2026-10-31 | D4: `test/wasmtool.c` (wasmtime C API) runs the modules, and a trap line is a FAIL. `run-wasm.mjs` and `grid.awk` go. Done in S8 P1. | S8 default |
+| 2026-10-31 | D5: the gate checks each module with wasm-validate (P1) and `build/notraptool` (P5). | S8 default |
+| 2026-10-31 | D6: each cairn trap row becomes the eval value or none, and the tag vectors (secp sigOk) are made again. Done in S8 P1 and P2. | S8 default |
+| 2026-10-31 | D7: natAdd, natSub, u256Add, u256Sub, u256Mul, mulDiv, nonZero, nonZeroValue and optNatIsSet lower with no trap. Done in S8 P1, P2 and P4. | S8 default |
+| 2026-10-31 | D8: the secret ops lower on Wasm, with no cairn S9 refusal (the S8 survey default). The O4 refusal is for S9. | S8 default |
+| 2026-10-31 | D9: the "target pending S8" build row goes, and the cairn build refusal rows replace it. Done in S8 P1. | S8 default |
+| 2026-10-31 | D10: a `Flag` argument reads as `x != 0`. Done in S8 P2 (the `pick 2 4 9 => 4` row). | S8 default |
+| 2026-11-01 | D11 to D14 (P3): `REFUSE_CAPACITY` comes from lower.c. The prelude heap bytes are hand constants. alloc has no check and no `memory.grow`. eval keeps the guest none. Done in S8 P3b. | S8 default |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -420,8 +455,8 @@ refusal or a law kills at least one mutant of it.
 | S6b | Part D, the constitution (Q-S6-1, Q-S6-8): the Polity record, `rulePos`, `govC`, AmendBallot, the O4 secret marks; L8, L11. | DONE |
 | S6c | Part D, the host rows (Q-S6-8): the ballottool mode for k = decisions, the dkgtool reshare rows for `keyStamp` and `keyPay`. | DONE |
 | S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | DONE |
-| S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | NEXT |
-| S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | |
+| S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | DONE |
+| S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | NEXT |
 | S10 | WGSL: `wgsl.c`, batch proof check and batch `earned`. | |
 | S11 | A1: canonical forms and `langc fmt`. | |
 | S12 | A2: `langc check --json`. | |
@@ -434,9 +469,9 @@ refusal or a law kills at least one mutant of it.
 
 - O1 The kit base data is `Scalar`, `Point`, `Digest`, `U256`. If a slice
   needs more, it records why here first.
-- O2 cairn-lang is in its S8 (Wasm). S2 ported its newest USER commit:
-  BASE 0743108. S8 takes its Wasm writer only after the cairn-lang USER
-  commit of S8.
+- O2 CLOSED in S8: P1 ported the Wasm writer of the cairn-lang S8 USER
+  commit 024c4cd (Q-S8-1 (a)). cairn traps on purpose (unreachable,
+  memory.grow, bare div_u), so P2, P3 and P5 removed each trap form.
 - O3 retainer-lang SPEC.md 82 still says EVM output PLANNED (its O-d16-1).
   accrue-lang takes only the domain, so this does not apply here.
 - O4 The secret marks for `REFUSE_TARGET_SECRET` (S9): the key shares,
@@ -454,13 +489,11 @@ refusal or a law kills at least one mutant of it.
   not dependent, so only refl on closed values can make the proof now. A
   dependent `Flag` eliminator comes first. S5b takes L4 as refl on
   closed values (Q-S5-3), so O8 stays open for a later slice.
-- O9 Rule N4 for the S8 writer (Q-S3-18): no trap flag, no
-  `IR_STMT_TRAP` and no Wasm `unreachable`. How an entry with an
-  `Option` result gives `none` to the host (the entry ABI) is an open S8
-  question. `src/front/lower.c`, `src/ir.h` and `src/wasm.c` are out of
-  the build until S8. `lower.c` does not compile: it names `OP_NAT_MUL`,
-  which S2 removed. `test/ir` stays for S8 (Q-S3-19), and the gate does
-  not run it.
+- O9 CLOSED in S8: the writer has no trap flag, no `IR_STMT_TRAP` and
+  no Wasm `unreachable` (D1). An `Option` entry returns its payload
+  address, and 0 is none (Q-S8-2 (c)). `lower.c`, `ir.h` and `wasm.c`
+  build and pass check-clang (D3), and the gate runs `test/ir`
+  (Q-S3-19).
 - O10 The S4 mutant M3 (the `var_core` clock test) survived as an
   equivalent mutant, so S4 removed the test (Q-S4-5). The
   `NAME_UNKNOWN` return at the end of `var_core` cannot run for the same

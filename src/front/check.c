@@ -2360,7 +2360,9 @@ static const Core *rule_nonzero(Call *k) {
   return t;
 }
 
-/* nonZero x: x : A with A Nat or U256, the result Option (NonZero A). */
+/* nonZero x: x : A with A Nat or U256, the result Option (NonZero A). The
+   inst is the width (Q-S8-16): 0 for a Nat, 1 for a U256 (src/front/lower.c
+   nonzero_of reads it). */
 static const Core *rule_nonzero_of(Call *k) {
   Checker *c = k->c;
   const Value *a = val_is(k->hint, OP_OPTION) && val_is(k->hint->args[0], OP_NONZERO) ? k->hint->args[0]->args[0] : NULL;
@@ -2370,7 +2372,7 @@ static const Core *rule_nonzero_of(Call *k) {
   if (!nonzero_base(a))
     return nul(FAIL(c, "TYPE_MISMATCH", "nonZero needs a Nat or a U256, found a term of type %s", show(c, a)));
   k->type = tyop(c, OP_OPTION, 1, tyop(c, OP_NONZERO, 1, a, NULL, NULL), NULL, NULL);
-  return op3(c, OP_NONZERO_OF, 0, 1, x, NULL, NULL);
+  return op3(c, OP_NONZERO_OF, val_is(a, OP_U256) ? 1u : 0u, 1, x, NULL, NULL);
 }
 
 /* nonZeroValue x: x : NonZero A, the result A. */
@@ -4901,9 +4903,10 @@ int entry_of(Machine *m, const Value *type, Entry *out) {
   const Value *t = type;
   memset(out, 0, sizeof *out);
   while (t != NULL && t->kind == VAL_PI && out->param_count < ENTRY_PARAMS_MAX) {
-    if (!val_is(t->dom, OP_NAT) && !val_is(t->dom, OP_FLAG))
+    if (!val_is(t->dom, OP_NAT) && !val_is(t->dom, OP_FLAG) && !val_is(t->dom, OP_U256))
       return 0;
     out->param_flag[out->param_count] = val_is(t->dom, OP_FLAG);
+    out->param_u256[out->param_count] = val_is(t->dom, OP_U256);
     t = closure_apply(m, t, val_var(m, out->param_count));
     out->param_count++;
   }
@@ -4911,7 +4914,8 @@ int entry_of(Machine *m, const Value *type, Entry *out) {
   out->result_option = val_is(t, OP_OPTION);
   t = out->result_option ? t->args[0] : t;
   out->result_flag = val_is(t, OP_FLAG);
-  return val_is(t, OP_NAT) || val_is(t, OP_FLAG);
+  out->result_u256 = val_is(t, OP_U256);
+  return val_is(t, OP_NAT) || out->result_flag || out->result_u256;
 }
 
 static int parse_u64(const char *s, uint64_t *out) {
@@ -5015,7 +5019,15 @@ static int print_result(Machine *m, const char *name, const Value *v, FILE *out,
     if (val_is(v, OP_SOME))
       return print_result(m, name, v->args[0], out, err);
     break;
-  case VAL_WORD:
+  case VAL_WORD: {
+    /* A U256 result (Q-S8-3) prints its normal form, as before it was an entry. */
+    char *buf = arena_alloc(m->arena, PRINT_MAX);
+    if (buf != NULL && value_print(m, NULL, 0, v, buf, PRINT_MAX)) {
+      fprintf(out, "%s\n", buf);
+      return 0;
+    }
+    break;
+  }
   case VAL_UNIV:
   case VAL_LAM:
   case VAL_PI:
@@ -5067,7 +5079,7 @@ int eval_command(Machine *m, const char *name, char *const *args, int arg_count,
     return 2;
   }
   for (i = 0; i < entry.param_count && v != NULL; i++) {
-    const Value *arg = entry_arg(m, args[i], entry.param_flag[i] ? ARG_TYPE_FLAG : ARG_TYPE_NAT);
+    const Value *arg = entry_arg(m, args[i], entry.param_flag[i] ? ARG_TYPE_FLAG : entry.param_u256[i] ? ARG_TYPE_U256 : ARG_TYPE_NAT);
     v = arg == NULL ? NULL : apply_value(m, v, arg);
   }
   if (v == NULL)

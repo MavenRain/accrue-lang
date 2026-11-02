@@ -1,0 +1,8 @@
+-- The Wasm page cap refusal in one arm of a flagIf (S8 resume 19, Q-S8-20 (a)
+-- and Q-S8-21 (a)). upFrom is the test/ir/heapcap.lang def (unfold limit
+-- 200000000). The fold arm of capIf needs more than 16384 pages
+-- (WASM_MAX_PAGES), and the other arm needs 0. The Wasm emitter (src/wasm.c,
+-- program_pages) refuses REFUSE_CAPACITY. A heap_max that takes the smaller
+-- arm (P3b-2) builds this file.
+def upFrom : (n : Nat) -> List Nat := fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natLe k n) (map (fun (j : Nat) => pair k j) (natAdd k 1)) none) 200000000 1
+def capIf : (n : Nat) -> Nat := fun (n : Nat) => flagIf (natEq n 0) 0 (fold (fun (x : Nat) (acc : Nat) => x) 0 (upFrom n))
