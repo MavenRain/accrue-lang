@@ -249,8 +249,8 @@ law def verified : (W : Type 0) -> Transcript W -> ZKProof W :=
 -- The secret marks (O4, Q-S6-9 (a)): a program can carry a Secret but not
 -- read it. Secret is a sealed family, so its elim, fold and projection are
 -- law-only, as for Enc. reveal is the law def that reads a Secret. A key
--- share, a nonce and a decryption key are each a Secret Scalar. S9 refuses
--- a target entry whose result holds a Secret (O4 stays open for that).
+-- share, a nonce and a decryption key are each a Secret Scalar. On ES, S9
+-- refuses a run-time Secret (REFUSE_TARGET_SECRET, O4, Q-S9-4 (a)).
 def Scalar : Type 0 := U256
 sealed family Secret (A : Type 0) := secretEta (secretOf : A)
 law def reveal : (A : Type 0) -> Secret A -> A :=

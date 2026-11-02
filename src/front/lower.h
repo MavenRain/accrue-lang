@@ -7,8 +7,10 @@
 #include "ir.h"
 
 /* Lowers each entry of the checked program M (a PROGRAM definition where
-   entry_of holds) into PROG. Returns 1, or 0 after a diagnostic. */
-int lower_program(Machine *m, IrProgram *prog);
+   entry_of holds) into PROG. ES is 1 for the ES target (`build --js`): a
+   run-time secret is then refused (S9 P4, PLAN O4). Returns 1, or 0 after a
+   diagnostic. */
+int lower_program(Machine *m, IrProgram *prog, int es);
 /* Writes PROG as text: a `func` line for each entry, then one statement on
    each line. */
 void ir_print(const IrProgram *prog, FILE *out);

@@ -7,6 +7,8 @@
 #include "front/check.h"
 #include "front/front.h"
 #include "front/lower.h"
+#include "js.h"
+#include "json.h"
 #include "target.h"
 
 #define ARENA_LIMIT_BYTES ((size_t)1 << 30)
@@ -29,6 +31,7 @@ typedef struct {
   int arg_count;
   const char *script_path;
   const char *out_path;
+  const char *js_path; /* accrue S9: build --js OUT.mjs writes the ES module (src/js.c) */
   int runtime;
   int json;
   CheckMode mode; /* orbit-lang S3: --kit selects the kit mode */
@@ -54,6 +57,7 @@ static int usage(FILE *err) {
         "       langc [--kit] ir PROG\n"
         "       langc [--kit] abi PROG [--text]\n"
         "       langc [--kit] build PROG -o OUT [--runtime]\n"
+        "       langc [--kit] build PROG --js OUT.mjs\n"
         "       langc [--kit] prove PROG NAME [POLL]\n"
         "--kit: the kit mode, the trusted test scope of the kit gate\n", err);
   return 2;
@@ -72,14 +76,21 @@ static int find_command(const char *word, Command *out) {
 static int parse_build_options(int argc, char **argv, Options *opt, Diag *diag) {
   for (int i = 3; i < argc; i++) {
     int is_out = strcmp(argv[i], "-o") == 0 && i + 1 < argc;
+    int is_js = strcmp(argv[i], "--js") == 0 && i + 1 < argc;
     int is_runtime = strcmp(argv[i], "--runtime") == 0;
-    if (!is_out && !is_runtime) return diag_fail(diag, "USAGE", NULL, "unknown build argument '%s'", argv[i]);
+    if (!is_out && !is_js && !is_runtime) return diag_fail(diag, "USAGE", NULL, "unknown build argument '%s'", argv[i]);
     opt->out_path = is_out ? argv[i + 1] : opt->out_path;
+    opt->js_path = is_js ? argv[i + 1] : opt->js_path;
     opt->runtime |= is_runtime;
-    i += is_out;
+    i += is_out | is_js;
   }
-  /* Q-S8-8: build writes a file, so -o OUT is required. */
-  return opt->out_path != NULL ? 1 : diag_fail(diag, "USAGE", NULL, "build needs -o OUT");
+  /* Q-S8-8: build writes a file, so -o OUT or --js OUT.mjs (accrue S9) is
+     required, and only one of them. */
+  if (opt->out_path != NULL && opt->js_path != NULL) {
+    return diag_fail(diag, "USAGE", NULL, "build takes -o OUT or --js OUT.mjs, not both");
+  }
+  return opt->out_path != NULL || opt->js_path != NULL ? 1
+    : diag_fail(diag, "USAGE", NULL, "build needs -o OUT or --js OUT.mjs");
 }
 
 static int parse_options(int argc, char **argv, Options *opt, Diag *diag) {
@@ -151,15 +162,18 @@ static const char *command_word(Command command) {
 /* The ABI comes from checked types, independently of lowering. An omitted
    IR function must not disappear from both sides of the gate's count check.
    An Option-result entry has the word `option` before its result kind
-   (Q-S8-2 (c)). */
-static int print_abi(Machine *machine) {
+   (Q-S8-2 (c)). JSON (src/json.c) is the default form; --text gives one
+   line for each entry (target_abi_line). */
+static int print_abi(Machine *machine, int json) {
   uint32_t i;
   uint32_t k;
+  uint32_t count = 0;
   Entry entry;
   IrFunc fn;
   IrScalar params[ENTRY_PARAMS_MAX];
   memset(&fn, 0, sizeof fn);
   fn.params = params;
+  if (json) fputs("{\"entries\":[", stdout);
   for (i = 0; i < machine->def_count; i++) {
     machine->fuel = EVAL_FUEL_STEPS;
     if (machine->defs[i].origin != ORIGIN_PROGRAM || !entry_of(machine, machine->defs[i].type, &entry))
@@ -170,9 +184,10 @@ static int print_abi(Machine *machine) {
       params[k] = entry.param_flag[k] ? IR_SCALAR_FLAG : entry.param_u256[k] ? IR_SCALAR_U256 : IR_SCALAR_NAT;
     fn.result = entry.result_flag ? IR_SCALAR_FLAG : entry.result_u256 ? IR_SCALAR_U256 : IR_SCALAR_NAT;
     fn.result_option = entry.result_option;
-    if (!target_abi_line(&fn, stdout, stderr))
+    if (!(json ? json_abi_entry(&fn, count++ == 0, stdout) : target_abi_line(&fn, stdout, stderr)))
       return 1;
   }
+  if (json) fputs("]}\n", stdout);
   return machine->diag->set ? 1 : 0;
 }
 
@@ -180,9 +195,10 @@ static int print_abi(Machine *machine) {
 static int run_target(const Options *opt, Machine *machine, Diag *diag) {
   IrProgram prog;
   FILE *out;
+  const char *path = opt->js_path != NULL ? opt->js_path : opt->out_path;
   int ok = 1;
-  if (opt->command == CMD_ABI) return print_abi(machine);
-  if (!lower_program(machine, &prog)) return 1;
+  if (opt->command == CMD_ABI) return print_abi(machine, opt->json);
+  if (!lower_program(machine, &prog, opt->js_path != NULL)) return 1;
   switch (opt->command) {
     case CMD_IR:
       ir_print(&prog, stdout);
@@ -195,13 +211,16 @@ static int run_target(const Options *opt, Machine *machine, Diag *diag) {
     case CMD_BUILD:
       break;
   }
-  out = fopen(opt->out_path, "wb");
-  if (out == NULL) return diag_fail(diag, "IO", NULL, "cannot write '%s'", opt->out_path) + 2;
-  ok = target_write(&prog, opt->runtime ? TARGET_PART_RUNTIME : TARGET_PART_MAIN, out, stderr);
+  out = fopen(path, "wb");
+  if (out == NULL) return diag_fail(diag, "IO", NULL, "cannot write '%s'", path) + 2;
+  /* accrue S9: --js writes the ES module. The JS heap takes the Wasm limit,
+     so both targets refuse the same programs (REFUSE_CAPACITY). */
+  ok = opt->js_path != NULL ? target_capacity(&prog, stderr) && js_write(&prog, out, stderr)
+                            : target_write(&prog, opt->runtime ? TARGET_PART_RUNTIME : TARGET_PART_MAIN, out, stderr);
   ok = fclose(out) == 0 && ok;
   if (ok) return 0;
-  remove(opt->out_path);
-  diag_fail(diag, "BUILD", NULL, "no module written; '%s' removed", opt->out_path);
+  remove(path);
+  diag_fail(diag, "BUILD", NULL, "no module written; '%s' removed", path);
   return 1;
 }
 
@@ -229,14 +248,11 @@ static int run(const Options *opt, Arena *arena, Diag *diag) {
       signal(SIGPIPE, SIG_IGN);
       return prove_command(&machine, opt->entry, opt->arg_count == 1 ? opt->args[0] : NULL, stdout, stderr);
     case CMD_ABI:
-      /* cairn Q-S8-8: the JSON abi (the default) is planned for S9; --text works. */
-      if (!opt->json) return run_target(opt, &machine, diag);
-      break;
     case CMD_IR:
     case CMD_BUILD:
       return run_target(opt, &machine, diag);
   }
-  diag_fail(diag, "PLANNED", NULL, "the JSON %s is not built yet (pending S9): use --text", command_word(opt->command));
+  diag_fail(diag, "INTERNAL", NULL, "no handler for the %s command", command_word(opt->command));
   return 1;
 }
 

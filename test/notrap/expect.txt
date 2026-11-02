@@ -17,3 +17,15 @@ memory_max: a memory whose max is not its min (N3)
 data_past_memory: a data segment past the memory
 self_call: a call-graph cycle (N2)
 call_cycle: a call-graph cycle (N2)
+es_good: ok
+es_throw: a throw
+es_div: a / whose divisor can be 0
+es_rem: a % whose divisor can be 0
+es_div_assign: a / whose divisor can be 0
+es_zero: a / whose divisor can be 0
+es_name_prefix: a % whose divisor can be 0
+es_nz_sum: a / whose divisor can be 0
+es_power: a / whose divisor can be 0
+es_template: a template literal
+es_open_string: an open string or comment
+es_open_comment: an open string or comment

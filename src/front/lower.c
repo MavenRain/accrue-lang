@@ -56,6 +56,7 @@ typedef struct {
   uint32_t len_cap;
   int len_oom;    /* 1 when lens did not grow */
   uint32_t walks; /* the number of walks so far */
+  int es;         /* 1 on the ES target: a run-time secret is refused (S9 P4, O4) */
 } Low;
 
 /* No static length bound: a local that is not a list, or a list without a
@@ -711,6 +712,14 @@ static int static_leaf(const Low *l, const Value *x) {
          rec_count(&l->m->ctors[x->inst]) == 0u;
 }
 
+/* A secret on the ES target (S9 P4, Q-S9-4 (a), Q-S9-5 (a), PLAN O4): a
+   Secret value (a key share, a nonce or a decryption key) or a zk key, sign,
+   witness, cast or prove operation at run time has no form in an ES module.
+   The Wasm target keeps them (D8). */
+static int refuse_secret(Low *l, const char *what) {
+  return diag_fail(l->m->diag, "REFUSE_TARGET_SECRET", l->m->def, "%s touches a secret on the ES target (O4)", what);
+}
+
 /* A binary node (cairn-lang S8, Q-S8-6, Q-S8-10): a point constructor with
    the 2 recursive fields L < R lowers when one side is a static leaf. A
    static leaf at L gives the constructor tag (the walk goes to R); a static
@@ -723,6 +732,8 @@ static int lower_ctor(Low *l, Buf *b, const Value *v, Operand *out) {
   uint32_t side[2] = {0u, 0u};
   uint32_t n = 0;
   uint32_t k;
+  if (l->es && fam->sealed && strcmp(fam->name, "Secret") == 0)
+    return refuse_secret(l, c->name);
   if (c->interval_count != 0u || rec_count(c) != 2u || v->argc < fam->param_count + c->field_count)
     return ctor_full(l, b, v, fam->param_count, c->field_count, v->inst - fam->first_ctor, out);
   for (k = 0; k < c->field_count; k++)
@@ -1948,15 +1959,17 @@ static int lower_stuck(Low *l, Buf *b, const Value *v, Operand *out) {
   case OP_KMAP_GET:
   case OP_KMAP_SET:
     return refuse(l, "a run-time map (KMap)");
-  case OP_ZK_HP:
   case OP_ZK_KEY:
-  case OP_ZK_DIGEST:
   case OP_ZK_SIGN:
-  case OP_ZK_VERIFY:
-  case OP_ZK_BALLOT:
   case OP_ZK_WITNESS:
   case OP_ZK_CAST:
   case OP_ZK_PROVE:
+    return l->es ? refuse_secret(l, "a zk key, sign, witness, cast or prove operation")
+                 : refuse(l, "a host proof check (zk)");
+  case OP_ZK_HP:
+  case OP_ZK_DIGEST:
+  case OP_ZK_VERIFY:
+  case OP_ZK_BALLOT:
   case OP_ZK_PROJECT:
   case OP_ZK_CHECK:
     return refuse(l, "a host proof check (zk)");
@@ -2132,7 +2145,7 @@ static int block_bounded(const IrBlock *b) {
 
 /* The entry INDEX, applied to a variable for each parameter. No trap (R0):
    the entry returns the word of its result. */
-static int lower_entry(Machine *m, uint32_t index, const Entry *e, IrFunc *fn) {
+static int lower_entry(Machine *m, uint32_t index, const Entry *e, int es, IrFunc *fn) {
   Low l;
   Buf body = buf_under(NULL);
   IrScalar *params = arena_alloc(m->arena, ((size_t)e->param_count + 1u) * sizeof *params);
@@ -2142,6 +2155,7 @@ static int lower_entry(Machine *m, uint32_t index, const Entry *e, IrFunc *fn) {
   uint32_t k;
   memset(&l, 0, sizeof l);
   l.m = m;
+  l.es = es;
   l.local_count = e->param_count;
   m->def = m->defs[index].name;
   m->fuel = EVAL_FUEL_STEPS;
@@ -2171,7 +2185,7 @@ static int lower_entry(Machine *m, uint32_t index, const Entry *e, IrFunc *fn) {
   return 1;
 }
 
-int lower_program(Machine *m, IrProgram *prog) {
+int lower_program(Machine *m, IrProgram *prog, int es) {
   IrFunc *funcs = arena_alloc(m->arena, ((size_t)m->def_count + 1u) * sizeof *funcs);
   Entry e;
   size_t n = 0;
@@ -2184,7 +2198,7 @@ int lower_program(Machine *m, IrProgram *prog) {
   for (i = 0; i < m->def_count; i++) {
     m->fuel = EVAL_FUEL_STEPS;
     entry = m->defs[i].origin == ORIGIN_PROGRAM && entry_of(m, m->defs[i].type, &e);
-    if (entry && !lower_entry(m, i, &e, &funcs[n]))
+    if (entry && !lower_entry(m, i, &e, es, &funcs[n]))
       return 0;
     n += entry ? 1u : 0u;
   }

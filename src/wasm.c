@@ -699,8 +699,8 @@ static int part_fe_inv(Sink *s, const void *arg) {
    p and k (ec_mul); locals 2 to 23 = the modulus block M, the scratch block
    W, the affine AX, AY, BX, BY, the slope L, T, U, the flag C, the result R,
    the Jacobian X, Y, Z, the scratch YY, S, MM, H, HH, HHH, V and the bit
-   counter I. A point is a pair block [0, x, 0, y, 0] (lower.c block_ops: a
-   field is a word and its flag). */
+   counter I. A point is a pair block [0, x, y] (ir.h: field K is the word
+   1 + K). */
 enum {
   EC_M = 2, EC_W = 3, EC_AX = 4, EC_AY = 5, EC_BX = 6, EC_BY = 7, EC_L = 8, EC_T = 9, EC_U = 10, EC_C = 11, EC_R = 12,
   EC_X = 13, EC_Y = 14, EC_Z = 15, EC_YY = 16, EC_S = 17, EC_MM = 18, EC_H = 19, EC_HH = 20, EC_HHH = 21, EC_V = 22,
@@ -1444,6 +1444,10 @@ static uint64_t program_pages(const IrProgram *prog, FILE *err) {
     while (pages < need) pages *= 2u;
   }
   return pages;
+}
+
+int target_capacity(const IrProgram *prog, FILE *err) {
+  return program_pages(prog, err) != 0;
 }
 
 /* (i64 x N) -> i64 */

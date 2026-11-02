@@ -18,8 +18,11 @@
    Prints one FAIL line for each trap form, then
    `notrap: N modules checked, T trap forms`. Exit 0: T = 0. Exit 1: T > 0.
    Exit 2: usage, IO or a module that does not decode.
-   notraptool --self-test: checks the bad modules in this file (byte arrays)
-   and prints `NAME: REASON` for each (test/notrap/expect.txt). */
+   notraptool --js MODULE.mjs... (S9 P3, Q-S9-3 (a)): the ES mode. It fails
+   on each `throw`, and on each `/` or `%` whose divisor can be 0 (see
+   es_check), then prints `notrap js: N modules checked, T trap forms`.
+   notraptool --self-test: checks the bad modules in this file (byte arrays,
+   then ES text) and prints `NAME: REASON` for each (test/notrap/expect.txt). */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -881,6 +884,161 @@ static void build(const Case *k, Buf *o) {
   put_section(o, 11, &s);
 }
 
+/* The ES mode (S9 P3, Q-S9-3 (a)). A module that `langc build --js` writes
+   has no throw (R0), and each `/` or `%` has a divisor that is never 0
+   (src/js.c):
+   - a decimal literal that is not 0 (`64`, `4n`);
+   - `P` or `SC_N`;
+   - `nz(X)`, where X is one name or literal.
+   A `**`, `.`, `[` or `(` after the divisor makes it not safe. The scan skips
+   the comments and the '...' and "..." strings. A template literal is a FAIL:
+   src/js.c writes none, and the scan does not read into it. A `/` that starts
+   a regular expression is read as a division (src/js.c writes none). */
+#define ES_THROW "a throw"
+#define ES_DIV "a / whose divisor can be 0"
+#define ES_REM "a % whose divisor can be 0"
+#define ES_TEMPLATE "a template literal"
+#define ES_OPEN "an open string or comment"
+
+typedef struct {
+  const char *file;
+  int quiet;
+  unsigned long fails;
+  const char *reason;
+} EsCheck;
+
+typedef struct {
+  const char *name;
+  const char *text;
+} EsCase;
+
+static int es_name_char(char ch) {
+  return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') ||
+         ch == '_' || ch == '$';
+}
+
+/* The length of the name or number at p (0 if p has none). */
+static size_t es_word(const char *p, size_t n) {
+  size_t k = 0;
+  while (k < n && es_name_char(p[k])) k++;
+  return k;
+}
+
+static size_t es_space(const char *p, size_t n, size_t k) {
+  while (k < n && (p[k] == ' ' || p[k] == '\t' || p[k] == '\n' || p[k] == '\r')) k++;
+  return k;
+}
+
+/* 1 if the w bytes at p are [1-9][0-9]*, then an optional n. */
+static int es_nonzero_literal(const char *p, size_t w) {
+  size_t j;
+  if (w == 0u || p[0] < '1' || p[0] > '9') return 0;
+  for (j = 1; j < w; j++)
+    if (!((p[j] >= '0' && p[j] <= '9') || (p[j] == 'n' && j + 1u == w))) return 0;
+  return 1;
+}
+
+/* 1 if the divisor at p is safe (see the ES mode above). */
+static int es_safe_divisor(const char *p, size_t n) {
+  size_t k = es_space(p, n, 0), w = es_word(p + k, n - k), end = k + w;
+  int safe = es_nonzero_literal(p + k, w) || (w == 1u && p[k] == 'P') ||
+             (w == 4u && memcmp(p + k, "SC_N", 4) == 0);
+  if (w == 2u && memcmp(p + k, "nz", 2) == 0) {
+    size_t a = es_space(p, n, end), x;
+    if (a < n && p[a] == '(') {
+      a = es_space(p, n, a + 1u);
+      x = es_word(p + a, n - a);
+      a = es_space(p, n, a + x);
+      if (x > 0u && a < n && p[a] == ')') {
+        safe = 1;
+        end = a + 1u;
+      }
+    }
+  }
+  end = es_space(p, n, end);
+  if (!safe || end >= n) return safe;
+  return !(p[end] == '.' || p[end] == '[' || p[end] == '(' ||
+           (p[end] == '*' && end + 1u < n && p[end + 1u] == '*'));
+}
+
+static void es_fail(EsCheck *e, unsigned long line, const char *why) {
+  if (e->fails == 0u) e->reason = why;
+  e->fails++;
+  if (!e->quiet) printf("FAIL notrap %s:%lu: %s\n", e->file, line, why);
+}
+
+/* Scans the text of one module. It stops at an open string or comment. */
+static void es_check(EsCheck *e, const char *p, size_t n) {
+  size_t i = 0;
+  unsigned long line = 1;
+  while (i < n) {
+    char ch = p[i];
+    char next = i + 1u < n ? p[i + 1u] : '\0';
+    if (ch == '\n') line++;
+    if (ch == '/' && next == '/') {
+      while (i < n && p[i] != '\n') i++;
+      continue;
+    }
+    if (ch == '/' && next == '*') {
+      unsigned long from = line;
+      i += 2u;
+      while (i + 1u < n && !(p[i] == '*' && p[i + 1u] == '/')) {
+        if (p[i] == '\n') line++;
+        i++;
+      }
+      if (i + 1u >= n) {
+        es_fail(e, from, ES_OPEN);
+        return;
+      }
+      i += 2u;
+      continue;
+    }
+    if (ch == '\'' || ch == '"') {
+      i++;
+      while (i < n && p[i] != ch && p[i] != '\n')
+        i += (p[i] == '\\' && i + 1u < n && p[i + 1u] != '\n') ? 2u : 1u;
+      if (i >= n || p[i] == '\n') {
+        es_fail(e, line, ES_OPEN);
+        return;
+      }
+      i++;
+      continue;
+    }
+    if (ch == '`') es_fail(e, line, ES_TEMPLATE);
+    if (ch == '/' || ch == '%') {
+      size_t at = next == '=' ? i + 2u : i + 1u;
+      if (!es_safe_divisor(p + at, n - at)) es_fail(e, line, ch == '/' ? ES_DIV : ES_REM);
+      i = at;
+      continue;
+    }
+    if (es_name_char(ch)) {
+      size_t w = es_word(p + i, n - i);
+      if (w == 5u && memcmp(p + i, "throw", 5) == 0) es_fail(e, line, ES_THROW);
+      i += w;
+      continue;
+    }
+    i++;
+  }
+}
+
+static const EsCase es_cases[] = {
+    {"es_good", "// a throw, a / b and a % b in a comment\n/* throw; a / b */\n"
+                "const s = 'throw a / b' + \"a % b\" + 'it\\'s';\nconst throwaway = 1n;\n"
+                "const f = (a, b, q) => a / nz(b) + a % nz( q ) + a / 64 + a % 4n + a % P + a / SC_N;\n"
+                "let c = 8n;\nc /= 2n;\nc %= P;\n"},
+    {"es_throw", "const f = () => {\n  throw 1n;\n};\n"},
+    {"es_div", "const f = (a, b) => a / b;\n"},
+    {"es_rem", "const f = (a, b) => a % b;\n"},
+    {"es_div_assign", "let a = 8n;\na /= b;\n"},
+    {"es_zero", "const f = (a) => a / 0n;\n"},
+    {"es_name_prefix", "const f = (a) => a % Px;\n"},
+    {"es_nz_sum", "const f = (a, b) => a / nz(b + 1n);\n"},
+    {"es_power", "const f = (a, b) => a / 2n ** b;\n"},
+    {"es_template", "const s = `${a / b}`;\n"},
+    {"es_open_string", "const s = 'a / b;\n"},
+    {"es_open_comment", "/* a / b\n"},
+};
+
 static const char *outcome(Run run, const Check *c) {
   if (run == RUN_OK) return "ok";
   if (run == RUN_TRAP) return c->reason;
@@ -898,6 +1056,14 @@ static int self_test(void) {
     state.file = cases[i].name;
     if (o.n <= sizeof o.b) run = check_module(&state, o.b, o.n);
     printf("%s: %s\n", cases[i].name, outcome(run, &state));
+  }
+  for (i = 0; i < sizeof es_cases / sizeof es_cases[0]; i++) {
+    EsCheck e;
+    memset(&e, 0, sizeof e);
+    e.quiet = 1;
+    e.file = es_cases[i].name;
+    es_check(&e, es_cases[i].text, strlen(es_cases[i].text));
+    printf("%s: %s\n", es_cases[i].name, e.fails == 0u ? "ok" : e.reason);
   }
   return 0;
 }
@@ -928,12 +1094,44 @@ static int read_file(const char *path, uint8_t **out, size_t *n) {
   return 1;
 }
 
+static int es_main(int count, char **paths) {
+  int i, bad = 0;
+  unsigned long modules = 0, forms = 0;
+  if (count < 1) {
+    fprintf(stderr, "usage: notraptool --js MODULE.mjs...\n");
+    return 2;
+  }
+  for (i = 0; i < count; i++) {
+    uint8_t *buf;
+    size_t n;
+    EsCheck e;
+    if (!read_file(paths[i], &buf, &n)) {
+      printf("FAIL notrap %s: cannot read the file\n", paths[i]);
+      bad = 1;
+      continue;
+    }
+    memset(&e, 0, sizeof e);
+    e.file = paths[i];
+    es_check(&e, (const char *)buf, n);
+    free(buf);
+    modules++;
+    forms += e.fails;
+  }
+  printf("notrap js: %lu modules checked, %lu trap forms\n", modules, forms);
+  if (bad) return 2;
+  if (forms > 0u) return 1;
+  return 0;
+}
+
 int main(int argc, char **argv) {
   int i, bad = 0;
   unsigned long modules = 0, forms = 0;
   if (argc == 2 && strcmp(argv[1], "--self-test") == 0) return self_test();
+  if (argc >= 2 && strcmp(argv[1], "--js") == 0) return es_main(argc - 2, argv + 2);
   if (argc < 2) {
-    fprintf(stderr, "usage: notraptool MODULE.wasm... | notraptool --self-test\n");
+    fprintf(stderr,
+            "usage: notraptool MODULE.wasm... | notraptool --js MODULE.mjs... | "
+            "notraptool --self-test\n");
     return 2;
   }
   for (i = 1; i < argc; i++) {

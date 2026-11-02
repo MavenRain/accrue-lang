@@ -194,6 +194,29 @@ build_refused --kit REFUSE_CAPACITY test/ir/heapcap.lang
 # count. A heap_max that takes the smaller arm, or a heap_mul that gives
 # a + b, builds the file.
 build_refused --kit REFUSE_CAPACITY test/ir/heapif.lang
+# S9 P4 (Q-S9-4 (a), Q-S9-5 (a), PLAN O4): a Secret value or a zk secret
+# operation at run time is refused on the ES target (`build --js`) only. The
+# Wasm build of the same file gives a module (D8), or REFUSE_LOWER for the zk
+# operation.
+build_refused_js() {
+  flags=$1
+  code=$2
+  file=$3
+  status=0
+  build/langc $flags build "$file" --js "$tmp/refused.mjs" >"$tmp/out" 2>"$tmp/err" || status=$?
+  builds=$((builds + 1))
+  case "$status:$(head -n 1 "$tmp/err"):$(wc -c <"$tmp/out" | tr -d ' ')" in
+    "1:langc: $code: "*":0") ;;
+    *) echo "FAIL build --js $file: want exit 1 and $code, got exit $status: $(head -n 1 "$tmp/err")"; fail=$((fail + 1)) ;;
+  esac
+}
+for f in test/ir/secret-param.lang test/ir/secret-result.lang test/ir/secret-carrier.lang test/ir/secret-const.lang; do
+  build_refused_js --kit REFUSE_TARGET_SECRET "$f"
+  build/langc --kit build "$f" -o "$tmp/secret.wasm" 2>"$tmp/err" ||
+    { echo "FAIL build $f: the Wasm build must give a module (D8): $(head -n 1 "$tmp/err")"; fail=$((fail + 1)); }
+done
+build_refused_js --kit REFUSE_TARGET_SECRET test/ir/secret-key.lang
+build_refused --kit REFUSE_LOWER test/ir/secret-key.lang
 echo "build refusals: $builds checked"
 
 # The IR (S8 P1): each example lowers, with one `func` line for each `abi
@@ -268,6 +291,28 @@ for in_file in "$tmp"/wd/*.in; do
   [ "$bad" -eq 0 ] || { echo "FAIL wasm differential $file: $bad mismatches, first $(head -n 1 "$tmp/bad.txt")"; fail=$((fail + 1)); }
 done
 echo "wasm differential: $rows rows, $mismatches mismatches"
+# The JS differential (S9 P2, Q-S9-2 (a)): the same rows run on the ES module
+# of `langc build FILE --js` in build/jstool (under node) and must print the
+# same OUTPUT. R0: a throw is a `bad:` line, so it is a mismatch.
+js_rows=0
+js_bad=0
+for in_file in "$tmp"/wd/*.in; do
+  file=$(basename "$in_file" .in)
+  k=$(kit examples/kit.txt "$file.lang")
+  if ! build/langc $k build "examples/$file.lang" --js "$tmp/wd/$file.mjs" 2>"$tmp/w.err" ||
+    ! build/jstool "$tmp/wd/$file.mjs" "$tmp/wd/$file.abi" <"$in_file" >"$tmp/wd/$file.js" 2>>"$tmp/w.err"; then
+    echo "FAIL jstool $file: $(head -n 1 "$tmp/w.err")"
+    fail=$((fail + 1))
+    continue
+  fi
+  js_rows=$((js_rows + $(rg -c '.' "$in_file")))
+  paste -d '|' "$in_file" "$tmp/wd/$file.want" "$tmp/wd/$file.js" | awk -F '|' '$2 != $3' >"$tmp/bad.txt"
+  bad=$(rg -c '.' "$tmp/bad.txt" || echo 0)
+  js_bad=$((js_bad + bad))
+  [ "$bad" -eq 0 ] || { echo "FAIL js differential $file: $bad mismatches, first $(head -n 1 "$tmp/bad.txt")"; fail=$((fail + 1)); }
+done
+[ "$js_rows" -eq "$rows" ] || { echo "FAIL js differential: $js_rows rows for $rows wasm rows"; fail=$((fail + 1)); }
+echo "js differential: $js_rows rows, $js_bad mismatches"
 # D10: a Flag argument is x != 0, so the Wasm pick 2 4 9 gives 4 (langc eval
 # refuses it with EVAL_ARGS above). No differential row builds the entries
 # module. The ratio def lowers after S8 P4, but the square def of
@@ -279,6 +324,9 @@ build/langc $k build "$tmp/pick.lang" -o "$tmp/pick.wasm" 2>/dev/null &&
   build/langc $k abi "$tmp/pick.lang" --text >"$tmp/pick.abi" 2>/dev/null || :
 got=$(echo 'pick 2 4 9' | build/wasmtool "$tmp/pick.wasm" "$tmp/pick.abi" 2>&1) || true
 [ "$got" = "4" ] || { echo "FAIL wasm pick 2 4 9: want 4 (D10: a Flag argument is x != 0), got $got"; fail=$((fail + 1)); }
+build/langc $k build "$tmp/pick.lang" --js "$tmp/pick.mjs" 2>/dev/null || :
+got=$(echo 'pick 2 4 9' | build/jstool "$tmp/pick.mjs" "$tmp/pick.abi" 2>&1) || true
+[ "$got" = "4" ] || { echo "FAIL js pick 2 4 9: want 4 (D10: a Flag argument is x != 0), got $got"; fail=$((fail + 1)); }
 
 # The test/ir modules (S8 P1): each builds in --kit mode to a valid
 # module. Each row `FILE NAME ARGS` below runs on the module of test/ir/FILE.lang
@@ -357,6 +405,50 @@ for m in comb lazy spine proof-trap memname; do
   [ "$bad" -eq 0 ] || { echo "FAIL test/ir wasm $m: $bad mismatches, first $(head -n 1 "$tmp/bad.txt")"; fail=$((fail + 1)); }
 done
 echo "test/ir wasm: $ir_mods modules valid, $ir_rows rows, $ir_bad mismatches"
+# The test/ir rows on the JS module (S9 P2): build/jstool must print the same
+# `langc --kit eval` output (R0: no row is `trap`).
+ir_js_rows=0
+ir_js_bad=0
+for m in comb lazy spine proof-trap memname; do
+  [ -f "$tmp/ir/$m.in" ] || continue
+  if ! build/langc --kit build "test/ir/$m.lang" --js "$tmp/ir/$m.mjs" 2>"$tmp/w.err" ||
+    ! build/jstool "$tmp/ir/$m.mjs" "$tmp/ir/$m.abi" <"$tmp/ir/$m.in" >"$tmp/ir/$m.js" 2>>"$tmp/w.err"; then
+    echo "FAIL jstool test/ir/$m.lang: $(head -n 1 "$tmp/w.err")"
+    fail=$((fail + 1))
+    continue
+  fi
+  ir_js_rows=$((ir_js_rows + $(rg -c '.' "$tmp/ir/$m.in" || echo 0)))
+  paste -d '|' "$tmp/ir/$m.in" "$tmp/ir/$m.want" "$tmp/ir/$m.js" | awk -F '|' '$2 != $3' >"$tmp/bad.txt"
+  bad=$(rg -c '.' "$tmp/bad.txt" || echo 0)
+  ir_js_bad=$((ir_js_bad + bad))
+  [ "$bad" -eq 0 ] || { echo "FAIL test/ir js $m: $bad mismatches, first $(head -n 1 "$tmp/bad.txt")"; fail=$((fail + 1)); }
+done
+[ "$ir_js_rows" -eq "$ir_rows" ] || { echo "FAIL test/ir js: $ir_js_rows rows for $ir_rows wasm rows"; fail=$((fail + 1)); }
+echo "test/ir js: $ir_js_rows rows, $ir_js_bad mismatches"
+
+# S9 P5 (Q-S9-6 (a), Q-S9-7 (a)): the JSON abi is the default form of
+# `langc abi` (src/json.c, the rows of cairn-lang 6b73467 test/gate.sh
+# 409-419). An Option result has the word option before its kind, as in
+# --text. edge.lang and append.lang add the Option results and entries with
+# no params.
+json_rows=0
+while IFS='|' read -r json_prog json_want; do
+  json_got=$(build/langc --kit abi "$json_prog" 2>&1) || json_got="exit $?"
+  [ "$json_got" = "$json_want" ] || { echo "FAIL json abi: build/langc --kit abi $json_prog is not the JSON abi line"; fail=$((fail + 1)); }
+  json_rows=$((json_rows + 1))
+done <<'EOF'
+test/wasm/secp.lang|{"entries":[{"name":"addX","params":["u256","u256","u256","u256"],"result":"u256"},{"name":"addY","params":["u256","u256","u256","u256"],"result":"u256"},{"name":"mulX","params":["u256","u256","u256"],"result":"u256"},{"name":"mulY","params":["u256","u256","u256"],"result":"u256"},{"name":"sigOk","params":["u256","u256","u256","u256","u256"],"result":"flag"}]}
+test/wasm/edge.lang|{"entries":[{"name":"mul","params":["u256","u256"],"result":"option u256"},{"name":"ratioW","params":["u256","u256","u256"],"result":"option u256"},{"name":"addN","params":["nat","nat"],"result":"option nat"},{"name":"nz","params":["nat"],"result":"option nat"},{"name":"nzW","params":["u256"],"result":"option u256"},{"name":"empty","params":["nat"],"result":"nat"},{"name":"full","params":["nat"],"result":"nat"}]}
+examples/append.lang|{"entries":[{"name":"kA","params":[],"result":"u256"},{"name":"kO","params":[],"result":"u256"},{"name":"lenAfter","params":[],"result":"option flag"},{"name":"headAfter","params":[],"result":"option flag"}]}
+EOF
+json_rc=0
+build/langc --kit abi test/wasm/secp.lang --bad > /dev/null 2> "$tmp/json-abi.err" || json_rc=$?
+json_msg=$(head -n 1 "$tmp/json-abi.err")
+case "$json_rc $json_msg" in
+  "2 "*USAGE*"abi takes only --text"*) ;;
+  *) echo "FAIL json abi: --bad gave exit $json_rc, line 1: $json_msg"; fail=$((fail + 1)) ;;
+esac
+echo "json abi: $((json_rows + 1)) checked"
 
 # P5 (Q-S8-4 (a), Q-S8-18 (a)): no module has a trap form. build/notraptool
 # runs its self-test (test/notrap/expect.txt), then it checks each module that
@@ -377,6 +469,18 @@ status=0
 build/notraptool "$tmp"/ex/*.wasm "$tmp"/ir/*.wasm "$tmp"/tw/*.wasm >"$tmp/notrap.out" 2>&1 || status=$?
 rg '^FAIL' "$tmp/notrap.out" | head -n 5
 [ "$status" -eq 0 ] || { echo "FAIL notrap: exit $status"; fail=$((fail + 1)); }
+tail -n 1 "$tmp/notrap.out"
+
+# S9 P3 (Q-S9-3 (a)): no ES module has a trap form. build/notraptool --js
+# checks each .mjs that the gate builds: examples, pick, test/ir and test/wasm.
+for m in hash secp traps edge; do
+  build/langc --kit build "test/wasm/$m.lang" --js "$tmp/tw/$m.mjs" 2>"$tmp/w.err" ||
+    { echo "FAIL notrap js test/wasm $m: $(head -n 1 "$tmp/w.err")"; fail=$((fail + 1)); }
+done
+status=0
+build/notraptool --js "$tmp"/wd/*.mjs "$tmp/pick.mjs" "$tmp"/ir/*.mjs "$tmp"/tw/*.mjs >"$tmp/notrap.out" 2>&1 || status=$?
+rg '^FAIL' "$tmp/notrap.out" | head -n 5
+[ "$status" -eq 0 ] || { echo "FAIL notrap js: exit $status"; fail=$((fail + 1)); }
 tail -n 1 "$tmp/notrap.out"
 
 # The differential (S9 B2) in the guest. A row of test/contract/diff.txt is

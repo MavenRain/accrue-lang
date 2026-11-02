@@ -22,4 +22,9 @@ int target_abi_line(const IrFunc *fn, FILE *out, FILE *err);
 /* Writes PART of the target for PROG. Returns 1, or 0 after a message on ERR. */
 int target_write(const IrProgram *prog, TargetPart part, FILE *out, FILE *err);
 
+/* 1 when the heap of each entry of PROG fits WASM_MAX_PAGES pages (wasm.c
+   program_pages), else 0 after a REFUSE_CAPACITY message on ERR. accrue S9:
+   the JS target (src/js.c) calls it too, so both refuse the same programs. */
+int target_capacity(const IrProgram *prog, FILE *err);
+
 #endif

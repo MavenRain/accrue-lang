@@ -8,7 +8,7 @@ CC ?= cc
 CFLAGS = -std=c99 -Wall -Werror -Isrc
 CLANG_FLAGS = -std=c99 -Wall -Wextra -Wswitch-enum -Werror -fsyntax-only -Isrc
 FRONT = src/front/base.c src/front/u256.c src/front/field.c src/front/secp256k1.c src/front/blsag.c src/front/elgamal.c src/front/threshold.c src/front/frost.c src/front/lexer.c src/front/parser.c src/front/front.c src/front/eval.c src/front/check.c src/sha256.c
-TARGET = src/front/lower.c src/wasm.c
+TARGET = src/front/lower.c src/wasm.c src/js.c src/json.c
 SRC = src/main.c $(FRONT) $(TARGET)
 FRONT_TOOL = test/fronttool.c $(filter-out src/front/front.c,$(FRONT))
 BLSAG_TOOL = test/blsagtool.c src/front/u256.c src/front/field.c src/front/secp256k1.c src/front/blsag.c src/sha256.c
@@ -25,6 +25,8 @@ U256_TOOL = test/u256tool.c src/front/u256.c
 # build/wasmtool, so the gate fails; nothing is downloaded.
 WASMTIME ?= /opt/homebrew
 WASM_TOOL = test/wasmtool.c src/front/u256.c
+# The JS runner (S9 P2, Q-S9-2 (a)) runs an ES module under node.
+JS_TOOL = test/jstool.c src/front/u256.c
 WASMTIME_FILES = $(WASMTIME)/include/wasmtime.h $(WASMTIME)/lib/libwasmtime.dylib
 # The P5 no-trap check of each Wasm module (Q-S8-4 (a)).
 NOTRAP_TOOL = test/notraptool.c
@@ -34,7 +36,7 @@ HEADERS = $(wildcard src/*.h src/front/*.h)
 
 .PHONY: build check check-clang clean
 
-build: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/u256tool build/pathtool build/runtool build/wasmtool build/notraptool
+build: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/u256tool build/pathtool build/runtool build/wasmtool build/notraptool build/jstool build/jstest
 
 build/domain.c: domain/domain.lang gen/embed.c
 	mkdir -p build
@@ -102,6 +104,14 @@ build/notraptool: $(NOTRAP_TOOL)
 	mkdir -p build
 	$(TCC) $(CFLAGS) -o build/notraptool $(NOTRAP_TOOL)
 
+build/jstool: $(JS_TOOL) $(HEADERS)
+	mkdir -p build
+	$(TCC) $(CFLAGS) -o build/jstool $(JS_TOOL)
+
+build/jstest: test/jstest.c
+	mkdir -p build
+	$(TCC) $(CFLAGS) -o build/jstest test/jstest.c
+
 check-clang: build/domain.c
 	$(CC) $(CLANG_FLAGS) $(SRC) build/domain.c
 	$(CC) $(CLANG_FLAGS) $(FRONT_TOOL)
@@ -119,8 +129,10 @@ check-clang: build/domain.c
 	$(CC) $(CLANG_FLAGS) $(RUN_TOOL) build/domain.c
 	$(CC) $(CLANG_FLAGS) -isystem $(WASMTIME)/include $(WASM_TOOL)
 	$(CC) $(CLANG_FLAGS) $(NOTRAP_TOOL)
+	$(CC) $(CLANG_FLAGS) $(JS_TOOL)
+	$(CC) $(CLANG_FLAGS) test/jstest.c
 
-check: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/u256tool build/pathtool build/runtool build/wasmtool build/notraptool check-clang
+check: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/u256tool build/pathtool build/runtool build/wasmtool build/notraptool build/jstool build/jstest check-clang
 	sh test/gate.sh
 	sh test/run.sh
 	sh test/review.sh
@@ -159,6 +171,21 @@ check: build/langc build/fronttool build/blsagtool build/elgamaltool build/thres
 	awk -F ' => ' '/^[^#]/ {print $$2}' test/wasm/edge.txt | cmp -s - build/wasm-edge.out || { echo "FAIL edge regressions: Wasm output differs"; exit 1; }
 	awk -F ' => ' '/^[^#]/ {print $$1}' test/wasm/edge.txt | while IFS= read -r line; do set -- $$line; build/langc --kit eval test/wasm/edge.lang "$$@" 2>/dev/null || :; done > build/eval-edge.out
 	awk -F ' => ' '/^[^#]/ {print $$2}' test/wasm/edge.txt | cmp -s - build/eval-edge.out && echo "edge regressions: passed" || { echo "FAIL edge regressions: evaluator output differs"; exit 1; }
+	build/langc --kit build test/wasm/hash.lang --js build/js-hash.mjs
+	awk -F ' => ' '/^[^#]/ {print $$1}' test/wasm/hash.txt | build/jstool build/js-hash.mjs build/wasm-hash.abi > build/js-hash.out
+	cmp -s build/wasm-hash.out build/js-hash.out || { echo "FAIL js regressions: build/js-hash.out differs from build/wasm-hash.out"; exit 1; }
+	build/langc --kit build test/wasm/secp.lang --js build/js-secp.mjs
+	awk -F ' => ' '/^[^#]/ {print $$1}' test/wasm/secp.txt | build/jstool build/js-secp.mjs build/wasm-secp.abi > build/js-secp.out
+	cmp -s build/wasm-secp.out build/js-secp.out || { echo "FAIL js regressions: build/js-secp.out differs from build/wasm-secp.out"; exit 1; }
+	build/langc --kit build test/wasm/traps.lang --js build/js-traps.mjs
+	awk -F ' => ' '/^[^#]/ {print $$1}' test/wasm/traps.txt | build/jstool build/js-traps.mjs build/wasm-traps.abi > build/js-traps.out
+	cmp -s build/wasm-traps.out build/js-traps.out || { echo "FAIL js regressions: build/js-traps.out differs from build/wasm-traps.out"; exit 1; }
+	build/langc --kit build test/wasm/edge.lang --js build/js-edge.mjs
+	awk -F ' => ' '/^[^#]/ {print $$1}' test/wasm/edge.txt | build/jstool build/js-edge.mjs build/wasm-edge.abi > build/js-edge.out
+	cmp -s build/wasm-edge.out build/js-edge.out && echo "js regressions: passed" || { echo "FAIL js regressions: build/js-edge.out differs from build/wasm-edge.out"; exit 1; }
+	build/langc --kit build test/js/names.lang --js 'build/js-names #?%.mjs'
+	build/langc --kit abi test/js/names.lang --text > build/js-names.abi
+	build/jstest
 	build/langc --kit abi test/ir/transp.lang --text > build/transp.abi
 	printf 'moved (nat) -> nat\n' | cmp -s - build/transp.abi || { echo "FAIL ABI: checked signatures must be available independently of lowering"; exit 1; }
 

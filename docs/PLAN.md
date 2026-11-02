@@ -74,8 +74,18 @@ and each div, rem and carry divisor is `X | (X == 0)`.
 `build/notraptool` checks that each of the 68 gate modules has no trap
 form (N2 to N4; section 1: Q-S8-1 to Q-S8-4, Q-S8-14 to Q-S8-21, D1 to
 D14).
-Next: S9 (ES module + JSON: `js.c`, `json.c`, the BigInt prelude,
-`REFUSE_TARGET_SECRET`).
+S9 DONE: the ES target and the JSON ABI. S9 ports the cairn-lang 6b73467
+`src/js.c` with the BigInt prelude. `langc build PROG --js OUT.mjs`
+writes one ES module. An `Option` entry returns `null` for none, else
+the payload as a BigInt (Q-S9-1). `test/jstool.c` runs each module on
+node (Q-S9-2), and the gate runs 166 differential rows and 32 test/ir
+rows on ES with 0 mismatches. `build/notraptool --js` checks the 33 ES
+modules that the gate builds (Q-S9-3, D15). On ES, a run-time `Secret`
+or a zk secret op gives `REFUSE_TARGET_SECRET` (Q-S9-4, Q-S9-5, O4).
+`langc abi` prints JSON (`src/json.c`), and `--text` prints the text
+form (Q-S9-6, Q-S9-7; section 1: Q-S9-1 to Q-S9-7, D15).
+Next: S10 (WGSL: `wgsl.c`, the batch proof check and the batch
+`earned`).
 
 ## 1. Rulings
 
@@ -147,7 +157,7 @@ Next: S9 (ES module + JSON: `js.c`, `json.c`, the BigInt prelude,
 | 2026-10-30 | Q-S6-6, verbatim: "(a) Record, amendable (Recommended)". `govC s n t = govD n (rulePos s) t`: the rule position comes from the Polity in force, and an amendment can change `rulePos` and `tAmend`. | S6b |
 | 2026-10-30 | Q-S6-7, verbatim: "(a) Reuse SealedBallot, new kit file (Recommended)". AmendBallot = `SealedBallot` on the extended record (no new type). examples/amend.lang: cast, tally, open with a quorum, decide, `stepD`, `amendAll`; L8 on the real `tallyBox`; L11 with free ps, qs and s, and closed splits. | S6b |
 | 2026-10-30 | Q-S6-8, verbatim: "(a) S6b guest, S6c host (Recommended)". S6b: the record, `rulePos`, `govC`, amend.lang with L8 and L11, the O4 marks. S6c: the ballottool mode for k = decisions and the dkgtool reshare rows for `keyStamp` and `keyPay` (C only). | S6b |
-| 2026-10-30 | Q-S6-9, verbatim: "(a) Sealed family Secret (Recommended)". `sealed family Secret (A)` with one constructor; `KeyShare`, `Nonce`, `DecKey := Secret Scalar`; the law def `reveal` reads one. A guest def that reads a Secret outside a law gets `REFUSE_LAW`. S9 refuses a target entry whose result holds a Secret (O4 stays open). | S6b |
+| 2026-10-30 | Q-S6-9, verbatim: "(a) Sealed family Secret (Recommended)". `sealed family Secret (A)` with one constructor; `KeyShare`, `Nonce`, `DecKey := Secret Scalar`; the law def `reveal` reads one. A guest def that reads a Secret outside a law gets `REFUSE_LAW`. On ES, S9 refuses a run-time Secret (`REFUSE_TARGET_SECRET`, Q-S9-4 (a), O4). | S6b |
 | 2026-10-30 | Not asked, a build default (not a ruling): `Scalar := U256` is new in the domain (the name was free). | S6b default |
 | 2026-10-30 | Not asked, a build default (not a ruling): the PLAN numbers L8 and L11 go on the examples/polity.lang comments. The def names `l7` and `l9` stay (test/check rows name them). The comment of the G4 step `l8` does not say L8 now. The new law names are `l8Box`, `l8Two` and `l11Amend` (`l8` and `l11` are taken). | S6b default |
 | 2026-10-30 | Q-S6-10, verbatim: "(a) One run, K 1..4 (Recommended)". One recipe line `build/ballottool onehot` runs k = 1 to 4 and each choice c < k (prove, verify, open each slot to its bit). It prints one count line `onehot regressions: 10 checked`. | S6c |
@@ -183,10 +193,18 @@ Next: S9 (ES module + JSON: `js.c`, `json.c`, the BigInt prelude,
 | 2026-10-31 | D5: the gate checks each module with wasm-validate (P1) and `build/notraptool` (P5). | S8 default |
 | 2026-10-31 | D6: each cairn trap row becomes the eval value or none, and the tag vectors (secp sigOk) are made again. Done in S8 P1 and P2. | S8 default |
 | 2026-10-31 | D7: natAdd, natSub, u256Add, u256Sub, u256Mul, mulDiv, nonZero, nonZeroValue and optNatIsSet lower with no trap. Done in S8 P1, P2 and P4. | S8 default |
-| 2026-10-31 | D8: the secret ops lower on Wasm, with no cairn S9 refusal (the S8 survey default). The O4 refusal is for S9. | S8 default |
+| 2026-10-31 | D8: a `Secret` value lowers on Wasm, with no cairn S9 refusal (the S8 survey default). A run-time zk op does not lower on Wasm (`REFUSE_LOWER`, HOST-LIMIT). S9 adds the O4 refusal on ES only (Q-S9-4 (a)). | S8 default |
 | 2026-10-31 | D9: the "target pending S8" build row goes, and the cairn build refusal rows replace it. Done in S8 P1. | S8 default |
 | 2026-10-31 | D10: a `Flag` argument reads as `x != 0`. Done in S8 P2 (the `pick 2 4 9 => 4` row). | S8 default |
 | 2026-11-01 | D11 to D14 (P3): `REFUSE_CAPACITY` comes from lower.c. The prelude heap bytes are hand constants. alloc has no check and no `memory.grow`. eval keeps the guest none. Done in S8 P3b. | S8 default |
+| 2026-11-01 | Q-S9-1 RULED (a) 11-01: an ES entry with an `Option` result returns `null` for none, else the payload as a BigInt (`Nat`, `Flag` or `U256`). Done in S9. | S9 |
+| 2026-11-01 | Q-S9-2 RULED (a) 11-01: `test/jstool.c`, a port of the cairn-lang tool, runs each ES module with `node --input-type=module` through popen and prints wasmtool lines. A `trap` line is a FAIL. Done in S9. | S9 |
+| 2026-11-01 | Q-S9-3 RULED (a) 11-01: an ES mode in `test/notraptool.c` (`--js M.mjs...`) checks each ES module for trap forms. `test/notrap/expect.txt` has the bad-ES self-test rows. Done in S9 P3. | S9 |
+| 2026-11-01 | Q-S9-4 RULED (a) 11-01: `REFUSE_TARGET_SECRET` is for ES only. It refuses an entry param, the entry result or an inner term lowered at run time whose type has head `Secret` (`KeyShare`, `Nonce` and `DecKey` unfold to `Secret Scalar`), and the zk secret ops. Wasm keeps them (D8). Done in S9 P4. | S9 |
+| 2026-11-02 | Q-S9-5 TAKEN (a) 11-02, open for the USER: the param and result clause of Q-S9-4 (a) is a run-time check only. (b) would also scan the types of the program defs that are not entries, on ES; then `examples/amend.lang` is refused on `--js`. (a) is a subset of (b). Done in S9 P4. | S9 |
+| 2026-11-02 | Q-S9-6 TAKEN (a) 11-02, open for the USER: the JSON code is in `src/json.c` and `src/json.h`, as section 7.2 names them. (b) would put it in `src/main.c`, as cairn-lang does. Done in S9 P5. | S9 |
+| 2026-11-02 | Q-S9-7 TAKEN (a) 11-02, open for the USER: the JSON form of an `Option` result is `"result":"option KIND"`, the same word as `--text` (Q-S8-2 (c)). (b) would add a separate `"option":true` key. Done in S9 P5. | S9 |
+| 2026-11-02 | D15 (S9): `build/notraptool --js` checks only the 33 ES modules that the gate builds. The USER can ask to add the other examples. | S9 default |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -399,7 +417,7 @@ One front end (the ported kernel) and three writers that read its output:
 | Target | Kit source | Crypto at run time | Use |
 |---|---|---|---|
 | Wasm MVP (primary) | cairn-lang `src/wasm.c` and `src/front/lower.c` at its S8 close, else tcc-wasm | the cairn-lang Wasm prelude (i64 limbs, point add and multiply, SHA-256) | every party: client, firm, members, stamp and pay committees |
-| ES module + JSON | tcc-js `src/js.c`, `src/json.c` | BigInt in a JS prelude | client and firm views, public checks of the record. JS is not constant time, so a program that touches a key share is refused here (`REFUSE_TARGET_SECRET`). |
+| ES module + JSON | tcc-js `src/js.c`, `src/json.c` | BigInt in a JS prelude | client and firm views, public checks of the record. JS is not constant time, so a run-time `Secret` or a zk secret op is refused here (`REFUSE_TARGET_SECRET`, Q-S9-4 (a)). `langc abi` prints the JSON ABI `{"entries":[...]}`: each entry has `name`, `params` (a list of kinds) and `result`. A kind is `nat`, `flag` or `u256`, and an `Option` result is `option KIND` (Q-S9-6 (a), Q-S9-7 (a)). |
 | WGSL compute | tcc-webgpu `src/wgsl.c` | u32 limbs | batch work: check many ballot proofs, `earned` over many engagements |
 
 Differential tests: each target runs the same vectors as `langc eval`.
@@ -456,8 +474,8 @@ refusal or a law kills at least one mutant of it.
 | S6c | Part D, the host rows (Q-S6-8): the ballottool mode for k = decisions, the dkgtool reshare rows for `keyStamp` and `keyPay`. | DONE |
 | S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | DONE |
 | S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | DONE |
-| S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | NEXT |
-| S10 | WGSL: `wgsl.c`, batch proof check and batch `earned`. | |
+| S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | DONE |
+| S10 | WGSL: `wgsl.c`, batch proof check and batch `earned`. | NEXT |
 | S11 | A1: canonical forms and `langc fmt`. | |
 | S12 | A2: `langc check --json`. | |
 | S13 | A4: `langc mcp`. | |
@@ -474,10 +492,14 @@ refusal or a law kills at least one mutant of it.
   memory.grow, bare div_u), so P2, P3 and P5 removed each trap form.
 - O3 retainer-lang SPEC.md 82 still says EVM output PLANNED (its O-d16-1).
   accrue-lang takes only the domain, so this does not apply here.
-- O4 The secret marks for `REFUSE_TARGET_SECRET` (S9): the key shares,
-  the nonces and the decryption key. S6b marks them in the types
-  (Q-S6-9 (a): `Secret`, `KeyShare`, `Nonce`, `DecKey`). The S9 refusal
-  stays open.
+- O4 CLOSED in S9 for ES: the secret marks for `REFUSE_TARGET_SECRET` are
+  the key shares, the nonces and the decryption key. S6b marks them in
+  the types (Q-S6-9 (a): `Secret`, `KeyShare`, `Nonce`, `DecKey`). S9 P4
+  refuses on ES an entry param, the entry result or an inner term lowered
+  at run time with head `Secret`, and the zk secret ops (Q-S9-4 (a),
+  Q-S9-5 (a)). Q-S9-5 (b) would also scan the types of the program defs
+  that are not entries, on ES; then `examples/amend.lang` is refused on
+  `--js`.
 - O5 The test vectors come from the published standards (NIST CAVP for
   SHA-256, SEC 2 for secp256k1, the FROST RFC 9591 vectors), not from an
   implementation that the gate would trust.

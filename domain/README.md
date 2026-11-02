@@ -146,6 +146,20 @@ of each section gives its rule or ruling.
   checks each module that the gate builds. `docs/host/README.md` has
   the details.
 
+## The domain on ES (S9)
+
+- `langc build PROG --js OUT.mjs` writes a program to one ES module with
+  a BigInt prelude. S9 adds no domain word.
+- An entry with an `Option` result returns `null` for `none`, else the
+  payload as a BigInt (Q-S9-1 (a)).
+- JS is not constant time. On ES, a run-time `Secret` (a `KeyShare`, a
+  `Nonce` or a `DecKey`) or a zk secret op gives `REFUSE_TARGET_SECRET`
+  (Q-S9-4 (a), O4). A Secret in a def that does not lower at run time
+  does not stop the build (Q-S9-5 (a)), so `examples/amend.lang` builds
+  on ES.
+- `langc abi PROG` prints the JSON ABI of the entries (Q-S9-6 (a),
+  Q-S9-7 (a)).
+
 ## How to change the domain
 
 1. Edit `domain/domain.lang`. Keep each new name apart from the core

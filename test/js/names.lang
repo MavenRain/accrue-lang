@@ -1,0 +1,3 @@
+def default : Nat -> Nat := fun x => x
+def a' : Nat -> Nat := fun x => 8
+def then : Nat -> Nat := fun x => 9

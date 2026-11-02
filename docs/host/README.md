@@ -25,8 +25,8 @@ same change in `hosts/tcc-evm`.
 
 These files are specific to this kit:
 
-- the target file: `src/wasm.c`
-- the target test file: `test/run-wasm.mjs`
+- the target files: `src/wasm.c`, `src/js.c` and `src/json.c`
+- the target test files: `test/wasmtool.c`, `test/jstool.c` and `test/notraptool.c`
 - the build and gate files: `Makefile`, `test/gate.sh` and `PIN`
 - the docs: `README.md`, `FORMERS.md` and `docs/CAPABILITY.md`
 
@@ -80,8 +80,9 @@ The compiler enforces these rules:
 build/langc check PROG
 build/langc eval PROG NAME [ARGS...]
 build/langc ir PROG
-build/langc abi PROG
+build/langc abi PROG [--text]
 build/langc build PROG -o OUT [--runtime]
+build/langc build PROG --js OUT.mjs
 ```
 
 - `check` prints `ok`, or refuses the program.
@@ -89,9 +90,14 @@ build/langc build PROG -o OUT [--runtime]
   number. For an Option result, `eval` prints the payload of `some`, or
   `none` (S3, Q-S3-9).
 - `ir` prints the first-order IR. It has one `func` for each entry.
-- `abi` prints the name of each entry, one for each line.
+- `abi` prints the JSON ABI of the entries (`src/json.c`, Q-S9-6 (a)):
+  `{"entries":[{"name":N,"params":[K,...],"result":R}]}`. A kind K is
+  `nat`, `flag` or `u256`, and R is K or `option K` (Q-S9-7 (a)).
+  `--text` prints the text form, one line for each entry.
 - `build` writes the Wasm module to `OUT`. On this target, `--runtime`
-  gives the same bytes.
+  gives the same bytes. `--js OUT.mjs` writes an ES module with a BigInt
+  prelude instead (`src/js.c`, S9). On ES, a run-time `Secret` or a zk
+  secret op gives `REFUSE_TARGET_SECRET` (Q-S9-4 (a)).
 
 The exit status is 0 for success, 1 for a refused program and 2 for a
 usage or IO error. A diagnostic on stderr has the form
