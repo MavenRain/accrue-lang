@@ -56,7 +56,7 @@ typedef struct {
   uint32_t len_cap;
   int len_oom;    /* 1 when lens did not grow */
   uint32_t walks; /* the number of walks so far */
-  int es;         /* 1 on the ES target: a run-time secret is refused (S9 P4, O4) */
+  int es;         /* 1 on the ES or WGSL target: a run-time secret is refused (S9 P4, O4; accrue S10) */
 } Low;
 
 /* No static length bound: a local that is not a list, or a list without a
@@ -714,10 +714,12 @@ static int static_leaf(const Low *l, const Value *x) {
 
 /* A secret on the ES target (S9 P4, Q-S9-4 (a), Q-S9-5 (a), PLAN O4): a
    Secret value (a key share, a nonce or a decryption key) or a zk key, sign,
-   witness, cast or prove operation at run time has no form in an ES module.
+   witness, cast or prove operation at run time has no form in an ES module or
+   in a WGSL module (accrue S10, Q-S10-4).
    The Wasm target keeps them (D8). */
 static int refuse_secret(Low *l, const char *what) {
-  return diag_fail(l->m->diag, "REFUSE_TARGET_SECRET", l->m->def, "%s touches a secret on the ES target (O4)", what);
+  return diag_fail(l->m->diag, "REFUSE_TARGET_SECRET", l->m->def, "%s touches a secret on the ES or WGSL target (O4)",
+                   what);
 }
 
 /* A binary node (cairn-lang S8, Q-S8-6, Q-S8-10): a point constructor with

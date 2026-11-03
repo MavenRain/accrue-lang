@@ -1,0 +1,34 @@
+-- accrue S10 P5: the zk ring check (bLSAG) on WGSL, in split entries. No
+-- cairn form: cairn has no guest bLSAG def at 3717b81. Rulings: accrue
+-- Q-S10-11 (a) (a guest check over flat U256 params, a ring of K = 2 keys, the
+-- H_p points are host params) and Q-S10-12 (a) (one link in one entry gives
+-- GPUInternalError on Metal, so one link is in split entries).
+-- The host link of src/front/blsag.c: L = s G + c P, R = s H_p(P) + c I, and
+-- the next c is a hash fold of tag, D, poll, choice, I, L and R.
+-- The abi has no entry with a Prod U256 U256 result, so each coordinate of L
+-- and R is an Option U256 entry: zkLx, zkLy, zkRx and zkRy.
+def gen : Prod U256 U256 := pair 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798u 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8u
+def tag : U256 := 0x616363727565u
+
+-- s H + c Q (2 ecMul, 1 ecAdd): L = comb s c gen P, R = comb s c Hp I.
+def comb : (s c : U256) -> (h q : Prod U256 U256) -> Option (Prod U256 U256) :=
+  fun (s c : U256) (h q : Prod U256 U256) =>
+    bind (ecMul h s) (fun (a : Prod U256 U256) => bind (ecMul q c) (fun (b : Prod U256 U256) => ecAdd a b))
+
+-- The challenge fold (9 hash): tag, D, poll, choice, I.x, I.y, L.x, L.y, R.x, R.y.
+def chal : (d poll choice ix iy lx ly rx ry : U256) -> U256 :=
+  fun (d poll choice ix iy lx ly rx ry : U256) =>
+    hash (hash (hash (hash (hash (hash (hash (hash (hash tag d) poll) choice) ix) iy) lx) ly) rx) ry
+
+-- The coordinates of L and R of one link (2 ecMul, 1 ecAdd each).
+def zkLx : (s c px py : U256) -> Option U256 := fun (s c px py : U256) => option none (fun (p : Prod U256 U256) => some (first p)) (comb s c gen (pair px py))
+def zkLy : (s c px py : U256) -> Option U256 := fun (s c px py : U256) => option none (fun (p : Prod U256 U256) => some (second p)) (comb s c gen (pair px py))
+def zkRx : (s c hx hy ix iy : U256) -> Option U256 := fun (s c hx hy ix iy : U256) => option none (fun (p : Prod U256 U256) => some (first p)) (comb s c (pair hx hy) (pair ix iy))
+def zkRy : (s c hx hy ix iy : U256) -> Option U256 := fun (s c hx hy ix iy : U256) => option none (fun (p : Prod U256 U256) => some (second p)) (comb s c (pair hx hy) (pair ix iy))
+
+-- One challenge step (9 hash). The ring has K = 2 keys: a count other than 2
+-- gives none.
+def zkStep : (count d poll choice ix iy lx ly rx ry : U256) -> Option U256 := fun (count d poll choice ix iy lx ly rx ry : U256) => flagIf (u256Eq count 2u) (some (chal d poll choice ix iy lx ly rx ry)) none
+
+-- The ring digest D of 2 keys (3 hash).
+def zkDig : (p1x p1y p2x p2y : U256) -> U256 := fun (p1x p1y p2x p2y : U256) => hash (hash (hash p1x p1y) p2x) p2y

@@ -25,8 +25,8 @@ same change in `hosts/tcc-evm`.
 
 These files are specific to this kit:
 
-- the target files: `src/wasm.c`, `src/js.c` and `src/json.c`
-- the target test files: `test/wasmtool.c`, `test/jstool.c` and `test/notraptool.c`
+- the target files: `src/wasm.c`, `src/js.c`, `src/json.c` and `src/wgsl.c`
+- the target test files: `test/wasmtool.c`, `test/jstool.c`, `test/wgsltool.c` and `test/notraptool.c`
 - the build and gate files: `Makefile`, `test/gate.sh` and `PIN`
 - the docs: `README.md`, `FORMERS.md` and `docs/CAPABILITY.md`
 
@@ -83,6 +83,7 @@ build/langc ir PROG
 build/langc abi PROG [--text]
 build/langc build PROG -o OUT [--runtime]
 build/langc build PROG --js OUT.mjs
+build/langc build PROG --wgsl OUT.wgsl
 ```
 
 - `check` prints `ok`, or refuses the program.
@@ -98,6 +99,16 @@ build/langc build PROG --js OUT.mjs
   gives the same bytes. `--js OUT.mjs` writes an ES module with a BigInt
   prelude instead (`src/js.c`, S9). On ES, a run-time `Secret` or a zk
   secret op gives `REFUSE_TARGET_SECRET` (Q-S9-4 (a)).
+- `build PROG --wgsl OUT.wgsl` writes a WGSL compute module instead
+  (`src/wgsl.c`, S10). Each entry is a compute entry with the bindings
+  `NAME_in` (0), `NAME_out` (1) and `heap` (2). Invocation idx reads row
+  idx of `NAME_in` and writes row idx of `NAME_out`: a status u32 (always
+  0), then the result. A `Nat` or `Flag` is 2 u32 and a `U256` is 8 u32,
+  low first. An `Option` result has one more u32 after the status: 0 for
+  none, 1 for some. `--wgsl` takes the Wasm heap limit
+  (`REFUSE_CAPACITY`). As `--js` does, it refuses a run-time `Secret` or
+  a zk secret op (`REFUSE_TARGET_SECRET`). `build` takes one of `-o OUT`,
+  `--js OUT.mjs` and `--wgsl OUT.wgsl`.
 
 The exit status is 0 for success, 1 for a refused program and 2 for a
 usage or IO error. A diagnostic on stderr has the form
@@ -160,6 +171,11 @@ what the domain holds and how to change it.
 | `gate: 0 failures` | the sum of all failures |
 
 The `ir`, `wasm` and `differential` lines come with the S8 writer.
+`make gpu-check` runs `sh test/gate.sh gpu` outside the sandbox, because
+deno needs a GPU adapter. `make check` does not run it (Q-S10-2 (a)). It
+prints the `wgsl` lines, for example
+`wgsl differential: 166 rows, 0 mismatches, 0 files with no WGSL module`
+and `wgsl known internal: 2 modules, 6 entries`.
 
 The gate also checks the usage and IO exit codes, five `eval` refusals,
 the eval cases of `test/ir/spine.lang` in `Option` form (`eval_spines`
@@ -180,6 +196,9 @@ problems.
 - `langc eval` stops after 20000000 steps (`EVAL_FUEL`). The Wasm module
   has no step limit, so a large loop count can run on Wasm and stop in
   `eval`. The grid uses large values only for entries with no loop.
+- The Metal backend does not compile 6 WGSL entries (O12 in
+  `docs/PLAN.md`). `test/wgsl/internal.txt` lists them, and the gpu gate
+  accepts a listed entry only when it gives `GPUInternalError`.
 - The arena of `langc` stops at 1 GiB. The Wasm memory has a static size (min = max, Q-S8-16): P + 1
   pages, where P is the least power of two pages that holds the heap of each entry, at most 16384 pages
   (1 GiB). An entry above that refuses with REFUSE_CAPACITY (HOST-LIMIT). Each load and store address is

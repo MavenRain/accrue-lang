@@ -21,8 +21,13 @@
    notraptool --js MODULE.mjs... (S9 P3, Q-S9-3 (a)): the ES mode. It fails
    on each `throw`, and on each `/` or `%` whose divisor can be 0 (see
    es_check), then prints `notrap js: N modules checked, T trap forms`.
+   notraptool --wgsl MODULE.wgsl... (accrue S10 P2, N4): the WGSL mode. It
+   fails on each trap form of the cairn wgsl.c (the flag `tr`, a status 1
+   write; see wgsl_check), then prints `notrap wgsl: N modules checked, T trap
+   forms`.
    notraptool --self-test: checks the bad modules in this file (byte arrays,
-   then ES text) and prints `NAME: REASON` for each (test/notrap/expect.txt). */
+   then ES text, then WGSL text) and prints `NAME: REASON` for each
+   (test/notrap/expect.txt). */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -899,6 +904,8 @@ static void build(const Case *k, Buf *o) {
 #define ES_REM "a % whose divisor can be 0"
 #define ES_TEMPLATE "a template literal"
 #define ES_OPEN "an open string or comment"
+#define WGSL_FLAG "the trap flag tr"
+#define WGSL_STATUS "a TRAP status write"
 
 typedef struct {
   const char *file;
@@ -1039,6 +1046,58 @@ static const EsCase es_cases[] = {
     {"es_open_comment", "/* a / b\n"},
 };
 
+/* The WGSL mode (accrue S10 P2, N4). WGSL has no trap. The cairn wgsl.c gave
+   a trap in two forms: the private flag `tr`, and a status 1 write into the
+   out row (`NAME_out[ob] = 1u;`). src/wgsl.c has neither (the status is
+   always 0, Q-S10-5 (b)). The scan skips the comments and fails on each form.
+   It stops at an open comment. */
+static void wgsl_check(EsCheck *e, const char *p, size_t n) {
+  static const char status[] = "[ob] = 1u;";
+  size_t s = sizeof status - 1u;
+  size_t i = 0;
+  unsigned long line = 1;
+  while (i < n) {
+    char ch = p[i];
+    char next = i + 1u < n ? p[i + 1u] : '\0';
+    if (ch == '\n') line++;
+    if (ch == '/' && next == '/') {
+      while (i < n && p[i] != '\n') i++;
+      continue;
+    }
+    if (ch == '/' && next == '*') {
+      unsigned long from = line;
+      i += 2u;
+      while (i + 1u < n && !(p[i] == '*' && p[i + 1u] == '/')) {
+        if (p[i] == '\n') line++;
+        i++;
+      }
+      if (i + 1u >= n) {
+        es_fail(e, from, ES_OPEN);
+        return;
+      }
+      i += 2u;
+      continue;
+    }
+    if (es_name_char(ch)) {
+      size_t w = es_word(p + i, n - i);
+      if (w == 2u && memcmp(p + i, "tr", 2) == 0) es_fail(e, line, WGSL_FLAG);
+      if (w >= 4u && memcmp(p + i + w - 4u, "_out", 4) == 0 && n - (i + w) >= s && memcmp(p + i + w, status, s) == 0)
+        es_fail(e, line, WGSL_STATUS);
+      i += w;
+      continue;
+    }
+    i++;
+  }
+}
+
+static const EsCase wgsl_cases[] = {
+    {"wgsl_good", "// tr = true; and f_out[ob] = 1u; in a comment\n/* tr */\nvar<private> trace: bool;\n"
+                  "fn f() {\n  f_out[ob] = 0u;\n  f_out[ob + 1u] = 1u;\n  let str = 1u;\n  g_in[ob] = 1u;\n}\n"},
+    {"wgsl_flag", "var<private> tr: bool;\n"},
+    {"wgsl_status", "fn f() {\n  f_out[ob] = 1u;\n}\n"},
+    {"wgsl_open_comment", "/* tr\n"},
+};
+
 static const char *outcome(Run run, const Check *c) {
   if (run == RUN_OK) return "ok";
   if (run == RUN_TRAP) return c->reason;
@@ -1064,6 +1123,14 @@ static int self_test(void) {
     e.file = es_cases[i].name;
     es_check(&e, es_cases[i].text, strlen(es_cases[i].text));
     printf("%s: %s\n", es_cases[i].name, e.fails == 0u ? "ok" : e.reason);
+  }
+  for (i = 0; i < sizeof wgsl_cases / sizeof wgsl_cases[0]; i++) {
+    EsCheck e;
+    memset(&e, 0, sizeof e);
+    e.quiet = 1;
+    e.file = wgsl_cases[i].name;
+    wgsl_check(&e, wgsl_cases[i].text, strlen(wgsl_cases[i].text));
+    printf("%s: %s\n", wgsl_cases[i].name, e.fails == 0u ? "ok" : e.reason);
   }
   return 0;
 }
@@ -1094,11 +1161,12 @@ static int read_file(const char *path, uint8_t **out, size_t *n) {
   return 1;
 }
 
-static int es_main(int count, char **paths) {
+/* The ES mode, or the WGSL mode when WGSL is 1. */
+static int es_main(int count, char **paths, int wgsl) {
   int i, bad = 0;
   unsigned long modules = 0, forms = 0;
   if (count < 1) {
-    fprintf(stderr, "usage: notraptool --js MODULE.mjs...\n");
+    fprintf(stderr, wgsl ? "usage: notraptool --wgsl MODULE.wgsl...\n" : "usage: notraptool --js MODULE.mjs...\n");
     return 2;
   }
   for (i = 0; i < count; i++) {
@@ -1112,12 +1180,12 @@ static int es_main(int count, char **paths) {
     }
     memset(&e, 0, sizeof e);
     e.file = paths[i];
-    es_check(&e, (const char *)buf, n);
+    (wgsl ? wgsl_check : es_check)(&e, (const char *)buf, n);
     free(buf);
     modules++;
     forms += e.fails;
   }
-  printf("notrap js: %lu modules checked, %lu trap forms\n", modules, forms);
+  printf("notrap %s: %lu modules checked, %lu trap forms\n", wgsl ? "wgsl" : "js", modules, forms);
   if (bad) return 2;
   if (forms > 0u) return 1;
   return 0;
@@ -1127,10 +1195,12 @@ int main(int argc, char **argv) {
   int i, bad = 0;
   unsigned long modules = 0, forms = 0;
   if (argc == 2 && strcmp(argv[1], "--self-test") == 0) return self_test();
-  if (argc >= 2 && strcmp(argv[1], "--js") == 0) return es_main(argc - 2, argv + 2);
+  if (argc >= 2 && strcmp(argv[1], "--js") == 0) return es_main(argc - 2, argv + 2, 0);
+  if (argc >= 2 && strcmp(argv[1], "--wgsl") == 0) return es_main(argc - 2, argv + 2, 1);
   if (argc < 2) {
     fprintf(stderr,
             "usage: notraptool MODULE.wasm... | notraptool --js MODULE.mjs... | "
+            "notraptool --wgsl MODULE.wgsl... | "
             "notraptool --self-test\n");
     return 2;
   }

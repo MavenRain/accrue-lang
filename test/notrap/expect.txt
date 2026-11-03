@@ -29,3 +29,7 @@ es_power: a / whose divisor can be 0
 es_template: a template literal
 es_open_string: an open string or comment
 es_open_comment: an open string or comment
+wgsl_good: ok
+wgsl_flag: the trap flag tr
+wgsl_status: a TRAP status write
+wgsl_open_comment: an open string or comment

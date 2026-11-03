@@ -1,0 +1,6 @@
+examples/onehot.lang rand
+examples/onehot.lang randWith
+examples/onehot.lang slot
+examples/onehot.lang slotWith
+examples/threshold.lang dleq
+examples/threshold.lang dleqWith

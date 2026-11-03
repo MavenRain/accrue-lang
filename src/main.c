@@ -10,6 +10,7 @@
 #include "js.h"
 #include "json.h"
 #include "target.h"
+#include "wgsl.h"
 
 #define ARENA_LIMIT_BYTES ((size_t)1 << 30)
 
@@ -32,6 +33,7 @@ typedef struct {
   const char *script_path;
   const char *out_path;
   const char *js_path; /* accrue S9: build --js OUT.mjs writes the ES module (src/js.c) */
+  const char *wgsl_path; /* accrue S10: build --wgsl OUT.wgsl writes the WGSL module (src/wgsl.c) */
   int runtime;
   int json;
   CheckMode mode; /* orbit-lang S3: --kit selects the kit mode */
@@ -58,6 +60,7 @@ static int usage(FILE *err) {
         "       langc [--kit] abi PROG [--text]\n"
         "       langc [--kit] build PROG -o OUT [--runtime]\n"
         "       langc [--kit] build PROG --js OUT.mjs\n"
+        "       langc [--kit] build PROG --wgsl OUT.wgsl\n"
         "       langc [--kit] prove PROG NAME [POLL]\n"
         "--kit: the kit mode, the trusted test scope of the kit gate\n", err);
   return 2;
@@ -77,20 +80,25 @@ static int parse_build_options(int argc, char **argv, Options *opt, Diag *diag) 
   for (int i = 3; i < argc; i++) {
     int is_out = strcmp(argv[i], "-o") == 0 && i + 1 < argc;
     int is_js = strcmp(argv[i], "--js") == 0 && i + 1 < argc;
+    int is_wgsl = strcmp(argv[i], "--wgsl") == 0 && i + 1 < argc;
     int is_runtime = strcmp(argv[i], "--runtime") == 0;
-    if (!is_out && !is_js && !is_runtime) return diag_fail(diag, "USAGE", NULL, "unknown build argument '%s'", argv[i]);
+    if (!is_out && !is_js && !is_wgsl && !is_runtime) return diag_fail(diag, "USAGE", NULL, "unknown build argument '%s'", argv[i]);
     opt->out_path = is_out ? argv[i + 1] : opt->out_path;
     opt->js_path = is_js ? argv[i + 1] : opt->js_path;
+    opt->wgsl_path = is_wgsl ? argv[i + 1] : opt->wgsl_path;
     opt->runtime |= is_runtime;
-    i += is_out | is_js;
+    i += is_out | is_js | is_wgsl;
   }
-  /* Q-S8-8: build writes a file, so -o OUT or --js OUT.mjs (accrue S9) is
-     required, and only one of them. */
-  if (opt->out_path != NULL && opt->js_path != NULL) {
+  /* Q-S8-8: build writes a file, so -o OUT, --js OUT.mjs (accrue S9) or
+     --wgsl OUT.wgsl (accrue S10) is required, and only one of them. */
+  int outs = (opt->out_path != NULL) + (opt->js_path != NULL) + (opt->wgsl_path != NULL);
+  if (outs > 1 && opt->wgsl_path != NULL) {
+    return diag_fail(diag, "USAGE", NULL, "build takes one of -o OUT, --js OUT.mjs and --wgsl OUT.wgsl");
+  }
+  if (outs > 1) {
     return diag_fail(diag, "USAGE", NULL, "build takes -o OUT or --js OUT.mjs, not both");
   }
-  return opt->out_path != NULL || opt->js_path != NULL ? 1
-    : diag_fail(diag, "USAGE", NULL, "build needs -o OUT or --js OUT.mjs");
+  return outs == 1 ? 1 : diag_fail(diag, "USAGE", NULL, "build needs -o OUT, --js OUT.mjs or --wgsl OUT.wgsl");
 }
 
 static int parse_options(int argc, char **argv, Options *opt, Diag *diag) {
@@ -195,10 +203,10 @@ static int print_abi(Machine *machine, int json) {
 static int run_target(const Options *opt, Machine *machine, Diag *diag) {
   IrProgram prog;
   FILE *out;
-  const char *path = opt->js_path != NULL ? opt->js_path : opt->out_path;
+  const char *path = opt->wgsl_path != NULL ? opt->wgsl_path : opt->js_path != NULL ? opt->js_path : opt->out_path;
   int ok = 1;
   if (opt->command == CMD_ABI) return print_abi(machine, opt->json);
-  if (!lower_program(machine, &prog, opt->js_path != NULL)) return 1;
+  if (!lower_program(machine, &prog, opt->js_path != NULL || opt->wgsl_path != NULL)) return 1;
   switch (opt->command) {
     case CMD_IR:
       ir_print(&prog, stdout);
@@ -214,9 +222,11 @@ static int run_target(const Options *opt, Machine *machine, Diag *diag) {
   out = fopen(path, "wb");
   if (out == NULL) return diag_fail(diag, "IO", NULL, "cannot write '%s'", path) + 2;
   /* accrue S9: --js writes the ES module. The JS heap takes the Wasm limit,
-     so both targets refuse the same programs (REFUSE_CAPACITY). */
-  ok = opt->js_path != NULL ? target_capacity(&prog, stderr) && js_write(&prog, out, stderr)
-                            : target_write(&prog, opt->runtime ? TARGET_PART_RUNTIME : TARGET_PART_MAIN, out, stderr);
+     so both targets refuse the same programs (REFUSE_CAPACITY). accrue S10:
+     --wgsl writes the WGSL module, with the same limit (S10 P2). */
+  ok = opt->wgsl_path != NULL ? target_capacity(&prog, stderr) && wgsl_write(&prog, out, stderr)
+       : opt->js_path != NULL ? target_capacity(&prog, stderr) && js_write(&prog, out, stderr)
+                              : target_write(&prog, opt->runtime ? TARGET_PART_RUNTIME : TARGET_PART_MAIN, out, stderr);
   ok = fclose(out) == 0 && ok;
   if (ok) return 0;
   remove(path);

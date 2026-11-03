@@ -1450,6 +1450,17 @@ int target_capacity(const IrProgram *prog, FILE *err) {
   return program_pages(prog, err) != 0;
 }
 
+uint64_t target_heap(const IrProgram *prog) {
+  uint64_t h = 0;
+  uint64_t e;
+  size_t i;
+  for (i = 0; i < prog->func_count; i++) {
+    e = entry_heap(&prog->funcs[i]);
+    h = e > h ? e : h;
+  }
+  return h;
+}
+
 /* (i64 x N) -> i64 */
 static int func_type(Sink *s, uint64_t n) {
   uint64_t k;

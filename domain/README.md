@@ -160,6 +160,38 @@ of each section gives its rule or ruling.
 - `langc abi PROG` prints the JSON ABI of the entries (Q-S9-6 (a),
   Q-S9-7 (a)).
 
+## The domain on WGSL (S10)
+
+- `langc build PROG --wgsl OUT.wgsl` writes a program to one WGSL
+  compute module. S10 adds no domain word.
+- Each entry is one compute entry. One GPU invocation reads one row and
+  writes one row. A `Nat` is 2 u32 and a `U256` is 8 u32, low first. An
+  entry with an `Option` result writes 0 for `none`, else 1 and the
+  payload.
+- No module can trap (R0, N4). A divisor of 0 reads as 1, and an alloc
+  past the heap slice gives the null block. `build/notraptool` checks
+  each WGSL module that the gpu gate writes.
+- As on ES, a run-time `Secret` or a zk secret op gives
+  `REFUSE_TARGET_SECRET` on WGSL.
+- `test/wgsl/earned.lang` has `earnedAt` in one flat entry, `earnedFlat`
+  (29 params: 20 `Nat`, 9 `U256`), in the shape of `hA` in
+  `examples/earned.lang` (Q-S10-3 (a), D16). Its 11 rows give the same
+  values on WGSL, on Wasm and in `langc eval`. Row 10 overflows and row
+  11 has `d1 = 0u`, so each gives `none`.
+- `test/wgsl/zk.lang` checks a bLSAG ring of 2 keys in split entries
+  (`zkLx`, `zkLy`, `zkRx`, `zkRy`, `zkStep`, `zkDig`). The host gives the
+  H_p points as params. A count other than 2 gives `none` (O13).
+- `test/wgsl/batch.lang` (from cairn-lang) checks schnorr and OR proofs
+  in batch with the forms of `examples/ballot.lang` (Q-S10-4 (b)).
+- The Metal backend does not compile 6 entries: `rand`, `randWith`,
+  `slot` and `slotWith` of `examples/onehot.lang`, and `dleq` and
+  `dleqWith` of `examples/threshold.lang` (`test/wgsl/internal.txt`,
+  O12). An entry with a `Prod U256 U256` result is not in the abi, so it
+  has no WGSL row (O14). `zkVerify` does not lower (HOST-LIMIT), so the
+  GPU ring check is the guest form of `zk.lang` (O13).
+- The WGSL rows need a GPU adapter. `make gpu-check` runs them outside
+  the sandbox, and `make check` does not run them (Q-S10-2 (a)).
+
 ## How to change the domain
 
 1. Edit `domain/domain.lang`. Keep each new name apart from the core

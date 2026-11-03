@@ -1,0 +1,18 @@
+# accrue S10 P6: the earned rows (Q-S10-3 (a)). One row for each GPU
+# invocation: the entry name, then one word for each param of earnedFlat
+# (test/wgsl/earned.lang) in param order (a Nat word has no suffix, a U256
+# word has the suffix u). Rows 1 to 9: hA and eA of examples/earned.lang at
+# t = 9, 10, 13, 25, 30, 37, 40, 60, 70 (test/eval/expect.txt ea9 to ea70:
+# 0, 50, 54, 72, 80, 94, 109, 149, 149). Row 10: mass 1 is 2^256 - 1, so the
+# sum at t = 40 overflows (none). Row 11: d1 = 0u at t = 13 (none).
+earnedFlat 10 60 10 60 0 0 100 0 20 3u 2u 20 40 1u 1u 0 50u 25 7u 30 0 100 0 50 2u 1u 30 9u 9
+earnedFlat 10 60 10 60 0 0 100 0 20 3u 2u 20 40 1u 1u 0 50u 25 7u 30 0 100 0 50 2u 1u 30 9u 10
+earnedFlat 10 60 10 60 0 0 100 0 20 3u 2u 20 40 1u 1u 0 50u 25 7u 30 0 100 0 50 2u 1u 30 9u 13
+earnedFlat 10 60 10 60 0 0 100 0 20 3u 2u 20 40 1u 1u 0 50u 25 7u 30 0 100 0 50 2u 1u 30 9u 25
+earnedFlat 10 60 10 60 0 0 100 0 20 3u 2u 20 40 1u 1u 0 50u 25 7u 30 0 100 0 50 2u 1u 30 9u 30
+earnedFlat 10 60 10 60 0 0 100 0 20 3u 2u 20 40 1u 1u 0 50u 25 7u 30 0 100 0 50 2u 1u 30 9u 37
+earnedFlat 10 60 10 60 0 0 100 0 20 3u 2u 20 40 1u 1u 0 50u 25 7u 30 0 100 0 50 2u 1u 30 9u 40
+earnedFlat 10 60 10 60 0 0 100 0 20 3u 2u 20 40 1u 1u 0 50u 25 7u 30 0 100 0 50 2u 1u 30 9u 60
+earnedFlat 10 60 10 60 0 0 100 0 20 3u 2u 20 40 1u 1u 0 50u 25 7u 30 0 100 0 50 2u 1u 30 9u 70
+earnedFlat 10 60 10 60 0 0 100 0 20 3u 2u 20 40 1u 1u 0 115792089237316195423570985008687907853269984665640564039457584007913129639935u 25 7u 30 0 100 0 50 2u 1u 30 9u 40
+earnedFlat 10 60 10 60 0 0 100 0 20 3u 0u 20 40 1u 1u 0 50u 25 7u 30 0 100 0 50 2u 1u 30 9u 13

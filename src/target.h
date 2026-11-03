@@ -27,4 +27,8 @@ int target_write(const IrProgram *prog, TargetPart part, FILE *out, FILE *err);
    the JS target (src/js.c) calls it too, so both refuse the same programs. */
 int target_capacity(const IrProgram *prog, FILE *err);
 
+/* The largest entry heap of PROG in bytes (wasm.c entry_heap; heap_add
+   saturates). accrue S10 P2: the WGSL heap slice (src/wgsl.c heap_words). */
+uint64_t target_heap(const IrProgram *prog);
+
 #endif

@@ -84,8 +84,23 @@ modules that the gate builds (Q-S9-3, D15). On ES, a run-time `Secret`
 or a zk secret op gives `REFUSE_TARGET_SECRET` (Q-S9-4, Q-S9-5, O4).
 `langc abi` prints JSON (`src/json.c`), and `--text` prints the text
 form (Q-S9-6, Q-S9-7; section 1: Q-S9-1 to Q-S9-7, D15).
-Next: S10 (WGSL: `wgsl.c`, the batch proof check and the batch
-`earned`).
+S10 DONE: the WGSL target (`wgsl.c`), the batch proof check and the batch
+`earned`. S10 ports the cairn-lang 4569c92 `src/wgsl.c` with the
+tranche-lang hunks for `MUL_DIV`, `U256_MUL` and the `Option` word
+(Q-S10-1). `langc build PROG --wgsl OUT.wgsl` writes one WGSL compute
+module. One GPU invocation reads one row and writes one row. The module
+has no trap form, and the status u32 of each out row is always 0 (N4).
+`test/wgsltool.c` runs each module on deno WebGPU (Q-S10-2), and
+`make gpu-check` runs these rows outside the sandbox. The gpu gate runs
+166 differential rows and 32 test/ir rows on WGSL with 0 mismatches.
+It also runs 192 schnorr and OR proof rows (`test/wgsl/batch.lang`), 18
+zk rows over a ring of 2 keys (`test/wgsl/zk.lang`, Q-S10-4, O13, O14)
+and 11 `earned` rows (`test/wgsl/earned.lang`, Q-S10-3, D16), with 0
+mismatches. The Metal backend does not compile 6 entries
+(`test/wgsl/internal.txt`, O12). On WGSL, a run-time `Secret` or a zk
+secret op gives `REFUSE_TARGET_SECRET`, as on ES (section 1: Q-S10-1 to
+Q-S10-4, D16).
+Next: S11 (A1: canonical forms and `langc fmt`).
 
 ## 1. Rulings
 
@@ -205,6 +220,11 @@ Next: S10 (WGSL: `wgsl.c`, the batch proof check and the batch
 | 2026-11-02 | Q-S9-6 TAKEN (a) 11-02, open for the USER: the JSON code is in `src/json.c` and `src/json.h`, as section 7.2 names them. (b) would put it in `src/main.c`, as cairn-lang does. Done in S9 P5. | S9 |
 | 2026-11-02 | Q-S9-7 TAKEN (a) 11-02, open for the USER: the JSON form of an `Option` result is `"result":"option KIND"`, the same word as `--text` (Q-S8-2 (c)). (b) would add a separate `"option":true` key. Done in S9 P5. | S9 |
 | 2026-11-02 | D15 (S9): `build/notraptool --js` checks only the 33 ES modules that the gate builds. The USER can ask to add the other examples. | S9 default |
+| 2026-11-02 | Q-S10-1 RULED (a) 11-02: `src/wgsl.c` is the cairn-lang 4569c92 writer with the tranche-lang hunks for `MUL_DIV`, `U256_MUL` and the `Option` status word. Then the trap flag goes (N4). Done in S10 P1 and P2. | S10 |
+| 2026-11-02 | Q-S10-2 RULED (a) 11-02: `test/wgsltool.c`, a port of the cairn-lang tool, runs each WGSL module on deno through popen. `sh test/gate.sh gpu` (`make gpu-check`) is not a part of `make check`. Each part close runs it once outside the sandbox and needs EXIT 0. Done in S10 P3. | S10 |
+| 2026-11-02 | Q-S10-3 RULED (a) 11-02: the batch `earned` is a flat guest entry for one engagement (`Nat` and `U256` params, an `Option U256` result), with one GPU invocation for each row. The vectors come from `examples/earned.lang`, and each GPU row is compared with Wasm. Done in S10 P6 (`test/wgsl/earned.lang`, D16). | S10 |
+| 2026-11-02 | Q-S10-4 RULED (b) 11-02: the batch proof check covers schnorr and the OR proofs (`test/wgsl/batch.lang`, from cairn-lang) and also zkVerify over a ring list with a fixed capacity (N3). `REFUSE_TARGET_SECRET` holds on `--wgsl`, as on ES. Done in S10 P4 and P5 (`test/wgsl/zk.lang`, O13). | S10 |
+| 2026-11-03 | D16 (S10): `earnedFlat` in `test/wgsl/earned.lang` has one fixed shape, the `hA` shape of `examples/earned.lang` (29 params: 20 `Nat`, 9 `U256`). Policy entry 1 has 2 segments and 2 masses, and policy entry 2 has 1 segment and 1 mass. No grant is paused, and the lower bound is none. A history of another shape needs its own flat entry. | S10 default |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -418,11 +438,22 @@ One front end (the ported kernel) and three writers that read its output:
 |---|---|---|---|
 | Wasm MVP (primary) | cairn-lang `src/wasm.c` and `src/front/lower.c` at its S8 close, else tcc-wasm | the cairn-lang Wasm prelude (i64 limbs, point add and multiply, SHA-256) | every party: client, firm, members, stamp and pay committees |
 | ES module + JSON | tcc-js `src/js.c`, `src/json.c` | BigInt in a JS prelude | client and firm views, public checks of the record. JS is not constant time, so a run-time `Secret` or a zk secret op is refused here (`REFUSE_TARGET_SECRET`, Q-S9-4 (a)). `langc abi` prints the JSON ABI `{"entries":[...]}`: each entry has `name`, `params` (a list of kinds) and `result`. A kind is `nat`, `flag` or `u256`, and an `Option` result is `option KIND` (Q-S9-6 (a), Q-S9-7 (a)). |
-| WGSL compute | tcc-webgpu `src/wgsl.c` | u32 limbs | batch work: check many ballot proofs, `earned` over many engagements |
+| WGSL compute | tcc-webgpu `src/wgsl.c` (cairn-lang 4569c92, Q-S10-1 (a)) | u32 limbs: a word is 2 u32 and a `U256` is 8 u32, low first | batch work: check many ballot proofs, `earned` over many engagements. One invocation reads one row of `NAME_in` and writes one row of `NAME_out`: a status u32 (always 0), then the result. An `Option` result has one more u32 after the status, 0 for none or 1 for some. A run-time `Secret` or a zk secret op is refused here too (`REFUSE_TARGET_SECRET`, Q-S10-4). |
 
 Differential tests: each target runs the same vectors as `langc eval`.
 The kit harnesses stay. No new node, Python or shell harness: new tests
 are guest `.lang` files and C tools.
+
+The WGSL row form: a guest file `test/wgsl/NAME.lang` has its rows in
+`test/wgsl/NAME.txt`. A row is the entry name, then one word for each
+param (a `Nat` word has no suffix, a `U256` word has the suffix `u`).
+`build/wgsltool` (`test/wgsltool.c`) runs the module of
+`langc build --wgsl` on deno WebGPU, one invocation for each row. The
+gate runs the same rows on Wasm and compares each result. `batch.lang`
+checks schnorr and OR proofs (Q-S10-4), `zk.lang` checks a bLSAG ring of
+2 keys (O13), and `earned.lang` runs `earnedAt` in one flat entry
+(Q-S10-3, D16). The rows need a GPU adapter, so `make gpu-check` runs
+them outside the sandbox (Q-S10-2).
 
 ## 8. Agent adoption (A1 to A6)
 
@@ -475,8 +506,8 @@ refusal or a law kills at least one mutant of it.
 | S7 | Part S: Instruction, PayAuth, the record of instructions; L13. | DONE |
 | S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | DONE |
 | S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | DONE |
-| S10 | WGSL: `wgsl.c`, batch proof check and batch `earned`. | NEXT |
-| S11 | A1: canonical forms and `langc fmt`. | |
+| S10 | WGSL: `wgsl.c`, batch proof check and batch `earned`. | DONE |
+| S11 | A1: canonical forms and `langc fmt`. | NEXT |
 | S12 | A2: `langc check --json`. | |
 | S13 | A4: `langc mcp`. | |
 | S14 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table. | |
@@ -524,6 +555,27 @@ refusal or a law kills at least one mutant of it.
 - O11 `govStep` takes the time t as given, so the time order of the
   decision log is the order of the caller, as for the S5 History. A
   later slice can add a time guard (as `later` for the stamps).
+- O12 The Metal backend does not compile 6 entries, so the gpu gate runs
+  no row of them: `rand`, `randWith`, `slot` and `slotWith` of
+  `examples/onehot.lang`, and `dleq` and `dleqWith` of
+  `examples/threshold.lang`. They are the 6 largest entries by inlined
+  size (4 to 8 `ecMul` calls), and cairn-lang lists the same entries.
+  `test/wgsl/internal.txt` lists them. A listed module passes only when
+  its `GPUInternalError` entries are equal to its list and it has no
+  other error line. A new error, or a listed entry that compiles, is a
+  FAIL. The rows of these entries stay open.
+- O13 `zkVerify` does not lower (HOST-LIMIT in `src/front/lower.c`: the
+  IR has no hash-to-point, `lift_x` or square root). S10 P5 checks a
+  guest bLSAG ring on WGSL instead (`test/wgsl/zk.lang`, Q-S10-4 (b)): a
+  ring of K = 2 keys, the H_p points as host params, and a count other
+  than 2 gives none. One link in one entry gives `GPUInternalError` on
+  Metal, so each link is in split entries (`zkLx`, `zkLy`, `zkRx`,
+  `zkRy`, `zkStep`, `zkDig`). A larger ring or a GPU hash-to-point is
+  for a later slice.
+- O14 An entry with a `Prod U256 U256` result is not in the abi, so it
+  has no WGSL row (`bad: no entry or a wrong argument count`). Thus
+  `test/wgsl/zk.lang` gives each coordinate of a point from its own
+  entry.
 
 ## 12. Questions for the USER (S0)
 
