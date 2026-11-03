@@ -5,28 +5,75 @@
 -- still runs each entry. The modules that these defs come from keep a copy
 -- with a literal count (examples/algebra.lang, test/ir/comb.lang,
 -- test/ir/lazy.lang, test/ir/spine.lang, test/wasm/traps.lang).
-def square : (n : Nat) -> Option Nat := fun (n : Nat) => fold (fun (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd a n)) (some 0) n
-def lazy : (n : Nat) -> Nat := fun (n : Nat) => first (fold (fun (p : Prod Nat (Option Nat)) => pair (option 0 (fun (a : Nat) => a) (natAdd (first p) 1)) (bind (second p) (fun (b : Nat) => natAdd b 9223372036854775807))) (pair 0 (some 2)) n)
+def square : (n : Nat) -> Option Nat :=
+  fun (n : Nat) => fold (fun (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd a n)) (some 0) n
+
+def lazy : (n : Nat) -> Nat :=
+  fun (n : Nat) => first (fold (fun (p : Prod Nat (Option Nat)) => pair (option 0 (fun (a : Nat) => a) (natAdd (first p) 1)) (bind (second p) (fun (b : Nat) => natAdd b 9223372036854775807))) (pair 0 (some 2)) n)
+
 def noNats : List Nat := nil
-def upFrom : (n : Nat) -> List Nat := fun (n : Nat) => unfold (fun (k : Nat) => map (fun (j : Nat) => pair k j) (natAdd k 1)) n 1
-def upTrap : (n : Nat) -> List Nat := fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natEq k 3) (bind (natAdd 18446744073709551615 1) (fun (m : Nat) => some (fold (fun (p : Prod Nat Nat) => p) (pair 0 0) m))) (map (fun (j : Nat) => pair k j) (natAdd k 1))) n 1
-def foldOnes : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (fold (fun (acc : List Nat) => cons 2 acc) noNats n))
-def mapUp : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (map (fun (x : Nat) => option 0 (fun (t : Nat) => t) (bind (natAdd x x) (fun (y : Nat) => natAdd y x))) (upFrom n)))
-def bindUp : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (bind (upFrom n) (fun (x : Nat) => cons x (cons 10 noNats))))
-def filterUp : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => natLe x 2) (upFrom n)))
-def trapHead : (n : Nat) -> Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Nat) => x) 0 (upTrap n)
-def trapSum : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (upTrap n))
-def filterTrap : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => flagIf (natEq x 3) (option flagNo (fun (m : Nat) => natEq m 0) (natAdd 18446744073709551615 1)) (natLe x 5)) (upFrom n)))
-def bindTrap : (n : Nat) -> Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Nat) => x) 0 (bind (upFrom n) (fun (x : Nat) => flagIf (natEq x 2) (option noNats (fun (m : Nat) => fold (fun (o : List Nat) => o) noNats m) (natAdd 18446744073709551615 1)) (cons x noNats)))
-def snocs : (n : Nat) -> FreeMon Nat := fun (n : Nat) => fold (fun (m : FreeMon Nat) => fmMul Nat (fmMul Nat m (fmEta Nat 1)) (fmEta Nat 2)) (fmUnit Nat) n
-def conses : (n : Nat) -> FreeMon Nat := fun (n : Nat) => fold (fun (m : FreeMon Nat) => fmMul Nat (fmEta Nat 3) (fmMul Nat (fmEta Nat 4) m)) (fmUnit Nat) n
-def mixes : (n : Nat) -> FreeMon Nat := fun (n : Nat) => fold (fun (m : FreeMon Nat) => fmMul Nat (fmEta Nat 1) (fmMul Nat m (fmEta Nat 2))) (fmUnit Nat) n
-def snocChain : (n : Nat) -> Nat := fun (n : Nat) => fmChain Nat Nat natIsSet (fun (d : Nat) (a : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (snocs n)
-def snocRun : (n : Nat) -> Nat := fun (n : Nat) => fmRun Nat Nat natIsSet (fun (a : Nat) (d : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (snocs n)
-def consChain : (n : Nat) -> Nat := fun (n : Nat) => fmChain Nat Nat natIsSet (fun (d : Nat) (a : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (conses n)
-def consRun : (n : Nat) -> Nat := fun (n : Nat) => fmRun Nat Nat natIsSet (fun (a : Nat) (d : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (conses n)
-def mixChain : (n : Nat) -> Nat := fun (n : Nat) => fmChain Nat Nat natIsSet (fun (d : Nat) (a : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (mixes n)
-def mixRun : (n : Nat) -> Nat := fun (n : Nat) => fmRun Nat Nat natIsSet (fun (a : Nat) (d : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (mixes n)
+
+def upFrom : (n : Nat) -> List Nat :=
+  fun (n : Nat) => unfold (fun (k : Nat) => map (fun (j : Nat) => pair k j) (natAdd k 1)) n 1
+
+def upTrap : (n : Nat) -> List Nat :=
+  fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natEq k 3) (bind (natAdd 18446744073709551615 1) (fun (m : Nat) => some (fold (fun (p : Prod Nat Nat) => p) (pair 0 0) m))) (map (fun (j : Nat) => pair k j) (natAdd k 1))) n 1
+
+def foldOnes : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (fold (fun (acc : List Nat) => cons 2 acc) noNats n))
+
+def mapUp : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (map (fun (x : Nat) => option 0 (fun (t : Nat) => t) (bind (natAdd x x) (fun (y : Nat) => natAdd y x))) (upFrom n)))
+
+def bindUp : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (bind (upFrom n) (fun (x : Nat) => cons x (cons 10 noNats))))
+
+def filterUp : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => natLe x 2) (upFrom n)))
+
+def trapHead : (n : Nat) -> Nat :=
+  fun (n : Nat) => fold (fun (x : Nat) (acc : Nat) => x) 0 (upTrap n)
+
+def trapSum : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (upTrap n))
+
+def filterTrap : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => flagIf (natEq x 3) (option flagNo (fun (m : Nat) => natEq m 0) (natAdd 18446744073709551615 1)) (natLe x 5)) (upFrom n)))
+
+def bindTrap : (n : Nat) -> Nat :=
+  fun (n : Nat) => fold (fun (x : Nat) (acc : Nat) => x) 0 (bind (upFrom n) (fun (x : Nat) => flagIf (natEq x 2) (option noNats (fun (m : Nat) => fold (fun (o : List Nat) => o) noNats m) (natAdd 18446744073709551615 1)) (cons x noNats)))
+
+def snocs : (n : Nat) -> FreeMon Nat :=
+  fun (n : Nat) => fold (fun (m : FreeMon Nat) => fmMul Nat (fmMul Nat m (fmEta Nat 1)) (fmEta Nat 2)) (fmUnit Nat) n
+
+def conses : (n : Nat) -> FreeMon Nat :=
+  fun (n : Nat) => fold (fun (m : FreeMon Nat) => fmMul Nat (fmEta Nat 3) (fmMul Nat (fmEta Nat 4) m)) (fmUnit Nat) n
+
+def mixes : (n : Nat) -> FreeMon Nat :=
+  fun (n : Nat) => fold (fun (m : FreeMon Nat) => fmMul Nat (fmEta Nat 1) (fmMul Nat m (fmEta Nat 2))) (fmUnit Nat) n
+
+def snocChain : (n : Nat) -> Nat :=
+  fun (n : Nat) => fmChain Nat Nat natIsSet (fun (d : Nat) (a : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (snocs n)
+
+def snocRun : (n : Nat) -> Nat :=
+  fun (n : Nat) => fmRun Nat Nat natIsSet (fun (a : Nat) (d : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (snocs n)
+
+def consChain : (n : Nat) -> Nat :=
+  fun (n : Nat) => fmChain Nat Nat natIsSet (fun (d : Nat) (a : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (conses n)
+
+def consRun : (n : Nat) -> Nat :=
+  fun (n : Nat) => fmRun Nat Nat natIsSet (fun (a : Nat) (d : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (conses n)
+
+def mixChain : (n : Nat) -> Nat :=
+  fun (n : Nat) => fmChain Nat Nat natIsSet (fun (d : Nat) (a : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (mixes n)
+
+def mixRun : (n : Nat) -> Nat :=
+  fun (n : Nat) => fmRun Nat Nat natIsSet (fun (a : Nat) (d : Nat) => option 0 (fun (r : Nat) => r) (bind (natAdd d d) (fun (e : Nat) => bind (natAdd e d) (fun (f : Nat) => natAdd f a)))) 0 (mixes n)
+
 def snocLen : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (k : Nat) => k) (len Nat (snocs n))
-def lazyAdd : (n : Nat) -> (x : U256) -> (y : U256) -> Nat := fun n x y => first (fold (fun (p : Prod Nat (Option (Prod U256 U256))) => pair (option 0 (fun (m : Nat) => m) (natAdd (first p) 1)) (bind (second p) (fun (q : Prod U256 U256) => ecAdd q (pair x y)))) (pair 0 (some (pair 0u 0u))) n)
-def lazyMul : (n : Nat) -> (x : U256) -> (y : U256) -> Nat := fun n x y => first (fold (fun (p : Prod Nat (Option (Prod U256 U256))) => pair (option 0 (fun (m : Nat) => m) (natAdd (first p) 1)) (bind (second p) (fun (q : Prod U256 U256) => ecMul (pair x y) (first q)))) (pair 0 (some (pair 0u 0u))) n)
+
+def lazyAdd : (n : Nat) -> (x : U256) -> (y : U256) -> Nat :=
+  fun n x y => first (fold (fun (p : Prod Nat (Option (Prod U256 U256))) => pair (option 0 (fun (m : Nat) => m) (natAdd (first p) 1)) (bind (second p) (fun (q : Prod U256 U256) => ecAdd q (pair x y)))) (pair 0 (some (pair 0u 0u))) n)
+
+def lazyMul : (n : Nat) -> (x : U256) -> (y : U256) -> Nat :=
+  fun n x y => first (fold (fun (p : Prod Nat (Option (Prod U256 U256))) => pair (option 0 (fun (m : Nat) => m) (natAdd (first p) 1)) (bind (second p) (fun (q : Prod U256 U256) => ecMul (pair x y) (first q)))) (pair 0 (some (pair 0u 0u))) n)

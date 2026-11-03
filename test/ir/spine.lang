@@ -7,20 +7,40 @@
 -- foldOnes has 4 items. The forms with a length from n are in
 -- test/ir/capacity.lang.
 def noNats : List Nat := nil
+
 -- The list 1, 2, ..., n.
-def upFrom : (n : Nat) -> List Nat := fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natLe k n) (map (fun (j : Nat) => pair k j) (natAdd k 1)) none) 6 1
+def upFrom : (n : Nat) -> List Nat :=
+  fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natLe k n) (map (fun (j : Nat) => pair k j) (natAdd k 1)) none) 6 1
+
 -- At seed 3 the step takes apart an overflow (natAdd gives none), so the
 -- step gives none and the list stops after 1 and 2.
-def upTrap : (n : Nat) -> List Nat := fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natLe k n) (flagIf (natEq k 3) (bind (natAdd 18446744073709551615 1) (fun (m : Nat) => some (fold (fun (p : Prod Nat Nat) => p) (pair 0 0) m))) (map (fun (j : Nat) => pair k j) (natAdd k 1))) none) 6 1
-def foldOnes : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (fold (fun (acc : List Nat) => cons n acc) noNats 4))
-def mapUp : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (map (fun (x : Nat) => option 0 (fun (t : Nat) => t) (bind (natAdd x x) (fun (y : Nat) => natAdd y x))) (upFrom n)))
-def bindUp : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (bind (upFrom n) (fun (x : Nat) => cons x (cons 10 noNats))))
-def filterUp : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => natLe x 2) (upFrom n)))
-def trapHead : (n : Nat) -> Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Nat) => x) 0 (upTrap n)
-def trapSum : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (upTrap n))
+def upTrap : (n : Nat) -> List Nat :=
+  fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natLe k n) (flagIf (natEq k 3) (bind (natAdd 18446744073709551615 1) (fun (m : Nat) => some (fold (fun (p : Prod Nat Nat) => p) (pair 0 0) m))) (map (fun (j : Nat) => pair k j) (natAdd k 1))) none) 6 1
+
+def foldOnes : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (fold (fun (acc : List Nat) => cons n acc) noNats 4))
+
+def mapUp : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (map (fun (x : Nat) => option 0 (fun (t : Nat) => t) (bind (natAdd x x) (fun (y : Nat) => natAdd y x))) (upFrom n)))
+
+def bindUp : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (bind (upFrom n) (fun (x : Nat) => cons x (cons 10 noNats))))
+
+def filterUp : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => natLe x 2) (upFrom n)))
+
+def trapHead : (n : Nat) -> Nat :=
+  fun (n : Nat) => fold (fun (x : Nat) (acc : Nat) => x) 0 (upTrap n)
+
+def trapSum : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (upTrap n))
+
 -- The test of item 3 overflows (natAdd gives none, and option gives flagNo),
 -- so the filter drops item 3.
-def filterTrap : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => flagIf (natEq x 3) (option flagNo (fun (m : Nat) => natEq m 0) (natAdd 18446744073709551615 1)) (natLe x 5)) (upFrom n)))
+def filterTrap : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (filter (fun (x : Nat) => flagIf (natEq x 3) (option flagNo (fun (m : Nat) => natEq m 0) (natAdd 18446744073709551615 1)) (natLe x 5)) (upFrom n)))
+
 -- The result of F for item 2 takes apart an overflow (natAdd gives none),
 -- so F gives nil for item 2.
-def bindTrap : (n : Nat) -> Nat := fun (n : Nat) => fold (fun (x : Nat) (acc : Nat) => x) 0 (bind (upFrom n) (fun (x : Nat) => flagIf (natEq x 2) (option noNats (fun (m : Nat) => fold (fun (o : List Nat) => o) noNats m) (natAdd 18446744073709551615 1)) (cons x noNats)))
+def bindTrap : (n : Nat) -> Nat :=
+  fun (n : Nat) => fold (fun (x : Nat) (acc : Nat) => x) 0 (bind (upFrom n) (fun (x : Nat) => flagIf (natEq x 2) (option noNats (fun (m : Nat) => fold (fun (o : List Nat) => o) noNats m) (natAdd 18446744073709551615 1)) (cons x noNats)))

@@ -100,7 +100,18 @@ mismatches. The Metal backend does not compile 6 entries
 (`test/wgsl/internal.txt`, O12). On WGSL, a run-time `Secret` or a zk
 secret op gives `REFUSE_TARGET_SECRET`, as on ES (section 1: Q-S10-1 to
 Q-S10-4, D16).
-Next: S11 (A1: canonical forms and `langc fmt`).
+S11 DONE: A1, canonical forms and `langc fmt`. S11 ports the
+cairn-lang a56e602 printer (`src/front/fmt.c`). `langc fmt PROG` prints
+the canonical form, and `langc fmt PROG --check` exits 1 when the file
+is not canonical (Q-S11-4). The layout, the spellings and the comments
+follow the cairn-lang rules (Q-S11-1 to Q-S11-3). S11 makes 171 repo
+files canonical with `langc fmt`. For each file, the dump of the new
+text is the same as the dump of the old text. The fmt block of the gate
+runs 293 canonical rows, 301 round trip rows, 8 fmt rows and 8 check
+rows. A witness row (`test/fmt/piname.lang`, Q-S11-6) shows that the
+dump sees each Pi binder name. The `pick` row reads the def line and
+its indented lines (Q-S11-5; section 1: Q-S11-1 to Q-S11-6).
+Next: S12 (A2: `langc check --json`).
 
 ## 1. Rulings
 
@@ -225,6 +236,12 @@ Next: S11 (A1: canonical forms and `langc fmt`).
 | 2026-11-02 | Q-S10-3 RULED (a) 11-02: the batch `earned` is a flat guest entry for one engagement (`Nat` and `U256` params, an `Option U256` result), with one GPU invocation for each row. The vectors come from `examples/earned.lang`, and each GPU row is compared with Wasm. Done in S10 P6 (`test/wgsl/earned.lang`, D16). | S10 |
 | 2026-11-02 | Q-S10-4 RULED (b) 11-02: the batch proof check covers schnorr and the OR proofs (`test/wgsl/batch.lang`, from cairn-lang) and also zkVerify over a ring list with a fixed capacity (N3). `REFUSE_TARGET_SECRET` holds on `--wgsl`, as on ES. Done in S10 P4 and P5 (`test/wgsl/zk.lang`, O13). | S10 |
 | 2026-11-03 | D16 (S10): `earnedFlat` in `test/wgsl/earned.lang` has one fixed shape, the `hA` shape of `examples/earned.lang` (29 params: 20 `Nat`, 9 `U256`). Policy entry 1 has 2 segments and 2 masses, and policy entry 2 has 1 segment and 1 mass. No grant is paused, and the lower bound is none. A history of another shape needs its own flat entry. | S10 default |
+| 2026-11-03 | Q-S11-1 RULED (a) 11-03: the `langc fmt` layout is the cairn-lang layout. The line width is 100. A line breaks only after `:=`, and the body is at a 2-space indent. Each family constructor is on its own line. An axiom never breaks. Done in S11. | S11 |
+| 2026-11-03 | Q-S11-2 RULED (a) 11-03: the canonical spellings are the cairn-lang set: `Sigma (x : A) B`, one name in each binder group, one `fun` for a chain of lambdas, the minimum parentheses, a word in decimal below 2^64 and else in lower-case `0x` hex, and an `Addr` as `0x` and 40 lower-case hex digits. The parser keeps the second forms. The gate makes each repo file canonical, and `test/fmt/refused.txt` lists the 18 test files that `langc fmt` refuses. Done in S11. | S11 |
+| 2026-11-03 | Q-S11-3 RULED (a) 11-03: `langc fmt` keeps each comment on its own line at column 0. A comment inside a decl moves above the decl. Done in S11. | S11 |
+| 2026-11-03 | Q-S11-4 RULED (a) 11-03: the CLI is `langc fmt PROG [--check]` (section 8, A1). Done in S11. | S11 |
+| 2026-11-03 | Q-S11-5 RULED (a) 11-03: the `pick` row of `test/gate.sh` reads the def line and its indented lines. After the repo rewrite, a def body can be on the indented lines after the def line. Done in S11. | S11 |
+| 2026-11-03 | Q-S11-6 RULED (a) 11-03: the fmt block of `test/gate.sh` has a witness row. `test/fmt/piname.lang` is `test/fmt/lambda.canon` with one Pi binder name changed, and the two dumps must not be the same. The row shows that the dump sees each Pi binder name. Done in S11. | S11 |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -462,7 +479,7 @@ it fits.
 
 | Item | Deliverable | Gate |
 |---|---|---|
-| A1 | One canonical form for each operation: no aliases, no second syntax. `langc fmt FILE` prints the canonical form. `langc fmt --check` exits 1 when a file is not canonical. | `fmt` is idempotent; `parse (fmt x)` has the same core term as `x`; every example and test file is canonical. |
+| A1 | One canonical form for each operation: no aliases, no second syntax. `langc fmt PROG` prints the canonical form. `langc fmt PROG --check` exits 1 when a file is not canonical (Q-S11-4). | `fmt` is idempotent; `parse (fmt x)` has the same core term as `x`; every example and test file is canonical. |
 | A2 | `langc check --json FILE`: one JSON object with `diagnostics` (code, span, message, `fix`: a concrete edit) and `progress` (`parsed`, `typed`, `laws_discharged`, `laws_total`). Schema in `docs/CHECK-JSON.md`. | Rows in `test/json/` with the expected JSON, byte equal. Each refusal code has a `fix` row. |
 | A3 | `SKILL.md` with five graded examples (G1 to G5). Each example is a file in `examples/skill/`, and SKILL.md quotes it. | The gate checks each example and checks that the SKILL.md block and the file are byte equal. |
 | A4 | `langc mcp`: an MCP server over stdio (JSON-RPC 2.0, one message on each line), in C, built by TinyCC into the same `langc`. Tools: `check`, `fmt`, `eval`, `build` (with a target), `explain` (a refusal code). The MCP spec version is pinned in `docs/MCP.md`. | A C tool `test/mcptool.c` sends `test/mcp/*.in` and compares the replies with `*.out`. |
@@ -507,8 +524,8 @@ refusal or a law kills at least one mutant of it.
 | S8 | Wasm: lowering, prelude, N2 to N4, `test/notraptool.c`, differential vectors. | DONE |
 | S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | DONE |
 | S10 | WGSL: `wgsl.c`, batch proof check and batch `earned`. | DONE |
-| S11 | A1: canonical forms and `langc fmt`. | NEXT |
-| S12 | A2: `langc check --json`. | |
+| S11 | A1: canonical forms and `langc fmt`. | DONE |
+| S12 | A2: `langc check --json`. | NEXT |
 | S13 | A4: `langc mcp`. | |
 | S14 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table. | |
 | S15 | A6: the token comparison. | |

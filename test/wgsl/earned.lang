@@ -10,31 +10,24 @@
 -- so a zero divisor gives none.
 def plusO : Option U256 -> Option U256 -> Option U256 :=
   fun (a : Option U256) (b : Option U256) => bind a (fun (x : U256) => bind b (fun (y : U256) => u256Add x y))
+
 def segT : Nat -> Nat -> U256 -> U256 -> Nat -> Option U256 :=
   fun (f : Nat) (u : Nat) (n : U256) (d : U256) (x : Nat) => bind (natSub (natMin (natMax x f) u) f) (fun (k : Nat) => bind (nonZero d) (fun (z : NonZero U256) => mulDiv n (toU256 k) z))
+
 def massT : Nat -> U256 -> Nat -> Option U256 :=
   fun (m : Nat) (a : U256) (x : Nat) => flagIf (natLe m x) (some a) (some 0u)
+
 def gA : Nat -> Nat -> U256 -> U256 -> Nat -> Nat -> U256 -> U256 -> Nat -> U256 -> Nat -> U256 -> Nat -> Option U256 :=
-  fun (f1 : Nat) (u1 : Nat) (n1 : U256) (d1 : U256) (f2 : Nat) (u2 : Nat) (n2 : U256) (d2 : U256) (m1 : Nat) (a1 : U256) (m2 : Nat) (a2 : U256) (x : Nat) =>
-    plusO (plusO (plusO (segT f1 u1 n1 d1 x) (segT f2 u2 n2 d2 x)) (massT m1 a1 x)) (massT m2 a2 x)
+  fun (f1 : Nat) (u1 : Nat) (n1 : U256) (d1 : U256) (f2 : Nat) (u2 : Nat) (n2 : U256) (d2 : U256) (m1 : Nat) (a1 : U256) (m2 : Nat) (a2 : U256) (x : Nat) => plusO (plusO (plusO (segT f1 u1 n1 d1 x) (segT f2 u2 n2 d2 x)) (massT m1 a1 x)) (massT m2 a2 x)
+
 def gB : Nat -> Nat -> U256 -> U256 -> Nat -> U256 -> Nat -> Option U256 :=
   fun (f : Nat) (u : Nat) (n : U256) (d : U256) (m : Nat) (a : U256) (x : Nat) => plusO (segT f u n d x) (massT m a x)
+
 def accA : Nat -> Nat -> Nat -> Flag -> Nat -> Nat -> U256 -> U256 -> Nat -> Nat -> U256 -> U256 -> Nat -> U256 -> Nat -> U256 -> Option U256 :=
-  fun (s : Nat) (lo : Nat) (hi : Nat) (closed : Flag) (f1 : Nat) (u1 : Nat) (n1 : U256) (d1 : U256) (f2 : Nat) (u2 : Nat) (n2 : U256) (d2 : U256) (m1 : Nat) (a1 : U256) (m2 : Nat) (a2 : U256) =>
-    flagIf (flagIf closed (natLe lo hi) (flagIf (natLe hi lo) flagNo flagYes))
-      (bind (natSub hi s) (fun (dh : Nat) => flagIf closed (gA f1 u1 n1 d1 f2 u2 n2 d2 m1 a1 m2 a2 dh)
-        (bind (gA f1 u1 n1 d1 f2 u2 n2 d2 m1 a1 m2 a2 dh) (fun (gh : U256) => bind (natSub lo s) (fun (dl : Nat) => bind (gA f1 u1 n1 d1 f2 u2 n2 d2 m1 a1 m2 a2 dl) (fun (gl : U256) => u256Sub gh gl))))))
-      (some 0u)
+  fun (s : Nat) (lo : Nat) (hi : Nat) (closed : Flag) (f1 : Nat) (u1 : Nat) (n1 : U256) (d1 : U256) (f2 : Nat) (u2 : Nat) (n2 : U256) (d2 : U256) (m1 : Nat) (a1 : U256) (m2 : Nat) (a2 : U256) => flagIf (flagIf closed (natLe lo hi) (flagIf (natLe hi lo) flagNo flagYes)) (bind (natSub hi s) (fun (dh : Nat) => flagIf closed (gA f1 u1 n1 d1 f2 u2 n2 d2 m1 a1 m2 a2 dh) (bind (gA f1 u1 n1 d1 f2 u2 n2 d2 m1 a1 m2 a2 dh) (fun (gh : U256) => bind (natSub lo s) (fun (dl : Nat) => bind (gA f1 u1 n1 d1 f2 u2 n2 d2 m1 a1 m2 a2 dl) (fun (gl : U256) => u256Sub gh gl)))))) (some 0u)
+
 def accB : Nat -> Nat -> Nat -> Flag -> Nat -> Nat -> U256 -> U256 -> Nat -> U256 -> Option U256 :=
-  fun (s : Nat) (lo : Nat) (hi : Nat) (closed : Flag) (f : Nat) (u : Nat) (n : U256) (d : U256) (m : Nat) (a : U256) =>
-    flagIf (flagIf closed (natLe lo hi) (flagIf (natLe hi lo) flagNo flagYes))
-      (bind (natSub hi s) (fun (dh : Nat) => flagIf closed (gB f u n d m a dh)
-        (bind (gB f u n d m a dh) (fun (gh : U256) => bind (natSub lo s) (fun (dl : Nat) => bind (gB f u n d m a dl) (fun (gl : U256) => u256Sub gh gl))))))
-      (some 0u)
+  fun (s : Nat) (lo : Nat) (hi : Nat) (closed : Flag) (f : Nat) (u : Nat) (n : U256) (d : U256) (m : Nat) (a : U256) => flagIf (flagIf closed (natLe lo hi) (flagIf (natLe hi lo) flagNo flagYes)) (bind (natSub hi s) (fun (dh : Nat) => flagIf closed (gB f u n d m a dh) (bind (gB f u n d m a dh) (fun (gh : U256) => bind (natSub lo s) (fun (dl : Nat) => bind (gB f u n d m a dl) (fun (gl : U256) => u256Sub gh gl)))))) (some 0u)
+
 def earnedFlat : Nat -> Nat -> Nat -> Nat -> Nat -> Nat -> Nat -> Nat -> Nat -> U256 -> U256 -> Nat -> Nat -> U256 -> U256 -> Nat -> U256 -> Nat -> U256 -> Nat -> Nat -> Nat -> Nat -> Nat -> U256 -> U256 -> Nat -> U256 -> Nat -> Option U256 :=
-  fun (sE : Nat) (eE : Nat) (sg : Nat) (cn : Nat) (ti1 : Nat) (sP1 : Nat) (eP1 : Nat) (f1 : Nat) (u1 : Nat) (n1 : U256) (d1 : U256) (f2 : Nat) (u2 : Nat) (n2 : U256) (d2 : U256) (m1 : Nat) (a1 : U256) (m2 : Nat) (a2 : U256) (ti2 : Nat) (sP2 : Nat) (eP2 : Nat) (f3 : Nat) (u3 : Nat) (n3 : U256) (d3 : U256) (m3 : Nat) (a3 : U256) (t : Nat) =>
-    plusO
-      (accB sE (natMax (natMax ti2 sE) (natMax sP2 sg)) (natMin (natMin (natMin eE eP2) t) cn)
-        (flagIf (natLe sE ti2) flagNo (flagIf (natLe sP2 sE) (natLe sg sE) flagNo)) f3 u3 n3 d3 m3 a3)
-      (accA sE (natMax (natMax ti1 sE) (natMax sP1 sg)) (natMin (natMin (natMin (natMin eE eP1) t) ti2) cn)
-        (flagIf (natLe sE ti1) flagNo (flagIf (natLe sP1 sE) (natLe sg sE) flagNo)) f1 u1 n1 d1 f2 u2 n2 d2 m1 a1 m2 a2)
+  fun (sE : Nat) (eE : Nat) (sg : Nat) (cn : Nat) (ti1 : Nat) (sP1 : Nat) (eP1 : Nat) (f1 : Nat) (u1 : Nat) (n1 : U256) (d1 : U256) (f2 : Nat) (u2 : Nat) (n2 : U256) (d2 : U256) (m1 : Nat) (a1 : U256) (m2 : Nat) (a2 : U256) (ti2 : Nat) (sP2 : Nat) (eP2 : Nat) (f3 : Nat) (u3 : Nat) (n3 : U256) (d3 : U256) (m3 : Nat) (a3 : U256) (t : Nat) => plusO (accB sE (natMax (natMax ti2 sE) (natMax sP2 sg)) (natMin (natMin (natMin eE eP2) t) cn) (flagIf (natLe sE ti2) flagNo (flagIf (natLe sP2 sE) (natLe sg sE) flagNo)) f3 u3 n3 d3 m3 a3) (accA sE (natMax (natMax ti1 sE) (natMax sP1 sg)) (natMin (natMin (natMin (natMin eE eP1) t) ti2) cn) (flagIf (natLe sE ti1) flagNo (flagIf (natLe sP1 sE) (natLe sg sE) flagNo)) f1 u1 n1 d1 f2 u2 n2 d2 m1 a1 m2 a2)

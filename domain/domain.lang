@@ -2,83 +2,95 @@
 -- orbit-lang S2). The DAO prelude comes in S7.
 -- Each family, constructor, field and def name here becomes a core name
 -- (rule R4). Only this file can declare a family (rule R1).
-
 -- Kan library (ported from sealed-lang, R6 (a)): transport, subst, J and the
 -- J rule as a path (JRefl, sealed-lang O11), all by transp.
 def transport : (X : Type 0) -> (Y : Type 0) -> Path (Type 0) X Y -> X -> Y :=
-  fun (X : Type 0) => fun (Y : Type 0) => fun (p : Path (Type 0) X Y) => fun (a : X) => transp (fun (i : I) => p @ i) i0 a
+  fun (X : Type 0) (Y : Type 0) (p : Path (Type 0) X Y) (a : X) => transp (fun (i : I) => p @ i) i0 a
+
 def subst : (A : Type 0) -> (B : A -> Type 0) -> (x : A) -> (y : A) -> Path A x y -> B x -> B y :=
-  fun (A : Type 0) => fun (B : A -> Type 0) => fun (x : A) => fun (y : A) => fun (p : Path A x y) => fun (b : B x) =>
-    transp (fun (i : I) => B (p @ i)) i0 b
+  fun (A : Type 0) (B : A -> Type 0) (x : A) (y : A) (p : Path A x y) (b : B x) => transp (fun (i : I) => B (p @ i)) i0 b
+
 def J : (A : Type 0) -> (x : A) -> (P : (y : A) -> Path A x y -> Type 0) -> P x refl -> (y : A) -> (p : Path A x y) -> P y p :=
-  fun (A : Type 0) => fun (x : A) => fun (P : (y : A) -> Path A x y -> Type 0) => fun (d : P x refl) => fun (y : A) => fun (p : Path A x y) =>
-    transp (fun (i : I) => P (p @ i) (fun (j : I) => p @ (i /\ j))) i0 d
+  fun (A : Type 0) (x : A) (P : (y : A) -> Path A x y -> Type 0) (d : P x refl) (y : A) (p : Path A x y) => transp (fun (i : I) => P (p @ i) (fun (j : I) => p @ (i /\ j))) i0 d
+
 def JRefl : (A : Type 0) -> (x : A) -> (P : (y : A) -> Path A x y -> Type 0) -> (d : P x refl) -> Path (P x refl) (J A x P d x refl) d :=
-  fun (A : Type 0) => fun (x : A) => fun (P : (y : A) -> Path A x y -> Type 0) => fun (d : P x refl) =>
-    fun (i : I) => transp (fun (_ : I) => P x refl) i d
+  fun (A : Type 0) (x : A) (P : (y : A) -> Path A x y -> Type 0) (d : P x refl) (i : I) => transp (fun (_ : I) => P x refl) i d
+
 -- Path composition (S2b, R2 (a)): trans by hcomp, with the tube x on ~j
 -- and q on j, and the base p.
 def trans : (A : Type 0) -> (x : A) -> (y : A) -> (z : A) -> Path A x y -> Path A y z -> Path A x z :=
-  fun (A : Type 0) => fun (x : A) => fun (y : A) => fun (z : A) => fun (p : Path A x y) => fun (q : Path A y z) =>
-    fun (j : I) => hcomp A (~j \/ j) (fun (i : I) => [ ~j -> x, j -> q @ i ]) (p @ j)
+  fun (A : Type 0) (x : A) (y : A) (z : A) (p : Path A x y) (q : Path A y z) (j : I) => hcomp A (~j \/ j) (fun (i : I) => [ ~j -> x, j -> q @ i ]) (p @ j)
+
 -- Propositions and sets (S4b): the squash1 fold case has the type
 -- isProp RES, the squash0 fold case the type isSet RES.
-def isProp : (A : Type 0) -> Type 0 :=
-  fun (A : Type 0) => (x : A) -> (y : A) -> Path A x y
-def isSet : (A : Type 0) -> Type 0 :=
-  fun (A : Type 0) => (x : A) -> (y : A) -> isProp (Path A x y)
+def isProp : (A : Type 0) -> Type 0 := fun (A : Type 0) => (x : A) -> (y : A) -> Path A x y
+
+def isSet : (A : Type 0) -> Type 0 := fun (A : Type 0) => (x : A) -> (y : A) -> isProp (Path A x y)
+
 -- The function set (S5, Q-S5-6 (b)): when B is a set, A -> B is a set,
 -- point by point. The carriers natIsSet, u256IsSet and flagIsSet are
 -- trusted constants (docs/VALIDATION.md).
 def isSetFun : (A : Type 0) -> (B : Type 0) -> isSet B -> isSet (A -> B) :=
-  fun (A : Type 0) (B : Type 0) (s : isSet B) (f : A -> B) (g : A -> B) (p : Path (A -> B) f g) (q : Path (A -> B) f g) =>
-    fun (i : I) => fun (j : I) => fun (a : A) => (s (f a) (g a) (fun (k : I) => (p @ k) a) (fun (k : I) => (q @ k) a) @ i) @ j
+  fun (A : Type 0) (B : Type 0) (s : isSet B) (f : A -> B) (g : A -> B) (p : Path (A -> B) f g) (q : Path (A -> B) f g) (i : I) (j : I) (a : A) => s (f a) (g a) (fun (k : I) => (p @ k) a) (fun (k : I) => (q @ k) a) @ i @ j
 
 -- The circle, a higher inductive family (S4a, R1 (a)). The path
 -- constructor loop goes from base to base.
 family S1 := base | loop (i : I) [ ~i -> base, i -> base ]
+
 -- The propositional truncation (S4b, R5 (a)): squash1 is a path between
 -- any two points, so the squash1 fold case has the type isProp RES. A
 -- field name is a core name (rule R4), so the names have a family prefix.
-family Trunc1 (A : Type 0) := trunc1 (truncOf : A) | squash1 (squashFrom : Trunc1 A) (squashTo : Trunc1 A) (i : I) [ ~i -> squashFrom, i -> squashTo ]
+family Trunc1 (A : Type 0) := trunc1 (truncOf : A)
+  | squash1 (squashFrom : Trunc1 A) (squashTo : Trunc1 A) (i : I) [ ~i -> squashFrom, i -> squashTo ]
+
 -- The set truncation (S4c, R5 (a)): squash0 is a square between any two
 -- paths with the same ends, so the squash0 fold case has the type isSet
 -- RES (R8 (a)). The case binds the folded ends and the folded paths.
-family Trunc0 (A : Type 0) := trunc0 (trunc0Of : A) | squash0 (squash0From : Trunc0 A) (squash0To : Trunc0 A) (squash0Left : Path (Trunc0 A) squash0From squash0To) (squash0Right : Path (Trunc0 A) squash0From squash0To) (i : I) (j : I) [ ~i -> squash0Left @ j, i -> squash0Right @ j, ~j -> squash0From, j -> squash0To ]
+family Trunc0 (A : Type 0) := trunc0 (trunc0Of : A)
+  | squash0 (squash0From : Trunc0 A) (squash0To : Trunc0 A) (squash0Left : Path (Trunc0 A) squash0From squash0To) (squash0Right : Path (Trunc0 A) squash0From squash0To) (i : I) (j : I) [ ~i -> squash0Left @ j, i -> squash0Right @ j, ~j -> squash0From, j -> squash0To ]
+
 -- The set quotient Quot went in S3 (rule R1: its relation parameter is a
 -- value parameter, so it is not a cell signature). The quotients of the
 -- DAO are families with no parameter: Orbit, Parity and OrbitN.
 -- The size index (S6, O24, USER ruling S6): a domain family, so Nat
 -- stays internal.
 family Size := sz0 | szS (szPred : Size)
+
 -- The stream comonad (S4, O28): the cofree comonad of the cocell
 -- signature with the observation sHead and the cofield sTail. The checker
 -- elaborates it (choice (ii)) to the positions Stream.pos, Stream A :=
 -- Stream.pos -> A, the destructors sHead and sTail, the walk Stream.walk,
 -- the corecursor sCorec and the bisimulation principle StreamBisim.
 cofamily Stream (A : Type 0) := sCorec (sHead : A) (sTail : Stream A)
+
 -- Extend and duplicate: sExtend A B f is the corecursor at the seed type
 -- Stream A, with the observation f and the step sTail A.
 def sExtend : (A : Type 0) -> (B : Type 0) -> (Stream A -> B) -> Stream A -> Stream B :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : Stream A -> B) => sCorec B (Stream A) f (sTail A)
+  fun (A : Type 0) (B : Type 0) (f : Stream A -> B) => sCorec B (Stream A) f (sTail A)
+
 def sDuplicate : (A : Type 0) -> Stream A -> Stream (Stream A) :=
   fun (A : Type 0) => sExtend A (Stream A) (fun (x : Stream A) => x)
+
 -- The parity quotient of Size (S3, design C 2b, USER ruling Q-S3-8 (a)):
 -- sizeEven s is sz0 for an even s and szS sz0 for an odd s, and parityEq
 -- is a path from parityOf a to parityOf b when a and b have the same
 -- parity. The relation is in the field type, so Parity has no parameter.
 -- paritySquash has the squash0 shape, so its fold case has the type isSet
 -- RES.
-def sizeFlip : Size -> Size := fun (s : Size) => elim (fun (t : Size) => Size) (szS sz0) (fun (k : Size) (ih : Size) => sz0) s
+def sizeFlip : Size -> Size :=
+  fun (s : Size) => elim (fun (t : Size) => Size) (szS sz0) (fun (k : Size) (ih : Size) => sz0) s
+
 def sizeEven : Size -> Size := fun (s : Size) => fold sz0 (fun (r : Size) => sizeFlip r) s
+
 family Parity := parityOf (parityAt : Size)
   | parityEq (parityA : Size) (parityB : Size) (parityR : Path Size (sizeEven parityA) (sizeEven parityB)) (i : I) [ ~i -> parityOf parityA, i -> parityOf parityB ]
-  | paritySquash (parityFrom : Parity) (parityTo : Parity) (parityLeft : Path Parity parityFrom parityTo) (parityRight : Path Parity parityFrom parityTo) (i : I) (j : I)
-    [ ~i -> parityLeft @ j, i -> parityRight @ j, ~j -> parityFrom, j -> parityTo ]
+  | paritySquash (parityFrom : Parity) (parityTo : Parity) (parityLeft : Path Parity parityFrom parityTo) (parityRight : Path Parity parityFrom parityTo) (i : I) (j : I) [ ~i -> parityLeft @ j, i -> parityRight @ j, ~j -> parityFrom, j -> parityTo ]
+
 -- The empty family (S10 B1, USER ruling Q-S10-9 (a)): one constructor and
 -- no base case, so no closed value. The parser needs a constructor, so
 -- Empty is not a family with no constructor (the Q-S10-4 (a) probe).
 family Empty := emptyLoop (emptyOf : Empty)
+
 -- The bag (S3, design C section 3, rule R1): the free commutative monoid
 -- on A. bagOf is the generator, bagUnit the unit and bagOp the operation;
 -- bagAssoc, bagComm and bagUnitL are the monoid paths (the right unit
@@ -89,14 +101,11 @@ family Empty := emptyLoop (emptyOf : Empty)
 family Bag (A : Type 0) := bagOf (bagGen : A)
   | bagUnit
   | bagOp (opLeft : Bag A) (opRight : Bag A)
-  | bagAssoc (assocX : Bag A) (assocY : Bag A) (assocZ : Bag A) (i : I)
-    [ ~i -> bagOp A (bagOp A assocX assocY) assocZ, i -> bagOp A assocX (bagOp A assocY assocZ) ]
-  | bagComm (commX : Bag A) (commY : Bag A) (i : I)
-    [ ~i -> bagOp A commX commY, i -> bagOp A commY commX ]
-  | bagUnitL (unitX : Bag A) (i : I)
-    [ ~i -> bagOp A (bagUnit A) unitX, i -> unitX ]
-  | bagSquash (bagFrom : Bag A) (bagTo : Bag A) (bagLeft : Path (Bag A) bagFrom bagTo) (bagRight : Path (Bag A) bagFrom bagTo) (i : I) (j : I)
-    [ ~i -> bagLeft @ j, i -> bagRight @ j, ~j -> bagFrom, j -> bagTo ]
+  | bagAssoc (assocX : Bag A) (assocY : Bag A) (assocZ : Bag A) (i : I) [ ~i -> bagOp A (bagOp A assocX assocY) assocZ, i -> bagOp A assocX (bagOp A assocY assocZ) ]
+  | bagComm (commX : Bag A) (commY : Bag A) (i : I) [ ~i -> bagOp A commX commY, i -> bagOp A commY commX ]
+  | bagUnitL (unitX : Bag A) (i : I) [ ~i -> bagOp A (bagUnit A) unitX, i -> unitX ]
+  | bagSquash (bagFrom : Bag A) (bagTo : Bag A) (bagLeft : Path (Bag A) bagFrom bagTo) (bagRight : Path (Bag A) bagFrom bagTo) (i : I) (j : I) [ ~i -> bagLeft @ j, i -> bagRight @ j, ~j -> bagFrom, j -> bagTo ]
+
 -- The free monoid (S3, USER ruling Q-S3-5 (a), rule R1): the cell monad
 -- of the monoid signature, with the generator fmEta and a set squash. The
 -- cons list List is kit only (the host ABI); a guest List gives REFUSE_CELL,
@@ -104,93 +113,93 @@ family Bag (A : Type 0) := bagOf (bagGen : A)
 family FreeMon (A : Type 0) := fmEta (fmEtaOf : A)
   | fmUnit
   | fmMul (fmLeft : FreeMon A) (fmRight : FreeMon A)
-  | fmAssoc (fmAssocX : FreeMon A) (fmAssocY : FreeMon A) (fmAssocZ : FreeMon A) (i : I)
-    [ ~i -> fmMul A (fmMul A fmAssocX fmAssocY) fmAssocZ, i -> fmMul A fmAssocX (fmMul A fmAssocY fmAssocZ) ]
-  | fmUnitL (fmUnitLOf : FreeMon A) (i : I)
-    [ ~i -> fmMul A (fmUnit A) fmUnitLOf, i -> fmUnitLOf ]
-  | fmUnitR (fmUnitROf : FreeMon A) (i : I)
-    [ ~i -> fmMul A fmUnitROf (fmUnit A), i -> fmUnitROf ]
-  | fmSquash (fmFrom : FreeMon A) (fmTo : FreeMon A) (fmPathL : Path (FreeMon A) fmFrom fmTo) (fmPathR : Path (FreeMon A) fmFrom fmTo) (i : I) (j : I)
-    [ ~i -> fmPathL @ j, i -> fmPathR @ j, ~j -> fmFrom, j -> fmTo ]
+  | fmAssoc (fmAssocX : FreeMon A) (fmAssocY : FreeMon A) (fmAssocZ : FreeMon A) (i : I) [ ~i -> fmMul A (fmMul A fmAssocX fmAssocY) fmAssocZ, i -> fmMul A fmAssocX (fmMul A fmAssocY fmAssocZ) ]
+  | fmUnitL (fmUnitLOf : FreeMon A) (i : I) [ ~i -> fmMul A (fmUnit A) fmUnitLOf, i -> fmUnitLOf ]
+  | fmUnitR (fmUnitROf : FreeMon A) (i : I) [ ~i -> fmMul A fmUnitROf (fmUnit A), i -> fmUnitROf ]
+  | fmSquash (fmFrom : FreeMon A) (fmTo : FreeMon A) (fmPathL : Path (FreeMon A) fmFrom fmTo) (fmPathR : Path (FreeMon A) fmFrom fmTo) (i : I) (j : I) [ ~i -> fmPathL @ j, i -> fmPathR @ j, ~j -> fmFrom, j -> fmTo ]
+
 def fmCons : (A : Type 0) -> A -> FreeMon A -> FreeMon A :=
   fun (A : Type 0) (a : A) (xs : FreeMon A) => fmMul A (fmEta A a) xs
+
 def fmIsSet : (A : Type 0) -> isSet (FreeMon A) :=
-  fun (A : Type 0) (x : FreeMon A) (y : FreeMon A) (p : Path (FreeMon A) x y) (q : Path (FreeMon A) x y) => fun (i : I) => fun (j : I) => fmSquash A x y p q i j
+  fun (A : Type 0) (x : FreeMon A) (y : FreeMon A) (p : Path (FreeMon A) x y) (q : Path (FreeMon A) x y) (i : I) (j : I) => fmSquash A x y p q i j
+
 -- The universal property: a map from A into a monoid M that is a set
 -- extends to FreeMon A. The fold cases are the laws of M.
 def fmFold : (A : Type 0) -> (M : Type 0) -> isSet M -> (e : M) -> (op : M -> M -> M) -> ((x : M) -> (y : M) -> (z : M) -> Path M (op (op x y) z) (op x (op y z))) -> ((x : M) -> Path M (op e x) x) -> ((x : M) -> Path M (op x e) x) -> (A -> M) -> FreeMon A -> M :=
-  fun (A : Type 0) (M : Type 0) (s : isSet M) (e : M) (op : M -> M -> M) (assoc : (x : M) -> (y : M) -> (z : M) -> Path M (op (op x y) z) (op x (op y z))) (unitL : (x : M) -> Path M (op e x) x) (unitR : (x : M) -> Path M (op x e) x) (f : A -> M) (t : FreeMon A) =>
-    fold (fun (a : A) => f a) e (fun (x : M) (y : M) => op x y)
-      (fun (x : M) (y : M) (z : M) => fun (i : I) => assoc x y z @ i)
-      (fun (x : M) => fun (i : I) => unitL x @ i)
-      (fun (x : M) => fun (i : I) => unitR x @ i)
-      (fun (x : M) (y : M) (p : Path M x y) (q : Path M x y) => fun (i : I) => fun (j : I) => (s x y p q @ i) @ j) t
+  fun (A : Type 0) (M : Type 0) (s : isSet M) (e : M) (op : M -> M -> M) (assoc : (x : M) -> (y : M) -> (z : M) -> Path M (op (op x y) z) (op x (op y z))) (unitL : (x : M) -> Path M (op e x) x) (unitR : (x : M) -> Path M (op x e) x) (f : A -> M) (t : FreeMon A) => fold (fun (a : A) => f a) e (fun (x : M) (y : M) => op x y) (fun (x : M) (y : M) (z : M) (i : I) => assoc x y z @ i) (fun (x : M) (i : I) => unitL x @ i) (fun (x : M) (i : I) => unitR x @ i) (fun (x : M) (y : M) (p : Path M x y) (q : Path M x y) (i : I) (j : I) => s x y p q @ i @ j) t
+
 def fmBind : (A : Type 0) -> (B : Type 0) -> (A -> FreeMon B) -> FreeMon A -> FreeMon B :=
-  fun (A : Type 0) (B : Type 0) (k : A -> FreeMon B) => fmFold A (FreeMon B) (fmIsSet B) (fmUnit B) (fmMul B)
-    (fun (x : FreeMon B) (y : FreeMon B) (z : FreeMon B) => fun (i : I) => fmAssoc B x y z i)
-    (fun (x : FreeMon B) => fun (i : I) => fmUnitL B x i)
-    (fun (x : FreeMon B) => fun (i : I) => fmUnitR B x i) k
+  fun (A : Type 0) (B : Type 0) (k : A -> FreeMon B) => fmFold A (FreeMon B) (fmIsSet B) (fmUnit B) (fmMul B) (fun (x : FreeMon B) (y : FreeMon B) (z : FreeMon B) (i : I) => fmAssoc B x y z i) (fun (x : FreeMon B) (i : I) => fmUnitL B x i) (fun (x : FreeMon B) (i : I) => fmUnitR B x i) k
+
 def fmMap : (A : Type 0) -> (B : Type 0) -> (A -> B) -> FreeMon A -> FreeMon B :=
   fun (A : Type 0) (B : Type 0) (f : A -> B) => fmBind A B (fun (a : A) => fmEta B (f a))
+
 -- The folds of a trace into a set B (S5, Q-S5-6 (b)): fmChain runs from
 -- the first op to the last, fmRun from the last op to the first. The
 -- monoid is the endomaps of B, a set by isSetFun, and its laws are refl.
 def endoThen : (B : Type 0) -> (B -> B) -> (B -> B) -> B -> B :=
   fun (B : Type 0) (g : B -> B) (h : B -> B) (d : B) => h (g d)
+
 def fmChain : (A : Type 0) -> (B : Type 0) -> isSet B -> (B -> A -> B) -> B -> FreeMon A -> B :=
-  fun (A : Type 0) (B : Type 0) (s : isSet B) (step : B -> A -> B) (b0 : B) (r : FreeMon A) =>
-    fmFold A (B -> B) (isSetFun B B s) (fun (d : B) => d) (endoThen B)
-      (fun (x : B -> B) (y : B -> B) (z : B -> B) => refl)
-      (fun (x : B -> B) => refl)
-      (fun (x : B -> B) => refl)
-      (fun (a : A) (d : B) => step d a) r b0
+  fun (A : Type 0) (B : Type 0) (s : isSet B) (step : B -> A -> B) (b0 : B) (r : FreeMon A) => fmFold A (B -> B) (isSetFun B B s) (fun (d : B) => d) (endoThen B) (fun (x : B -> B) (y : B -> B) (z : B -> B) => refl) (fun (x : B -> B) => refl) (fun (x : B -> B) => refl) (fun (a : A) (d : B) => step d a) r b0
+
 def fmRun : (A : Type 0) -> (B : Type 0) -> isSet B -> (A -> B -> B) -> B -> FreeMon A -> B :=
-  fun (A : Type 0) (B : Type 0) (s : isSet B) (step : A -> B -> B) (b0 : B) (r : FreeMon A) =>
-    fmFold A (B -> B) (isSetFun B B s) (fun (d : B) => d) (fun (g : B -> B) (h : B -> B) => endoThen B h g)
-      (fun (x : B -> B) (y : B -> B) (z : B -> B) => refl)
-      (fun (x : B -> B) => refl)
-      (fun (x : B -> B) => refl)
-      step r b0
+  fun (A : Type 0) (B : Type 0) (s : isSet B) (step : A -> B -> B) (b0 : B) (r : FreeMon A) => fmFold A (B -> B) (isSetFun B B s) (fun (d : B) => d) (fun (g : B -> B) (h : B -> B) => endoThen B h g) (fun (x : B -> B) (y : B -> B) (z : B -> B) => refl) (fun (x : B -> B) => refl) (fun (x : B -> B) => refl) step r b0
+
 -- len A r, the op count of the trace r (S5, O16): a fold, not a C builtin.
 -- natAdd gives none on a carry (S3, Q-S3-2), so the count is an Option
 -- Nat, a set by the trusted optNatIsSet (Q-S3-11 (a)).
 def len : (A : Type 0) -> FreeMon A -> Option Nat :=
   fun (A : Type 0) (r : FreeMon A) => fmChain A (Option Nat) optNatIsSet (fun (n : Option Nat) (a : A) => bind n (fun (k : Nat) => natAdd k 1)) (some 0) r
+
 -- The record (S5, Part R, Q-S5-1 .. Q-S5-5 (a)): a trace of entries, each
 -- entry a digest. A guest names Digest, never U256. snoc puts an entry at
 -- the end.
 def Digest : Type 0 := U256
+
 def Entry : Type 0 := Digest
+
 def Record : Type 0 := FreeMon Entry
+
 def snoc : Entry -> Record -> Record :=
   fun (e : Entry) (r : Record) => fmMul Entry r (fmEta Entry e)
+
 -- The hash chain (Q-S5-3 (a), Q-S5-4 (a)): the tags are the ASCII bytes of
 -- "accrue-genesis" and "accrue-append" as a big-endian U256, as the bLSAG
 -- tag "accrue" (O5). H3 nests two hash calls. chainFrom d r runs the chain
 -- from d over the entries of r, and head r runs it from the genesis digest.
 def tagGenesis : Digest := 0x6163637275652d67656e65736973u
+
 def tagAppend : Digest := 0x6163637275652d617070656e64u
+
 def H3 : Digest -> Digest -> Entry -> Digest :=
   fun (t : Digest) (d : Digest) (e : Entry) => hash (hash t d) e
+
 def chainFrom : Digest -> Record -> Digest :=
   fun (d : Digest) (r : Record) => fmChain Entry Digest u256IsSet (fun (h : Digest) (x : Entry) => H3 tagAppend h x) d r
-def head : Record -> Digest :=
-  fun (r : Record) => chainFrom (hash tagGenesis 0u) r
+
+def head : Record -> Digest := fun (r : Record) => chainFrom (hash tagGenesis 0u) r
+
 -- The guest names of the L2 successor and the L5 result (Q-S5-10 (a)).
 def opSucc : Nat -> Option Nat := fun (n : Nat) => natAdd n 1
+
 def Verdict : Type 0 := Flag
+
 def verdictYes : Verdict := flagYes
+
 -- verify e r (Q-S5-9 (a)): the position of the first entry e of r, or
 -- none. The fold runs from the last entry to the first with a found code:
 -- 0 is none, j + 1 is the position j (foundAt).
-def foundAt : Nat -> Option Nat :=
-  fun (f : Nat) => natSub f 1
+def foundAt : Nat -> Option Nat := fun (f : Nat) => natSub f 1
+
 def verify : Entry -> Record -> Option Nat :=
-  fun (e : Entry) (r : Record) =>
-    bind (fmRun Entry (Option Nat) optNatIsSet (fun (x : Entry) (f : Option Nat) => flagIf (u256Eq x e) (some 1) (bind f (fun (g : Nat) => flagIf (natEq g 0) (some 0) (natAdd g 1)))) (some 0) r) foundAt
+  fun (e : Entry) (r : Record) => bind (fmRun Entry (Option Nat) optNatIsSet (fun (x : Entry) (f : Option Nat) => flagIf (u256Eq x e) (some 1) (bind f (fun (g : Nat) => flagIf (natEq g 0) (some 0) (natAdd g 1)))) (some 0) r) foundAt
+
 -- prefix r s (Q-S5-5 (a)): s is r and then a rest t, by a path.
 def prefix : Record -> Record -> Type 0 :=
   fun (r : Record) (s : Record) => Sigma (t : Record) (Path Record (fmMul Entry r t) s)
+
 -- An inclusion proof (Q-S5-5 (a)): the head before position p and the
 -- entries from p to the end. recTake p r keeps the entries before p and
 -- recDrop p r the entries from p. verifyAt e inc h is verdictYes when the
@@ -198,20 +207,19 @@ def prefix : Record -> Record -> Type 0 :=
 -- suffix ends at h. Each step counts p down with natSub (none at 0, S3),
 -- so no step adds.
 family Inclusion := inclusionOf (inclBefore : Digest) (inclSuffix : Record)
+
 def recTake : Nat -> Record -> Record :=
-  fun (p : Nat) (r : Record) => fmRun Entry (Nat -> Record) (isSetFun Nat Record (fmIsSet Entry))
-    (fun (x : Entry) (b : Nat -> Record) (k : Nat) => option (fmUnit Entry) (fun (j : Nat) => fmCons Entry x (b j)) (natSub k 1))
-    (fun (n : Nat) => fmUnit Entry) r p
+  fun (p : Nat) (r : Record) => fmRun Entry (Nat -> Record) (isSetFun Nat Record (fmIsSet Entry)) (fun (x : Entry) (b : Nat -> Record) (k : Nat) => option (fmUnit Entry) (fun (j : Nat) => fmCons Entry x (b j)) (natSub k 1)) (fun (n : Nat) => fmUnit Entry) r p
+
 def recDrop : Nat -> Record -> Record :=
-  fun (p : Nat) (r : Record) => fmRun Entry (Nat -> Record) (isSetFun Nat Record (fmIsSet Entry))
-    (fun (x : Entry) (b : Nat -> Record) (k : Nat) => option (fmCons Entry x (b 0)) b (natSub k 1))
-    (fun (n : Nat) => fmUnit Entry) r p
+  fun (p : Nat) (r : Record) => fmRun Entry (Nat -> Record) (isSetFun Nat Record (fmIsSet Entry)) (fun (x : Entry) (b : Nat -> Record) (k : Nat) => option (fmCons Entry x (b 0)) b (natSub k 1)) (fun (n : Nat) => fmUnit Entry) r p
+
 def inclusion : Nat -> Record -> Inclusion :=
   fun (p : Nat) (r : Record) => inclusionOf (head (recTake p r)) (recDrop p r)
+
 def verifyAt : Entry -> Inclusion -> Digest -> Verdict :=
-  fun (e : Entry) (inc : Inclusion) (h : Digest) =>
-    elim (fun (u : Inclusion) => Flag)
-      (fun (b : Digest) (s : Record) => flagIf (fmRun Entry Flag flagIsSet (fun (x : Entry) (f : Flag) => u256Eq x e) flagNo s) (u256Eq (chainFrom b s) h) flagNo) inc
+  fun (e : Entry) (inc : Inclusion) (h : Digest) => elim (fun (u : Inclusion) => Flag) (fun (b : Digest) (s : Record) => flagIf (fmRun Entry Flag flagIsSet (fun (x : Entry) (f : Flag) => u256Eq x e) flagNo s) (u256Eq (chainFrom b s) h) flagNo) inc
+
 -- The encrypted values (S5, USER rulings Q3 (a) and Q-S5-1 .. Q-S5-3 (a),
 -- rule O7): the identity cell monad with a sealed eliminator. A guest elim,
 -- fold or projection of Enc, or a use of a law def (decrypt, observe),
@@ -220,21 +228,28 @@ def verifyAt : Entry -> Inclusion -> Digest -> Verdict :=
 -- REFUSE_LAW. encBind is the fold, encMap and encOp2 are binds (the op*
 -- homomorphisms), decrypt is the counit, observe is decrypt under Trunc1.
 sealed family Enc (A : Type 0) := encEta (encOf : A)
+
 def encBind : (A : Type 0) -> (B : Type 0) -> Enc A -> (A -> Enc B) -> Enc B :=
   fun (A : Type 0) (B : Type 0) (c : Enc A) (f : A -> Enc B) => fold (fun (a : A) => f a) c
+
 def encMap : (A : Type 0) -> (B : Type 0) -> (A -> B) -> Enc A -> Enc B :=
   fun (A : Type 0) (B : Type 0) (f : A -> B) (c : Enc A) => encBind A B c (fun (a : A) => encEta B (f a))
+
 def encOp2 : (A : Type 0) -> (B : Type 0) -> (C : Type 0) -> (A -> B -> C) -> Enc A -> Enc B -> Enc C :=
-  fun (A : Type 0) (B : Type 0) (C : Type 0) (op : A -> B -> C) (c1 : Enc A) (c2 : Enc B) =>
-  encBind A C c1 (fun (a : A) => encBind B C c2 (fun (b : B) => encEta C (op a b)))
+  fun (A : Type 0) (B : Type 0) (C : Type 0) (op : A -> B -> C) (c1 : Enc A) (c2 : Enc B) => encBind A C c1 (fun (a : A) => encBind B C c2 (fun (b : B) => encEta C (op a b)))
+
 law def decrypt : (A : Type 0) -> Enc A -> A :=
   fun (A : Type 0) (c : Enc A) => fold (fun (a : A) => a) c
+
 law def observe : (A : Type 0) -> Enc A -> Trunc1 A :=
   fun (A : Type 0) (c : Enc A) => trunc1 A (decrypt A c)
+
 -- Quorum (S6, rule O7): the public part of a threshold opening, t of n.
 family Quorum := quorum (quorumT : Size) (quorumN : Size)
+
 law def open : (A : Type 0) -> Quorum -> Enc A -> A :=
   fun (A : Type 0) (q : Quorum) (c : Enc A) => decrypt A c
+
 -- ZKProof and Transcript (S7, Q-S7-1 .. Q-S7-3 (a), rule O7). A proof of W
 -- is the truncation of W, and zero knowledge is the squash1 cell. ZKProof
 -- is a def, not a family. The O7 walk skips the argument of ZKProof, as it
@@ -243,21 +258,30 @@ law def open : (A : Type 0) -> Quorum -> Enc A -> A :=
 -- observe. A failed check is a host refusal or a chain revert, so the
 -- codomain is not an Option.
 def ZKProof : Type 0 -> Type 0 := fun (W : Type 0) => Trunc1 W
+
 sealed family Transcript (W : Type 0) := transcript (transcriptOf : W)
+
 law def verified : (W : Type 0) -> Transcript W -> ZKProof W :=
   fun (W : Type 0) (t : Transcript W) => trunc1 W (elim (fun (u : Transcript W) => W) (fun (w : W) => w) t)
+
 -- The secret marks (O4, Q-S6-9 (a)): a program can carry a Secret but not
 -- read it. Secret is a sealed family, so its elim, fold and projection are
 -- law-only, as for Enc. reveal is the law def that reads a Secret. A key
 -- share, a nonce and a decryption key are each a Secret Scalar. On ES, S9
 -- refuses a run-time Secret (REFUSE_TARGET_SECRET, O4, Q-S9-4 (a)).
 def Scalar : Type 0 := U256
+
 sealed family Secret (A : Type 0) := secretEta (secretOf : A)
+
 law def reveal : (A : Type 0) -> Secret A -> A :=
   fun (A : Type 0) (s : Secret A) => fold (fun (a : A) => a) s
+
 def KeyShare : Type 0 := Secret Scalar
+
 def Nonce : Type 0 := Secret Scalar
+
 def DecKey : Type 0 := Secret Scalar
+
 -- The DAO (S6, Q-S6-1 to Q-S6-12 (a)). A Point is a member key. A Polity
 -- is the constitution: the members, the thresholds tAppend, tAmend and
 -- tOpen, and the keys keyOpen and keyAppend. S6b (Q-S6-5, Q-S6-6 (a))
@@ -272,42 +296,57 @@ def DecKey : Type 0 := Secret Scalar
 -- yes count is at least tAmend of the Polity in force. stepD enacts an
 -- accepted proposal, and amendAll folds the decisions in order (L9).
 def Point : Type 0 := U256
+
 def Count : Type 0 := Nat
+
 def verdictNo : Verdict := flagNo
+
 def isSetProd : (A : Type 0) -> (B : Type 0) -> isSet A -> isSet B -> isSet (Prod A B) :=
-  fun (A : Type 0) (B : Type 0) (sA : isSet A) (sB : isSet B) (x : Prod A B) (y : Prod A B) (p : Path (Prod A B) x y) (q : Path (Prod A B) x y) =>
-    fun (i : I) => fun (j : I) => pair ((sA (first x) (first y) (fun (k : I) => first (p @ k)) (fun (k : I) => first (q @ k)) @ i) @ j) ((sB (second x) (second y) (fun (k : I) => second (p @ k)) (fun (k : I) => second (q @ k)) @ i) @ j)
+  fun (A : Type 0) (B : Type 0) (sA : isSet A) (sB : isSet B) (x : Prod A B) (y : Prod A B) (p : Path (Prod A B) x y) (q : Path (Prod A B) x y) (i : I) (j : I) => pair (sA (first x) (first y) (fun (k : I) => first (p @ k)) (fun (k : I) => first (q @ k)) @ i @ j) (sB (second x) (second y) (fun (k : I) => second (p @ k)) (fun (k : I) => second (q @ k)) @ i @ j)
+
 def encEtaOf : (A : Type 0) -> (c : Enc A) -> Path (Enc A) (encEta A (encOf c)) c :=
   fun (A : Type 0) (c : Enc A) => elim (fun (d : Enc A) => Path (Enc A) (encEta A (encOf d)) d) (fun (a : A) => refl) c
+
 def encIsSet : (A : Type 0) -> isSet A -> isSet (Enc A) :=
-  fun (A : Type 0) (sA : isSet A) (x : Enc A) (y : Enc A) (p : Path (Enc A) x y) (q : Path (Enc A) x y) =>
-    fun (i : I) => fun (j : I) => hcomp (Enc A) (~i \/ i \/ ~j \/ j) (fun (k : I) => [ ~i -> encEtaOf A (p @ j) @ k, i -> encEtaOf A (q @ j) @ k, ~j -> encEtaOf A x @ k, j -> encEtaOf A y @ k ])
-      (encEta A ((sA (encOf x) (encOf y) (fun (k : I) => encOf (p @ k)) (fun (k : I) => encOf (q @ k)) @ i) @ j))
-def Polity : Type 0 := Prod (FreeMon Point) (Prod Nat (Prod Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))))))))
+  fun (A : Type 0) (sA : isSet A) (x : Enc A) (y : Enc A) (p : Path (Enc A) x y) (q : Path (Enc A) x y) (i : I) (j : I) => hcomp (Enc A) (~i \/ i \/ ~j \/ j) (fun (k : I) => [ ~i -> encEtaOf A (p @ j) @ k, i -> encEtaOf A (q @ j) @ k, ~j -> encEtaOf A x @ k, j -> encEtaOf A y @ k ]) (encEta A (sA (encOf x) (encOf y) (fun (k : I) => encOf (p @ k)) (fun (k : I) => encOf (q @ k)) @ i @ j))
+
+def Polity : Type 0 :=
+  Prod (FreeMon Point) (Prod Nat (Prod Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))))))))
+
 def makePolity : FreeMon Point -> Nat -> Nat -> Nat -> Point -> Point -> Nat -> Nat -> Point -> Point -> Nat -> Polity :=
   fun (m : FreeMon Point) (a : Nat) (b : Nat) (c : Nat) (ko : Point) (ka : Point) (ts : Nat) (tp : Nat) (ks : Point) (kp : Point) (r : Nat) => pair m (pair a (pair b (pair c (pair ko (pair ka (pair ts (pair tp (pair ks (pair kp r)))))))))
+
 def members : Polity -> FreeMon Point := fun (s : Polity) => first s
+
 def tAppend : Polity -> Nat := fun (s : Polity) => first (second s)
+
 def tAmend : Polity -> Nat := fun (s : Polity) => first (second (second s))
+
 def tOpen : Polity -> Nat := fun (s : Polity) => first (second (second (second s)))
+
 def keyOpen : Polity -> Point := fun (s : Polity) => first (second (second (second (second s))))
-def keyAppend : Polity -> Point := fun (s : Polity) => first (second (second (second (second (second s)))))
-def tStamp : Polity -> Nat := fun (s : Polity) => first (second (second (second (second (second (second s))))))
-def tPay : Polity -> Nat := fun (s : Polity) => first (second (second (second (second (second (second (second s)))))))
-def keyStamp : Polity -> Point := fun (s : Polity) => first (second (second (second (second (second (second (second (second s))))))))
-def keyPay : Polity -> Point := fun (s : Polity) => first (second (second (second (second (second (second (second (second (second s)))))))))
-def rulePos : Polity -> Nat := fun (s : Polity) => second (second (second (second (second (second (second (second (second (second s)))))))))
+
+def keyAppend : Polity -> Point :=
+  fun (s : Polity) => first (second (second (second (second (second s)))))
+
+def tStamp : Polity -> Nat :=
+  fun (s : Polity) => first (second (second (second (second (second (second s))))))
+
+def tPay : Polity -> Nat :=
+  fun (s : Polity) => first (second (second (second (second (second (second (second s)))))))
+
+def keyStamp : Polity -> Point :=
+  fun (s : Polity) => first (second (second (second (second (second (second (second (second s))))))))
+
+def keyPay : Polity -> Point :=
+  fun (s : Polity) => first (second (second (second (second (second (second (second (second (second s)))))))))
+
+def rulePos : Polity -> Nat :=
+  fun (s : Polity) => second (second (second (second (second (second (second (second (second (second s)))))))))
+
 def polityIsSet : isSet Polity :=
-  isSetProd (FreeMon Point) (Prod Nat (Prod Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat))))))))) (fmIsSet Point)
-    (isSetProd Nat (Prod Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))))))) natIsSet
-      (isSetProd Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat))))))) natIsSet
-      (isSetProd Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))))) natIsSet
-      (isSetProd Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat))))) u256IsSet
-      (isSetProd Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))) u256IsSet
-      (isSetProd Nat (Prod Nat (Prod Point (Prod Point Nat))) natIsSet
-      (isSetProd Nat (Prod Point (Prod Point Nat)) natIsSet
-      (isSetProd Point (Prod Point Nat) u256IsSet
-      (isSetProd Point Nat u256IsSet natIsSet)))))))))
+  isSetProd (FreeMon Point) (Prod Nat (Prod Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat))))))))) (fmIsSet Point) (isSetProd Nat (Prod Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))))))) natIsSet (isSetProd Nat (Prod Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat))))))) natIsSet (isSetProd Nat (Prod Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))))) natIsSet (isSetProd Point (Prod Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat))))) u256IsSet (isSetProd Point (Prod Nat (Prod Nat (Prod Point (Prod Point Nat)))) u256IsSet (isSetProd Nat (Prod Nat (Prod Point (Prod Point Nat))) natIsSet (isSetProd Nat (Prod Point (Prod Point Nat)) natIsSet (isSetProd Point (Prod Point Nat) u256IsSet (isSetProd Point Nat u256IsSet natIsSet)))))))))
+
 -- The append check (S7, Q-S7-1, Q-S7-2 and Q-S7-6 (a)). An Auth is a
 -- threshold Schnorr signature (R.x, z) of the keyAppend committee on the
 -- message (head r, e). The host signs with FROST (src/front/frost.c), and
@@ -315,12 +354,13 @@ def polityIsSet : isSet Polity :=
 -- kernel builtin schnorrOk. append puts e at the end of r only when the
 -- check holds, else it gives none.
 family Auth := authOf (authR : U256) (authZ : U256)
+
 def authOk : Polity -> Auth -> Entry -> Record -> Verdict :=
-  fun (s : Polity) (a : Auth) (e : Entry) (r : Record) =>
-    elim (fun (u : Auth) => Flag)
-      (fun (rx : U256) (z : U256) => schnorrOk (keyAppend s) rx z (head r) e) a
+  fun (s : Polity) (a : Auth) (e : Entry) (r : Record) => elim (fun (u : Auth) => Flag) (fun (rx : U256) (z : U256) => schnorrOk (keyAppend s) rx z (head r) e) a
+
 def append : Polity -> Auth -> Entry -> Record -> Option Record :=
   fun (s : Polity) (a : Auth) (e : Entry) (r : Record) => flagIf (authOk s a e r) (some (snoc e r)) none
+
 -- The stamp chain (S4, Q-S4-2 to Q-S4-4 (a)). No program can read a clock
 -- (REFUSE_CLOCK), so a time comes in only as a Stamp argument. A Stamp
 -- holds the time t, the head prev of the chain before it and a threshold
@@ -335,25 +375,33 @@ def append : Polity -> Auth -> Entry -> Record -> Option Record :=
 -- it gives none. The first stamp needs only a good signature and prev =
 -- the stamp genesis digest.
 def Time : Type 0 := Nat
+
 family Stamp := stampOf (stampT : Time) (stampPrev : Digest) (stampR : U256) (stampZ : U256)
+
 def Stamps : Type 0 := FreeMon Stamp
+
 def tagStamp : Digest := 0x6163637275652d7374616d70u
+
 def tagStampGenesis : Digest := 0x6163637275652d7374616d702d67656e65736973u
+
 def stampStep : Digest -> Stamp -> Digest :=
   fun (h : Digest) (s : Stamp) => elim (fun (u : Stamp) => Digest) (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => H3 tagStamp h (toU256 t)) s
+
 def stampHead : Stamps -> Digest :=
   fun (c : Stamps) => fmChain Stamp Digest u256IsSet stampStep (hash tagStampGenesis 0u) c
+
 def lastT : Stamps -> Option Time :=
-  fun (c : Stamps) => fmChain Stamp (Option Nat) optNatIsSet
-    (fun (o : Option Nat) (s : Stamp) => elim (fun (u : Stamp) => Option Nat) (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => some t) s) none c
+  fun (c : Stamps) => fmChain Stamp (Option Nat) optNatIsSet (fun (o : Option Nat) (s : Stamp) => elim (fun (u : Stamp) => Option Nat) (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => some t) s) none c
+
 def later : Time -> Option Time -> Verdict :=
   fun (t : Time) (o : Option Time) => option flagYes (fun (k : Time) => flagIf (natLe t k) flagNo flagYes) o
+
 def stampOk : Point -> Stamp -> Stamps -> Verdict :=
-  fun (key : Point) (s : Stamp) (c : Stamps) =>
-    elim (fun (u : Stamp) => Flag)
-      (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => flagIf (u256Eq prev (stampHead c)) (flagIf (later t (lastT c)) (schnorrOk key rx z prev (toU256 t)) flagNo) flagNo) s
+  fun (key : Point) (s : Stamp) (c : Stamps) => elim (fun (u : Stamp) => Flag) (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => flagIf (u256Eq prev (stampHead c)) (flagIf (later t (lastT c)) (schnorrOk key rx z prev (toU256 t)) flagNo) flagNo) s
+
 def stampSnoc : Point -> Stamp -> Stamps -> Option Stamps :=
   fun (key : Point) (s : Stamp) (c : Stamps) => flagIf (stampOk key s c) (some (fmMul Stamp c (fmEta Stamp s))) none
+
 -- Part E (S5a, Q-S5-1 to Q-S5-9): the engagement of retainer-lang SPEC 5
 -- as data. Each time in a Segment or a Mass is an offset from the start of
 -- the engagement. A Segment accrues segNum / segDen for each time unit from
@@ -362,52 +410,70 @@ def stampSnoc : Point -> Stamp -> Stamps -> Option Stamps :=
 -- A Dispute is the list of the firm shares in bps. History is the policy
 -- history as data, each entry a time and a policy (Q-S5-5 (a)).
 family Segment := segmentOf (segFrom : Time) (segUntil : Time) (segNum : U256) (segDen : NonZero U256)
+
 family Mass := massOf (massAt : Time) (massAmount : U256)
+
 def Rate : Type 0 := Prod (FreeMon Segment) (FreeMon Mass)
+
 family Window := windowOf (winStart : Time) (winEnd : Time)
+
 family Instrument := instrPush | instrPull | instrStream
+
 family Grant := grantOf (grantInstrument : Instrument) (grantPaused : Flag)
+
 def Dispute : Type 0 := FreeMon U256
+
 family Policy := policyOf (polRate : Rate) (polWindow : Window) (polGrant : Grant) (polDispute : Dispute)
+
 family Engagement := engagementOf (engClient : Point) (engFirm : Point) (engAsset : Digest) (engScope : Digest) (engWindow : Window) (engSigned : Option Time) (engCancelled : Option Time)
+
 def History : Type 0 := FreeMon (Prod Time Policy)
+
 -- The order words (the kit has no min or max word).
 def u256Min : U256 -> U256 -> U256 := fun (a : U256) (b : U256) => flagIf (u256Le a b) a b
+
 def natMax : Time -> Time -> Time := fun (a : Time) (b : Time) => flagIf (natLe a b) b a
+
 def natMin : Time -> Time -> Time := fun (a : Time) (b : Time) => flagIf (natLe a b) a b
+
 -- G and earnedAt (S5a, retainer-lang SPEC 6.1). Each sum folds into Acc,
 -- an ok flag and a value (Q-S5-9 (b): Acc is a set by isSetProd, so no
 -- trusted row is necessary). accOut makes the Option at the end. A none
 -- term clears the flag, and then the sum is none.
 def Acc : Type 0 := Prod Verdict U256
+
 def accIsSet : isSet Acc := isSetProd Flag U256 flagIsSet u256IsSet
+
 def accZero : Acc := pair flagYes 0u
+
 def accAdd : Acc -> Option U256 -> Acc :=
   fun (a : Acc) (o : Option U256) => flagIf (first a) (option (pair flagNo 0u) (fun (v : U256) => option (pair flagNo 0u) (fun (w : U256) => pair flagYes w) (u256Add (second a) v)) o) a
+
 def accOut : Acc -> Option U256 := fun (a : Acc) => flagIf (first a) (some (second a)) none
+
 -- segTerm s x = floor(segNum * (clamp(x, segFrom, segUntil) - segFrom) / segDen).
 -- natSub gives none only when segUntil < segFrom (a bad Segment).
 def segTerm : Segment -> Time -> Option U256 :=
-  fun (s : Segment) (x : Time) => elim (fun (u : Segment) => Option U256)
-    (fun (sf : Time) (su : Time) (num : U256) (den : NonZero U256) => bind (natSub (natMin (natMax x sf) su) sf) (fun (d : Time) => mulDiv num (toU256 d) den)) s
+  fun (s : Segment) (x : Time) => elim (fun (u : Segment) => Option U256) (fun (sf : Time) (su : Time) (num : U256) (den : NonZero U256) => bind (natSub (natMin (natMax x sf) su) sf) (fun (d : Time) => mulDiv num (toU256 d) den)) s
+
 -- gAt r x: the sum of the segment terms at the offset x, and the amount of
 -- each mass at the offset x or before.
 def gAt : Rate -> Time -> Option U256 :=
-  fun (r : Rate) (x : Time) => accOut (fmChain Mass Acc accIsSet
-    (fun (a : Acc) (m : Mass) => elim (fun (u : Mass) => Acc) (fun (ma : Time) (amt : U256) => flagIf (natLe ma x) (accAdd a (some amt)) a) m)
-    (fmChain Segment Acc accIsSet (fun (a : Acc) (s : Segment) => accAdd a (segTerm s x)) accZero (first r)) (second r))
+  fun (r : Rate) (x : Time) => accOut (fmChain Mass Acc accIsSet (fun (a : Acc) (m : Mass) => elim (fun (u : Mass) => Acc) (fun (ma : Time) (amt : U256) => flagIf (natLe ma x) (accAdd a (some amt)) a) m) (fmChain Segment Acc accIsSet (fun (a : Acc) (s : Segment) => accAdd a (segTerm s x)) accZero (first r)) (second r))
+
 -- optMin x o and optMax x o: a none bound has no effect.
-def optMin : Time -> Option Time -> Time := fun (x : Time) (o : Option Time) => option x (fun (k : Time) => natMin x k) o
-def optMax : Time -> Option Time -> Time := fun (x : Time) (o : Option Time) => option x (fun (k : Time) => natMax x k) o
+def optMin : Time -> Option Time -> Time :=
+  fun (x : Time) (o : Option Time) => option x (fun (k : Time) => natMin x k) o
+
+def optMax : Time -> Option Time -> Time :=
+  fun (x : Time) (o : Option Time) => option x (fun (k : Time) => natMax x k) o
+
 -- accrue r s lo hi closed: the term of one entry, G(hi - s) - G(lo - s) on
 -- (lo, hi], or G(hi - s) on the closed [s, hi]. An empty interval gives 0
 -- without evaluating G. The closed singleton [s, s] includes a mass at 0.
 def accrue : Rate -> Time -> Time -> Time -> Verdict -> Option U256 :=
-  fun (r : Rate) (s : Time) (lo : Time) (hi : Time) (closed : Verdict) =>
-    flagIf (flagIf closed (natLe lo hi) (later hi (some lo)))
-      (bind (natSub hi s) (fun (dh : Time) => flagIf closed (gAt r dh)
-        (bind (gAt r dh) (fun (gh : U256) => bind (natSub lo s) (fun (dl : Time) => bind (gAt r dl) (fun (gl : U256) => u256Sub gh gl))))))
-      (some 0u)
+  fun (r : Rate) (s : Time) (lo : Time) (hi : Time) (closed : Verdict) => flagIf (flagIf closed (natLe lo hi) (later hi (some lo))) (bind (natSub hi s) (fun (dh : Time) => flagIf closed (gAt r dh) (bind (gAt r dh) (fun (gh : U256) => bind (natSub lo s) (fun (dl : Time) => bind (gAt r dl) (fun (gl : U256) => u256Sub gh gl)))))) (some 0u)
+
 -- entryTerm e lower t nxt ti p: the entry (ti, p) is in force on (ti, nxt].
 -- The window of e, the window of p, the signed and the cancelled times of e,
 -- the time t and the open lower bound lower cut it. A paused grant or no
@@ -415,28 +481,23 @@ def accrue : Rate -> Time -> Time -> Time -> Verdict -> Option U256 :=
 -- policy start at S or before, signed at S or before, and no lower bound at
 -- S or after) adds G on the closed [S, hi], so a mass at the offset 0 counts.
 def entryTerm : Engagement -> Option Time -> Time -> Option Time -> Time -> Policy -> Option U256 :=
-  fun (e : Engagement) (lower : Option Time) (t : Time) (nxt : Option Time) (ti : Time) (p : Policy) =>
-    elim (fun (u : Engagement) => Option U256) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg0 : Option Time) (cn : Option Time) =>
-      elim (fun (u : Window) => Option U256) (fun (sE : Time) (eE : Time) =>
-        elim (fun (u : Policy) => Option U256) (fun (r : Rate) (wp : Window) (g : Grant) (d : Dispute) =>
-          elim (fun (u : Window) => Option U256) (fun (sP : Time) (eP : Time) =>
-            elim (fun (u : Grant) => Option U256) (fun (ins : Instrument) (paused : Flag) =>
-              flagIf paused (some 0u) (option (some 0u) (fun (sg : Time) =>
-                accrue r sE (optMax (natMax (natMax ti sE) (natMax sP sg)) lower) (optMin (optMin (natMin (natMin eE eP) t) nxt) cn)
-                  (flagIf (natLe sE ti) flagNo (flagIf (natLe sP sE) (flagIf (natLe sg sE) (later sE lower) flagNo) flagNo))) sg0)) g) wp) p) we) e
+  fun (e : Engagement) (lower : Option Time) (t : Time) (nxt : Option Time) (ti : Time) (p : Policy) => elim (fun (u : Engagement) => Option U256) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg0 : Option Time) (cn : Option Time) => elim (fun (u : Window) => Option U256) (fun (sE : Time) (eE : Time) => elim (fun (u : Policy) => Option U256) (fun (r : Rate) (wp : Window) (g : Grant) (d : Dispute) => elim (fun (u : Window) => Option U256) (fun (sP : Time) (eP : Time) => elim (fun (u : Grant) => Option U256) (fun (ins : Instrument) (paused : Flag) => flagIf paused (some 0u) (option (some 0u) (fun (sg : Time) => accrue r sE (optMax (natMax (natMax ti sE) (natMax sP sg)) lower) (optMin (optMin (natMin (natMin eE eP) t) nxt) cn) (flagIf (natLe sE ti) flagNo (flagIf (natLe sP sE) (flagIf (natLe sg sE) (later sE lower) flagNo) flagNo))) sg0)) g) wp) p) we) e
+
 -- earnedFrom lower h e t: the sum of the entry terms of h. The run goes
 -- from the last entry to the first and carries the time of the next entry.
 -- earnedAt h e t is earned at t (SPEC 6.1). earnedBetween h e t1 t2 is
 -- earned on (t1, t2] (L1).
 def EarnRun : Type 0 := Prod Acc (Option Time)
+
 def earnedFrom : Option Time -> History -> Engagement -> Time -> Option U256 :=
-  fun (lower : Option Time) (h : History) (e : Engagement) (t : Time) =>
-    accOut (first (fmRun (Prod Time Policy) EarnRun (isSetProd Acc (Option Time) accIsSet optNatIsSet)
-      (fun (x : Prod Time Policy) (st : EarnRun) => pair (accAdd (first st) (entryTerm e lower t (second st) (first x) (second x))) (some (first x)))
-      (pair accZero none) h))
-def earnedAt : History -> Engagement -> Time -> Option U256 := fun (h : History) (e : Engagement) (t : Time) => earnedFrom none h e t
+  fun (lower : Option Time) (h : History) (e : Engagement) (t : Time) => accOut (first (fmRun (Prod Time Policy) EarnRun (isSetProd Acc (Option Time) accIsSet optNatIsSet) (fun (x : Prod Time Policy) (st : EarnRun) => pair (accAdd (first st) (entryTerm e lower t (second st) (first x) (second x))) (some (first x))) (pair accZero none) h))
+
+def earnedAt : History -> Engagement -> Time -> Option U256 :=
+  fun (h : History) (e : Engagement) (t : Time) => earnedFrom none h e t
+
 def earnedBetween : History -> Engagement -> Time -> Time -> Option U256 :=
   fun (h : History) (e : Engagement) (t1 : Time) (t2 : Time) => earnedFrom (some t1) h e t2
+
 -- Part E books (S5b, Q-S5b-1 to Q-S5b-3 (a)). An Instruction is data only
 -- (Q-S5-2 (a)): pay ixAmount of the asset ixAsset to ixPayee, at the stamp
 -- ixAt. S7 adds the payment signature and the record. Funding is the
@@ -446,10 +507,15 @@ def earnedBetween : History -> Engagement -> Time -> Time -> Option U256 :=
 -- Escrow is the engagement and its book. A Payout is the list of the
 -- Instructions of one op.
 family Instruction := instructionOf (ixPayee : Point) (ixAsset : Digest) (ixAmount : U256) (ixAt : Stamp)
+
 def Funding : Type 0 := FreeMon (Prod Time U256)
+
 family Book := bookOf (bookLog : Funding) (bookWithdrawn : U256) (bookClosed : Option Time)
+
 family Escrow := escrowOf (escEng : Engagement) (escBook : Book)
+
 def Payout : Type 0 := FreeMon Instruction
+
 -- The book words (S5b P2, retainer-lang SPEC 6.1 and section 5). stampTime s
 -- is the time of the stamp s. fundedAt l t is the funded amount of the last
 -- entry of l at t or before, or 0 when there is none. logOk l t is
@@ -458,122 +524,118 @@ def Payout : Type 0 := FreeMon Instruction
 -- entry at c or before changes recognized at c after the close.
 def stampTime : Stamp -> Time :=
   fun (s : Stamp) => elim (fun (u : Stamp) => Time) (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => t) s
+
 def fundedAt : Funding -> Time -> U256 :=
   fun (l : Funding) (t : Time) => fmChain (Prod Time U256) U256 u256IsSet (fun (f : U256) (x : Prod Time U256) => flagIf (natLe (first x) t) (second x) f) 0u l
+
 def logOk : Funding -> Time -> Verdict :=
   fun (l : Funding) (t : Time) => fmChain (Prod Time U256) Flag flagIsSet (fun (v : Flag) (x : Prod Time U256) => flagIf (natLe (first x) t) v flagNo) flagYes l
+
 def bookOk : Funding -> Option Time -> Time -> Verdict :=
   fun (l : Funding) (c : Option Time) (t : Time) => flagIf (logOk l t) (later t c) flagNo
+
 def logPut : Funding -> Time -> U256 -> Funding :=
   fun (l : Funding) (t : Time) (f : U256) => fmMul (Prod Time U256) l (fmEta (Prod Time U256) (pair t f))
+
 -- recognizedAt h e l t = min (funded t) (earned t) (SPEC 135). unearnedAt =
 -- funded t - recognized t (SPEC 136). withdrawableAt = recognized t -
 -- withdrawn (SPEC 137). A none earned or a none residual gives none.
 def recognizedAt : History -> Engagement -> Funding -> Time -> Option U256 :=
   fun (h : History) (e : Engagement) (l : Funding) (t : Time) => bind (earnedAt h e t) (fun (x : U256) => some (u256Min (fundedAt l t) x))
+
 def unearnedAt : History -> Engagement -> Funding -> Time -> Option U256 :=
   fun (h : History) (e : Engagement) (l : Funding) (t : Time) => bind (recognizedAt h e l t) (fun (r : U256) => u256Sub (fundedAt l t) r)
+
 def withdrawableAt : History -> Escrow -> Time -> Option U256 :=
-  fun (h : History) (x : Escrow) (t : Time) => elim (fun (u : Escrow) => Option U256) (fun (e : Engagement) (b : Book) =>
-    elim (fun (u : Book) => Option U256) (fun (l : Funding) (w : U256) (c : Option Time) => bind (recognizedAt h e l t) (fun (r : U256) => u256Sub r w)) b) x
+  fun (h : History) (x : Escrow) (t : Time) => elim (fun (u : Escrow) => Option U256) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => Option U256) (fun (l : Funding) (w : U256) (c : Option Time) => bind (recognizedAt h e l t) (fun (r : U256) => u256Sub r w)) b) x
+
 -- The engagement words. engIsOpen e: no cancelled time. engIsSigned e: a
 -- signed time. engCancel e t and engSign e t set the cancelled and the
 -- signed time.
 def engClientOf : Engagement -> Point :=
   fun (e : Engagement) => elim (fun (u : Engagement) => Point) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => cl) e
+
 def engFirmOf : Engagement -> Point :=
   fun (e : Engagement) => elim (fun (u : Engagement) => Point) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => fm) e
+
 def engAssetOf : Engagement -> Digest :=
   fun (e : Engagement) => elim (fun (u : Engagement) => Digest) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => asset) e
+
 def engStartOf : Engagement -> Time :=
-  fun (e : Engagement) => elim (fun (u : Engagement) => Time) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) =>
-    elim (fun (u : Window) => Time) (fun (sE : Time) (eE : Time) => sE) we) e
+  fun (e : Engagement) => elim (fun (u : Engagement) => Time) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => elim (fun (u : Window) => Time) (fun (sE : Time) (eE : Time) => sE) we) e
+
 def engEndOf : Engagement -> Time :=
-  fun (e : Engagement) => elim (fun (u : Engagement) => Time) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) =>
-    elim (fun (u : Window) => Time) (fun (sE : Time) (eE : Time) => eE) we) e
+  fun (e : Engagement) => elim (fun (u : Engagement) => Time) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => elim (fun (u : Window) => Time) (fun (sE : Time) (eE : Time) => eE) we) e
+
 def engIsOpen : Engagement -> Verdict :=
   fun (e : Engagement) => elim (fun (u : Engagement) => Flag) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => option flagYes (fun (k : Time) => flagNo) cn) e
+
 def engIsSigned : Engagement -> Verdict :=
   fun (e : Engagement) => elim (fun (u : Engagement) => Flag) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => option flagNo (fun (k : Time) => flagYes) sg) e
+
 def engCancel : Engagement -> Time -> Engagement :=
   fun (e : Engagement) (t : Time) => elim (fun (u : Engagement) => Engagement) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => engagementOf cl fm asset scope we sg (some t)) e
+
 def engSign : Engagement -> Time -> Engagement :=
   fun (e : Engagement) (t : Time) => elim (fun (u : Engagement) => Engagement) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => engagementOf cl fm asset scope we (some t) cn) e
+
 -- The policy in force at t is the last entry (ti, p) of h with ti < t (an
 -- entry is in force on (ti, next]). pullAt h t: its grant holds instrPull
 -- (verdictNo when no entry is in force). disputeAt h t: its dispute list
 -- (the empty list when no entry is in force). shareAt d v: the entry v of d
 -- (from 0), or none when v is outside d; the run carries the count left.
 def isPull : Policy -> Verdict :=
-  fun (p : Policy) => elim (fun (u : Policy) => Flag) (fun (r : Rate) (wp : Window) (g : Grant) (d : Dispute) =>
-    elim (fun (u : Grant) => Flag) (fun (ins : Instrument) (paused : Flag) => elim (fun (u : Instrument) => Flag) flagNo flagYes flagNo ins) g) p
+  fun (p : Policy) => elim (fun (u : Policy) => Flag) (fun (r : Rate) (wp : Window) (g : Grant) (d : Dispute) => elim (fun (u : Grant) => Flag) (fun (ins : Instrument) (paused : Flag) => elim (fun (u : Instrument) => Flag) flagNo flagYes flagNo ins) g) p
+
 def pullAt : History -> Time -> Verdict :=
   fun (h : History) (t : Time) => fmChain (Prod Time Policy) Flag flagIsSet (fun (v : Flag) (x : Prod Time Policy) => flagIf (later t (some (first x))) (isPull (second x)) v) flagNo h
+
 def disputeOf : Policy -> Dispute :=
   fun (p : Policy) => elim (fun (u : Policy) => Dispute) (fun (r : Rate) (wp : Window) (g : Grant) (d : Dispute) => d) p
+
 def disputeAt : History -> Time -> Dispute :=
   fun (h : History) (t : Time) => fmChain (Prod Time Policy) Dispute (fmIsSet U256) (fun (d : Dispute) (x : Prod Time Policy) => flagIf (later t (some (first x))) (disputeOf (second x)) d) (fmUnit U256) h
+
 def ShareRun : Type 0 := Prod (Option Nat) Acc
+
 def shareAt : Dispute -> Nat -> Option U256 :=
-  fun (d : Dispute) (v : Nat) => accOut (second (fmChain U256 ShareRun (isSetProd (Option Nat) Acc optNatIsSet accIsSet)
-    (fun (st : ShareRun) (bps : U256) => option st (fun (k : Nat) => flagIf (natLe k 0) (pair none (pair flagYes bps)) (pair (natSub k 1) (second st))) (first st))
-    (pair (some v) (pair flagNo 0u)) d))
+  fun (d : Dispute) (v : Nat) => accOut (second (fmChain U256 ShareRun (isSetProd (Option Nat) Acc optNatIsSet accIsSet) (fun (st : ShareRun) (bps : U256) => option st (fun (k : Nat) => flagIf (natLe k 0) (pair none (pair flagYes bps)) (pair (natSub k 1) (second st))) (first st)) (pair (some v) (pair flagNo 0u)) d))
+
 def bpsDen : NonZero U256 := 10000u
+
 -- The ops (Q-S5b-3 (a)). t is the stamp time. Each op that moves value
 -- needs bookOk l c t and gives the Escrow after and its Payout, or none.
 -- escFund s a x: add a to funded (not after a cancel).
 def escFund : Stamp -> U256 -> Escrow -> Option (Prod Escrow Payout) :=
-  fun (s : Stamp) (a : U256) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) =>
-    elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) =>
-      flagIf (flagIf (engIsOpen e) (bookOk l c (stampTime s)) flagNo)
-        (bind (u256Add (fundedAt l (stampTime s)) a) (fun (f : U256) => some (pair (escrowOf e (bookOf (logPut l (stampTime s) f) w c)) (fmUnit Instruction))))
-        none) b) x
+  fun (s : Stamp) (a : U256) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) => flagIf (flagIf (engIsOpen e) (bookOk l c (stampTime s)) flagNo) (bind (u256Add (fundedAt l (stampTime s)) a) (fun (f : U256) => some (pair (escrowOf e (bookOf (logPut l (stampTime s) f) w c)) (fmUnit Instruction)))) none) b) x
+
 -- escSettle h s v x: pay v to the firm. Every settle logs the funded amount
 -- at its time, so a later op cannot precede a withdrawal. A pull settle also
 -- adds v to funded (Q-S5-8 O1). The guard is on the book after (Q-S5b-2 (a)): withdrawn + v
 -- <= recognized after.
 def escSettle : History -> Stamp -> U256 -> Escrow -> Option (Prod Escrow Payout) :=
-  fun (h : History) (s : Stamp) (v : U256) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) =>
-    elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) =>
-      flagIf (bookOk l c (stampTime s))
-        (bind (flagIf (pullAt h (stampTime s)) (bind (u256Add (fundedAt l (stampTime s)) v) (fun (f : U256) => some (logPut l (stampTime s) f))) (some (logPut l (stampTime s) (fundedAt l (stampTime s))))) (fun (l2 : Funding) =>
-          bind (u256Add w v) (fun (w2 : U256) => bind (recognizedAt h e l2 (stampTime s)) (fun (r : U256) =>
-            flagIf (u256Le w2 r) (some (pair (escrowOf e (bookOf l2 w2 c)) (fmEta Instruction (instructionOf (engFirmOf e) (engAssetOf e) v s)))) none))))
-        none) b) x
+  fun (h : History) (s : Stamp) (v : U256) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) => flagIf (bookOk l c (stampTime s)) (bind (flagIf (pullAt h (stampTime s)) (bind (u256Add (fundedAt l (stampTime s)) v) (fun (f : U256) => some (logPut l (stampTime s) f))) (some (logPut l (stampTime s) (fundedAt l (stampTime s))))) (fun (l2 : Funding) => bind (u256Add w v) (fun (w2 : U256) => bind (recognizedAt h e l2 (stampTime s)) (fun (r : U256) => flagIf (u256Le w2 r) (some (pair (escrowOf e (bookOf l2 w2 c)) (fmEta Instruction (instructionOf (engFirmOf e) (engAssetOf e) v s)))) none)))) none) b) x
+
 -- escCancel h s x: cancel at t (not after a cancel). The client gets
 -- unearned t, the log gets (t, funded - unearned) = (t, recognized).
 def escCancel : History -> Stamp -> Escrow -> Option (Prod Escrow Payout) :=
-  fun (h : History) (s : Stamp) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) =>
-    elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) =>
-      flagIf (flagIf (engIsOpen e) (bookOk l c (stampTime s)) flagNo)
-        (bind (unearnedAt h e l (stampTime s)) (fun (u : U256) => bind (u256Sub (fundedAt l (stampTime s)) u) (fun (f : U256) =>
-          some (pair (escrowOf (engCancel e (stampTime s)) (bookOf (logPut l (stampTime s) f) w c)) (fmEta Instruction (instructionOf (engClientOf e) (engAssetOf e) u s))))))
-        none) b) x
+  fun (h : History) (s : Stamp) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) => flagIf (flagIf (engIsOpen e) (bookOk l c (stampTime s)) flagNo) (bind (unearnedAt h e l (stampTime s)) (fun (u : U256) => bind (u256Sub (fundedAt l (stampTime s)) u) (fun (f : U256) => some (pair (escrowOf (engCancel e (stampTime s)) (bookOf (logPut l (stampTime s) f) w c)) (fmEta Instruction (instructionOf (engClientOf e) (engAssetOf e) u s)))))) none) b) x
+
 -- escDispute h s v x: after a cancel, or at the end or later (O3). u =
 -- unearned t; the firm gets floor(u * bps / 10000) (bps = entry v of the
 -- dispute list in force at t), the client the rest (Q-S5-8 (a)). The log
 -- gets (t, funded - u). A v outside the list gives none.
 def escDispute : History -> Stamp -> Nat -> Escrow -> Option (Prod Escrow Payout) :=
-  fun (h : History) (s : Stamp) (v : Nat) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) =>
-    elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) =>
-      flagIf (flagIf (flagIf (engIsOpen e) (natLe (engEndOf e) (stampTime s)) flagYes) (bookOk l c (stampTime s)) flagNo)
-        (bind (unearnedAt h e l (stampTime s)) (fun (u : U256) => bind (shareAt (disputeAt h (stampTime s)) v) (fun (bps : U256) =>
-          bind (mulDiv u bps bpsDen) (fun (fs : U256) => bind (u256Sub u fs) (fun (cs : U256) => bind (u256Sub (fundedAt l (stampTime s)) u) (fun (f : U256) =>
-            some (pair (escrowOf e (bookOf (logPut l (stampTime s) f) w c))
-              (fmMul Instruction (fmEta Instruction (instructionOf (engFirmOf e) (engAssetOf e) fs s)) (fmEta Instruction (instructionOf (engClientOf e) (engAssetOf e) cs s))))))))))
-        none) b) x
+  fun (h : History) (s : Stamp) (v : Nat) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) => flagIf (flagIf (flagIf (engIsOpen e) (natLe (engEndOf e) (stampTime s)) flagYes) (bookOk l c (stampTime s)) flagNo) (bind (unearnedAt h e l (stampTime s)) (fun (u : U256) => bind (shareAt (disputeAt h (stampTime s)) v) (fun (bps : U256) => bind (mulDiv u bps bpsDen) (fun (fs : U256) => bind (u256Sub u fs) (fun (cs : U256) => bind (u256Sub (fundedAt l (stampTime s)) u) (fun (f : U256) => some (pair (escrowOf e (bookOf (logPut l (stampTime s) f) w c)) (fmMul Instruction (fmEta Instruction (instructionOf (engFirmOf e) (engAssetOf e) fs s)) (fmEta Instruction (instructionOf (engClientOf e) (engAssetOf e) cs s)))))))))) none) b) x
+
 -- escClose h s T x: recognized T - recognized T^- (Q-S5-6 (a)); T^- is the
 -- last close. The first close gives recognized T - 0 (Q-S5b-4 (a)), so the
 -- closes sum to recognized at the last close. The bound is T^- < T <= t, and
 -- before the first close the bound uses the start for T^-. The book gets the
 -- close time T.
 def escClose : History -> Stamp -> Time -> Escrow -> Option (Prod Escrow U256) :=
-  fun (h : History) (s : Stamp) (tc : Time) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow U256)) (fun (e : Engagement) (b : Book) =>
-    elim (fun (u : Book) => Option (Prod Escrow U256)) (fun (l : Funding) (w : U256) (c : Option Time) =>
-      flagIf (flagIf (natLe tc (stampTime s)) (later tc (some (option (engStartOf e) (fun (k : Time) => k) c))) flagNo)
-        (bind (recognizedAt h e l tc) (fun (r1 : U256) => bind (option (some 0u) (fun (k : Time) => recognizedAt h e l k) c) (fun (r0 : U256) =>
-          bind (u256Sub r1 r0) (fun (d : U256) => some (pair (escrowOf e (bookOf l w (some tc))) d)))))
-        none) b) x
+  fun (h : History) (s : Stamp) (tc : Time) (x : Escrow) => elim (fun (u : Escrow) => Option (Prod Escrow U256)) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => Option (Prod Escrow U256)) (fun (l : Funding) (w : U256) (c : Option Time) => flagIf (flagIf (natLe tc (stampTime s)) (later tc (some (option (engStartOf e) (fun (k : Time) => k) c))) flagNo) (bind (recognizedAt h e l tc) (fun (r1 : U256) => bind (option (some 0u) (fun (k : Time) => recognizedAt h e l k) c) (fun (r0 : U256) => bind (u256Sub r1 r0) (fun (d : U256) => some (pair (escrowOf e (bookOf l w (some tc))) d))))) none) b) x
+
 -- Part S (S7, Q-S7-2 and Q-S7-4 (a)): the record of the instructions. A
 -- PayEntry is an op kind and an Instruction, and a PayLog is a list of
 -- PayEntry values. The tag is the ASCII bytes of "accrue-pay" as a
@@ -583,20 +645,23 @@ def escClose : History -> Stamp -> Time -> Escrow -> Option (Prod Escrow U256) :
 -- digests, and ixHead log is its head. payEntries k ps puts each
 -- Instruction of the Payout ps in a PayEntry of the kind k.
 family PayKind := kindSettle | kindCancel | kindDispute
+
 family PayEntry := payEntryOf (peKind : PayKind) (peIx : Instruction)
+
 def PayLog : Type 0 := FreeMon PayEntry
+
 def tagPay : Digest := 0x6163637275652d706179u
+
 def ixDigest : PayEntry -> Digest :=
-  fun (p : PayEntry) => elim (fun (u : PayEntry) => Digest) (fun (k : PayKind) (i : Instruction) =>
-    elim (fun (u : Instruction) => Digest) (fun (py : Point) (ast : Digest) (am : U256) (st : Stamp) =>
-      elim (fun (u : Stamp) => Digest) (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) =>
-        H3 tagPay (hash (elim (fun (u : PayKind) => U256) 0u 1u 2u k) py) (H3 tagPay (hash ast am) (H3 tagPay (hash (toU256 t) prev) (hash rx z)))) st) i) p
-def ixEntries : PayLog -> Record :=
-  fun (log : PayLog) => fmMap PayEntry Entry ixDigest log
-def ixHead : PayLog -> Digest :=
-  fun (log : PayLog) => head (ixEntries log)
+  fun (p : PayEntry) => elim (fun (u : PayEntry) => Digest) (fun (k : PayKind) (i : Instruction) => elim (fun (u : Instruction) => Digest) (fun (py : Point) (ast : Digest) (am : U256) (st : Stamp) => elim (fun (u : Stamp) => Digest) (fun (t : Time) (prev : Digest) (rx : U256) (z : U256) => H3 tagPay (hash (elim (fun (u : PayKind) => U256) 0u 1u 2u k) py) (H3 tagPay (hash ast am) (H3 tagPay (hash (toU256 t) prev) (hash rx z)))) st) i) p
+
+def ixEntries : PayLog -> Record := fun (log : PayLog) => fmMap PayEntry Entry ixDigest log
+
+def ixHead : PayLog -> Digest := fun (log : PayLog) => head (ixEntries log)
+
 def payEntries : PayKind -> Payout -> PayLog :=
   fun (k : PayKind) (ps : Payout) => fmMap Instruction PayEntry (fun (i : Instruction) => payEntryOf k i) ps
+
 -- The pay check (S7, Q-S7-1 and Q-S7-3 (a)). A PayAuth is a threshold
 -- Schnorr signature (R.x, z) of the keyPay committee on the message
 -- (ixHead log, ixDigest p), so the signature binds the position (the authOk
@@ -604,13 +669,13 @@ def payEntries : PayKind -> Payout -> PayLog :=
 -- log only when payOk holds and verify does not find ixDigest p in the
 -- record (valid once), else it gives none.
 family PayAuth := payAuthOf (payR : U256) (payZ : U256)
+
 def payOk : Polity -> PayAuth -> PayEntry -> PayLog -> Verdict :=
-  fun (s : Polity) (a : PayAuth) (p : PayEntry) (log : PayLog) =>
-    elim (fun (u : PayAuth) => Flag)
-      (fun (rx : U256) (z : U256) => schnorrOk (keyPay s) rx z (ixHead log) (ixDigest p)) a
+  fun (s : Polity) (a : PayAuth) (p : PayEntry) (log : PayLog) => elim (fun (u : PayAuth) => Flag) (fun (rx : U256) (z : U256) => schnorrOk (keyPay s) rx z (ixHead log) (ixDigest p)) a
+
 def paySnoc : Polity -> PayAuth -> PayEntry -> PayLog -> Option PayLog :=
-  fun (s : Polity) (a : PayAuth) (p : PayEntry) (log : PayLog) =>
-    flagIf (payOk s a p log) (option (some (fmMul PayEntry log (fmEta PayEntry p))) (fun (j : Nat) => none) (verify (ixDigest p) (ixEntries log))) none
+  fun (s : Polity) (a : PayAuth) (p : PayEntry) (log : PayLog) => flagIf (payOk s a p log) (option (some (fmMul PayEntry log (fmEta PayEntry p))) (fun (j : Nat) => none) (verify (ixDigest p) (ixEntries log))) none
+
 -- settledIn log is the sum of the amounts of the kindSettle entries of log
 -- (Acc, none on an overflow). A dispute pays the firm out of unearned, so
 -- its entry does not add to the settled sum (retainer-lang SPEC 139, 217).
@@ -619,29 +684,18 @@ def paySnoc : Polity -> PayAuth -> PayEntry -> PayLog -> Option PayLog :=
 -- For push and stream it pays recognized minus withdrawn. A record behind
 -- the book or ahead of the stamp is refused.
 def settledIn : PayLog -> Option U256 :=
-  fun (log : PayLog) => accOut (fmChain PayEntry Acc accIsSet (fun (a : Acc) (p : PayEntry) => elim (fun (u : PayEntry) => Acc) (fun (k : PayKind) (i : Instruction) =>
-    elim (fun (u : PayKind) => Acc) (accAdd a (some (elim (fun (u : Instruction) => U256) (fun (py : Point) (ast : Digest) (am : U256) (st : Stamp) => am) i))) a a k) p) accZero log)
+  fun (log : PayLog) => accOut (fmChain PayEntry Acc accIsSet (fun (a : Acc) (p : PayEntry) => elim (fun (u : PayEntry) => Acc) (fun (k : PayKind) (i : Instruction) => elim (fun (u : PayKind) => Acc) (accAdd a (some (elim (fun (u : Instruction) => U256) (fun (py : Point) (ast : Digest) (am : U256) (st : Stamp) => am) i))) a a k) p) accZero log)
+
 -- payCarry h w t log skips the first w settled units already in the book
 -- and sums the remaining pull funding, using the policy at each payment.
 -- The first fold field is the amount still to skip; subtraction clamps at
 -- zero here. The second carries failure, including an entry after t.
 def payCarry : History -> U256 -> Time -> PayLog -> Option U256 :=
-  fun (h : History) (w : U256) (t : Time) (log : PayLog) => accOut (second (fmChain PayEntry (Prod U256 Acc) (isSetProd U256 Acc u256IsSet accIsSet)
-    (fun (st : Prod U256 Acc) (p : PayEntry) => elim (fun (u : PayEntry) => Prod U256 Acc) (fun (k : PayKind) (i : Instruction) =>
-      elim (fun (u : Instruction) => Prod U256 Acc) (fun (py : Point) (ast : Digest) (am : U256) (at : Stamp) =>
-        flagIf (natLe (stampTime at) t)
-          (elim (fun (u : PayKind) => Prod U256 Acc)
-            (pair (option 0u (fun (n : U256) => n) (u256Sub (first st) am))
-              (accAdd (second st) (flagIf (pullAt h (stampTime at)) (u256Sub am (u256Min am (first st))) (some 0u)))) st st k)
-          (pair (first st) (pair flagNo 0u))) i) p)
-    (pair w accZero) log))
+  fun (h : History) (w : U256) (t : Time) (log : PayLog) => accOut (second (fmChain PayEntry (Prod U256 Acc) (isSetProd U256 Acc u256IsSet accIsSet) (fun (st : Prod U256 Acc) (p : PayEntry) => elim (fun (u : PayEntry) => Prod U256 Acc) (fun (k : PayKind) (i : Instruction) => elim (fun (u : Instruction) => Prod U256 Acc) (fun (py : Point) (ast : Digest) (am : U256) (at : Stamp) => flagIf (natLe (stampTime at) t) (elim (fun (u : PayKind) => Prod U256 Acc) (pair (option 0u (fun (n : U256) => n) (u256Sub (first st) am)) (accAdd (second st) (flagIf (pullAt h (stampTime at)) (u256Sub am (u256Min am (first st))) (some 0u)))) st st k) (pair (first st) (pair flagNo 0u))) i) p) (pair w accZero) log))
+
 def escSettleR : History -> Stamp -> Escrow -> PayLog -> Option (Prod Escrow Payout) :=
-  fun (h : History) (s : Stamp) (x : Escrow) (log : PayLog) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) =>
-    elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) =>
-      bind (settledIn log) (fun (wl : U256) => flagIf (u256Le w wl)
-        (bind (payCarry h w (stampTime s) log) (fun (d : U256) => bind (u256Add (fundedAt l (stampTime s)) d) (fun (f : U256) =>
-          bind (flagIf (pullAt h (stampTime s)) (earnedAt h e (stampTime s)) (recognizedAt h e (logPut l (stampTime s) f) (stampTime s))) (fun (r : U256) =>
-            bind (u256Sub r wl) (fun (v : U256) => escSettle h s v (escrowOf e (bookOf (logPut l (stampTime s) f) wl c))))))) none)) b) x
+  fun (h : History) (s : Stamp) (x : Escrow) (log : PayLog) => elim (fun (u : Escrow) => Option (Prod Escrow Payout)) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => Option (Prod Escrow Payout)) (fun (l : Funding) (w : U256) (c : Option Time) => bind (settledIn log) (fun (wl : U256) => flagIf (u256Le w wl) (bind (payCarry h w (stampTime s) log) (fun (d : U256) => bind (u256Add (fundedAt l (stampTime s)) d) (fun (f : U256) => bind (flagIf (pullAt h (stampTime s)) (earnedAt h e (stampTime s)) (recognizedAt h e (logPut l (stampTime s) f) (stampTime s))) (fun (r : U256) => bind (u256Sub r wl) (fun (v : U256) => escSettle h s v (escrowOf e (bookOf (logPut l (stampTime s) f) wl c))))))) none)) b) x
+
 -- engage and countersign (Q-S5-7 (a), PLAN 4.1). engDigest e: the digest
 -- of the client, the firm, the asset, the scope and the window. The tags
 -- are the ASCII bytes of "accrue-engage" and "accrue-countersign". engage
@@ -652,21 +706,18 @@ def escSettleR : History -> Stamp -> Escrow -> PayLog -> Option (Prod Escrow Pay
 -- needs bookOk, so signing cannot change earned in a closed period or
 -- precede the funding log.
 def tagEngage : Digest := 0x6163637275652d656e67616765u
+
 def tagCountersign : Digest := 0x6163637275652d636f756e7465727369676eu
+
 def engDigest : Engagement -> Digest :=
-  fun (e : Engagement) => elim (fun (u : Engagement) => Digest) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) =>
-    elim (fun (u : Window) => Digest) (fun (sE : Time) (eE : Time) => H3 tagEngage (hash cl fm) (H3 tagEngage (hash asset scope) (hash (toU256 sE) (toU256 eE)))) we) e
+  fun (e : Engagement) => elim (fun (u : Engagement) => Digest) (fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (we : Window) (sg : Option Time) (cn : Option Time) => elim (fun (u : Window) => Digest) (fun (sE : Time) (eE : Time) => H3 tagEngage (hash cl fm) (H3 tagEngage (hash asset scope) (hash (toU256 sE) (toU256 eE)))) we) e
+
 def engage : Point -> Point -> Digest -> Digest -> Window -> Auth -> Option Escrow :=
-  fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (wn : Window) (a : Auth) =>
-    elim (fun (u : Auth) => Option Escrow) (fun (rx : U256) (z : U256) =>
-      flagIf (schnorrOk cl rx z tagEngage (engDigest (engagementOf cl fm asset scope wn none none)))
-        (some (escrowOf (engagementOf cl fm asset scope wn none none) (bookOf (fmUnit (Prod Time U256)) 0u none))) none) a
+  fun (cl : Point) (fm : Point) (asset : Digest) (scope : Digest) (wn : Window) (a : Auth) => elim (fun (u : Auth) => Option Escrow) (fun (rx : U256) (z : U256) => flagIf (schnorrOk cl rx z tagEngage (engDigest (engagementOf cl fm asset scope wn none none))) (some (escrowOf (engagementOf cl fm asset scope wn none none) (bookOf (fmUnit (Prod Time U256)) 0u none))) none) a
+
 def countersign : Stamp -> Auth -> Escrow -> Option Escrow :=
-  fun (s : Stamp) (a : Auth) (x : Escrow) => elim (fun (u : Escrow) => Option Escrow) (fun (e : Engagement) (b : Book) =>
-    elim (fun (u : Book) => Option Escrow) (fun (l : Funding) (w : U256) (c : Option Time) =>
-      elim (fun (u : Auth) => Option Escrow) (fun (rx : U256) (z : U256) =>
-        flagIf (flagIf (bookOk l c (stampTime s)) (flagIf (engIsSigned e) flagNo (schnorrOk (engFirmOf e) rx z tagCountersign (engDigest e))) flagNo)
-          (some (escrowOf (engSign e (stampTime s)) b)) none) a) b) x
+  fun (s : Stamp) (a : Auth) (x : Escrow) => elim (fun (u : Escrow) => Option Escrow) (fun (e : Engagement) (b : Book) => elim (fun (u : Book) => Option Escrow) (fun (l : Funding) (w : U256) (c : Option Time) => elim (fun (u : Auth) => Option Escrow) (fun (rx : U256) (z : U256) => flagIf (flagIf (bookOk l c (stampTime s)) (flagIf (engIsSigned e) flagNo (schnorrOk (engFirmOf e) rx z tagCountersign (engDigest e))) flagNo) (some (escrowOf (engSign e (stampTime s)) b)) none) a) b) x
+
 -- The CC dual of the books (S5b P3, Q-S5-4 (a)). Books A is the cofree
 -- comonad on Stamp -> _: booksNow b is the value now (eps) and booksNext b
 -- s is the book after the stamp s (advance). booksPair A sA b c runs b
@@ -678,41 +729,65 @@ def countersign : Stamp -> Auth -> Escrow -> Option Escrow :=
 -- stamp. The pairing law: the pairing of a corecursor with a chain is the
 -- fold of its step over the chain (refl on a closed chain).
 cofamily Books (A : Type 0) := booksCorec (booksNow : A) (booksNext : Stamp -> Books A)
+
 def booksPair : (A : Type 0) -> isSet A -> Books A -> Stamps -> A :=
-  fun (A : Type 0) => fun (sA : isSet A) => fun (b : Books A) => fun (c : Stamps) =>
-    fmChain Stamp ((Books A -> A) -> Books A -> A) (isSetFun (Books A -> A) (Books A -> A) (isSetFun (Books A) A sA))
-      (fun (t : (Books A -> A) -> Books A -> A) (s : Stamp) => fun (k : Books A -> A) => t (fun (y : Books A) => k (booksNext A y s)))
-      (fun (k : Books A -> A) => k) c (booksNow A) b
-def booksStep : Option Time -> Stamp -> Option Time := fun (o : Option Time) (s : Stamp) => some (stampTime s)
-def booksLast : Books (Option Time) := booksCorec (Option Time) (Option Time) (fun (o : Option Time) => o) booksStep none
-def booksChain : Stamps := fmMul Stamp (fmEta Stamp (stampOf 5 0u 0u 0u)) (fmEta Stamp (stampOf 9 0u 0u 0u))
-def booksLaw : Path (Option Time) (booksPair (Option Time) optNatIsSet booksLast booksChain) (fmChain Stamp (Option Time) optNatIsSet booksStep none booksChain) := refl
-def booksLawNine : Path (Option Time) (booksPair (Option Time) optNatIsSet booksLast booksChain) (some 9) := refl
+  fun (A : Type 0) (sA : isSet A) (b : Books A) (c : Stamps) => fmChain Stamp ((Books A -> A) -> Books A -> A) (isSetFun (Books A -> A) (Books A -> A) (isSetFun (Books A) A sA)) (fun (t : (Books A -> A) -> Books A -> A) (s : Stamp) (k : Books A -> A) => t (fun (y : Books A) => k (booksNext A y s))) (fun (k : Books A -> A) => k) c (booksNow A) b
+
+def booksStep : Option Time -> Stamp -> Option Time :=
+  fun (o : Option Time) (s : Stamp) => some (stampTime s)
+
+def booksLast : Books (Option Time) :=
+  booksCorec (Option Time) (Option Time) (fun (o : Option Time) => o) booksStep none
+
+def booksChain : Stamps :=
+  fmMul Stamp (fmEta Stamp (stampOf 5 0u 0u 0u)) (fmEta Stamp (stampOf 9 0u 0u 0u))
+
+def booksLaw : Path (Option Time) (booksPair (Option Time) optNatIsSet booksLast booksChain) (fmChain Stamp (Option Time) optNatIsSet booksStep none booksChain) :=
+  refl
+
+def booksLawNine : Path (Option Time) (booksPair (Option Time) optNatIsSet booksLast booksChain) (some 9) :=
+  refl
+
 def Proposal : Type 0 := Polity
+
 def Bit : Enc Verdict -> Type 0 :=
   fun (c : Enc Verdict) => Sigma (v : Verdict) (Path (Enc Verdict) (encEta Verdict v) c)
+
 def SealedBallot : Type 0 := Sigma (c : Enc Verdict) (Prod (ZKProof (Bit c)) Digest)
+
 def mkBallot : Verdict -> Digest -> SealedBallot :=
   fun (v : Verdict) (t : Digest) => pack (encEta Verdict v) (pair (trunc1 (Bit (encEta Verdict v)) (pack v refl)) t)
+
 def ballotVote : SealedBallot -> Enc Verdict := fun (b : SealedBallot) => witness b
+
 def linkTag : SealedBallot -> Digest := fun (b : SealedBallot) => second (payload b)
+
 def Box : Type 0 := FreeMon SealedBallot
+
 def tagUsed : Digest -> Box -> Flag :=
   fun (t : Digest) (box : Box) => fmChain SealedBallot Flag flagIsSet (fun (f : Flag) (x : SealedBallot) => flagIf (u256Eq (linkTag x) t) flagYes f) flagNo box
+
 def castBallot : Proposal -> SealedBallot -> Box -> Option Box :=
   fun (p : Proposal) (b : SealedBallot) (box : Box) => flagIf (tagUsed (linkTag b) box) none (some (fmMul SealedBallot box (fmEta SealedBallot b)))
+
 def tallyBox : Box -> Enc (Option Count) :=
-  fun (box : Box) => fmChain SealedBallot (Enc (Option Count)) (encIsSet (Option Count) optNatIsSet)
-    (fun (t : Enc (Option Count)) (b : SealedBallot) => encOp2 (Option Count) Flag (Option Count) (fun (n : Option Count) (f : Flag) => flagIf f (bind n opSucc) n) t (ballotVote b)) (encEta (Option Count) (some 0)) box
+  fun (box : Box) => fmChain SealedBallot (Enc (Option Count)) (encIsSet (Option Count) optNatIsSet) (fun (t : Enc (Option Count)) (b : SealedBallot) => encOp2 (Option Count) Flag (Option Count) (fun (n : Option Count) (f : Flag) => flagIf f (bind n opSucc) n) t (ballotVote b)) (encEta (Option Count) (some 0)) box
+
 def countVotes : FreeMon Verdict -> Option Count :=
   fun (vs : FreeMon Verdict) => fmChain Verdict (Option Count) optNatIsSet (fun (n : Option Count) (f : Verdict) => flagIf f (bind n opSucc) n) (some 0) vs
+
 def Decided : Type 0 := Prod Proposal Count
+
 def decideYes : Polity -> Count -> Flag := fun (s : Polity) (y : Count) => natLe (tAmend s) y
+
 def enact : Proposal -> Polity -> Polity := fun (p : Proposal) (s : Polity) => p
+
 def stepD : Polity -> Decided -> Polity :=
   fun (s : Polity) (d : Decided) => flagIf (decideYes s (second d)) (enact (first d) s) s
+
 def amendAll : FreeMon Decided -> Polity -> Polity :=
   fun (ds : FreeMon Decided) (s : Polity) => fmChain Decided Polity polityIsSet stepD s ds
+
 -- Part D policy ballots (S6a, Q-S6-1 and Q-S6-2 (a)). A decision is a Nat
 -- below the count of decisions of the program (retainer-lang C10). A
 -- PolicyBallot holds one encrypted bit for each decision, a ZKProof that
@@ -724,36 +799,42 @@ def amendAll : FreeMon Decided -> Polity -> Polity :=
 -- of each ballot (L7).
 def encAll : FreeMon Verdict -> FreeMon (Enc Verdict) :=
   fun (vs : FreeMon Verdict) => fmMap Verdict (Enc Verdict) (fun (v : Verdict) => encEta Verdict v) vs
+
 def HotOk : FreeMon (Enc Verdict) -> Type 0 :=
   fun (cs : FreeMon (Enc Verdict)) => Sigma (vs : FreeMon Verdict) (Prod (Path (FreeMon (Enc Verdict)) (encAll vs) cs) (Path (Option Count) (countVotes vs) (some 1)))
+
 def PolicyBallot : Type 0 := Sigma (cs : FreeMon (Enc Verdict)) (Prod (ZKProof (HotOk cs)) Digest)
+
 def mkPolicyBallot : (vs : FreeMon Verdict) -> Path (Option Count) (countVotes vs) (some 1) -> Digest -> PolicyBallot :=
-  fun (vs : FreeMon Verdict) (p : Path (Option Count) (countVotes vs) (some 1)) (t : Digest) =>
-    pack (encAll vs) (pair (trunc1 (HotOk (encAll vs)) (pack vs (pair refl p))) t)
+  fun (vs : FreeMon Verdict) (p : Path (Option Count) (countVotes vs) (some 1)) (t : Digest) => pack (encAll vs) (pair (trunc1 (HotOk (encAll vs)) (pack vs (pair refl p))) t)
+
 def pbVotes : PolicyBallot -> FreeMon (Enc Verdict) := fun (b : PolicyBallot) => witness b
+
 def pbTag : PolicyBallot -> Digest := fun (b : PolicyBallot) => second (payload b)
+
 def PolicyBox : Type 0 := FreeMon PolicyBallot
+
 def pbTagUsed : Digest -> PolicyBox -> Flag :=
   fun (t : Digest) (box : PolicyBox) => fmChain PolicyBallot Flag flagIsSet (fun (f : Flag) (x : PolicyBallot) => flagIf (u256Eq (pbTag x) t) flagYes f) flagNo box
+
 def castPolicy : Nat -> PolicyBallot -> PolicyBox -> Option PolicyBox :=
-  fun (n : Nat) (b : PolicyBallot) (box : PolicyBox) =>
-    flagIf (pbTagUsed (pbTag b) box) none
-      (option none (fun (m : Nat) => flagIf (natEq m n) (some (fmMul PolicyBallot box (fmEta PolicyBallot b))) none) (len (Enc Verdict) (pbVotes b)))
+  fun (n : Nat) (b : PolicyBallot) (box : PolicyBox) => flagIf (pbTagUsed (pbTag b) box) none (option none (fun (m : Nat) => flagIf (natEq m n) (some (fmMul PolicyBallot box (fmEta PolicyBallot b))) none) (len (Enc Verdict) (pbVotes b)))
+
 def slotOf : Nat -> FreeMon (Enc Verdict) -> Enc Verdict :=
-  fun (k : Nat) (cs : FreeMon (Enc Verdict)) => fmRun (Enc Verdict) (Nat -> Enc Verdict) (isSetFun Nat (Enc Verdict) (encIsSet Verdict flagIsSet))
-    (fun (x : Enc Verdict) (b : Nat -> Enc Verdict) (j : Nat) => option x (fun (i : Nat) => b i) (natSub j 1))
-    (fun (j : Nat) => encEta Verdict verdictNo) cs k
+  fun (k : Nat) (cs : FreeMon (Enc Verdict)) => fmRun (Enc Verdict) (Nat -> Enc Verdict) (isSetFun Nat (Enc Verdict) (encIsSet Verdict flagIsSet)) (fun (x : Enc Verdict) (b : Nat -> Enc Verdict) (j : Nat) => option x (fun (i : Nat) => b i) (natSub j 1)) (fun (j : Nat) => encEta Verdict verdictNo) cs k
+
 def slotPlain : Nat -> FreeMon Verdict -> Verdict :=
-  fun (k : Nat) (vs : FreeMon Verdict) => fmRun Verdict (Nat -> Verdict) (isSetFun Nat Verdict flagIsSet)
-    (fun (x : Verdict) (b : Nat -> Verdict) (j : Nat) => option x (fun (i : Nat) => b i) (natSub j 1))
-    (fun (j : Nat) => verdictNo) vs k
+  fun (k : Nat) (vs : FreeMon Verdict) => fmRun Verdict (Nat -> Verdict) (isSetFun Nat Verdict flagIsSet) (fun (x : Verdict) (b : Nat -> Verdict) (j : Nat) => option x (fun (i : Nat) => b i) (natSub j 1)) (fun (j : Nat) => verdictNo) vs k
+
 def tallyAt : Nat -> PolicyBox -> Enc (Option Count) :=
-  fun (k : Nat) (box : PolicyBox) => fmChain PolicyBallot (Enc (Option Count)) (encIsSet (Option Count) optNatIsSet)
-    (fun (t : Enc (Option Count)) (b : PolicyBallot) => encOp2 (Option Count) Flag (Option Count) (fun (n : Option Count) (f : Flag) => flagIf f (bind n opSucc) n) t (slotOf k (pbVotes b))) (encEta (Option Count) (some 0)) box
+  fun (k : Nat) (box : PolicyBox) => fmChain PolicyBallot (Enc (Option Count)) (encIsSet (Option Count) optNatIsSet) (fun (t : Enc (Option Count)) (b : PolicyBallot) => encOp2 (Option Count) Flag (Option Count) (fun (n : Option Count) (f : Flag) => flagIf f (bind n opSucc) n) t (slotOf k (pbVotes b))) (encEta (Option Count) (some 0)) box
+
 def countD : Nat -> FreeMon (FreeMon Verdict) -> Option Count :=
   fun (k : Nat) (hs : FreeMon (FreeMon Verdict)) => fmChain (FreeMon Verdict) (Option Count) optNatIsSet (fun (n : Option Count) (h : FreeMon Verdict) => flagIf (slotPlain k h) (bind n opSucc) n) (some 0) hs
+
 def pbPlain : PolicyBox -> FreeMon (FreeMon Verdict) :=
   fun (box : PolicyBox) => fmMap PolicyBallot (FreeMon Verdict) (fun (b : PolicyBallot) => fmMap (Enc Verdict) Verdict (fun (c : Enc Verdict) => decrypt Verdict c) (pbVotes b)) box
+
 -- Part D choice and Gov (S6a, Q-S6-2 (a), L10). A PolicyTally holds the
 -- opened count of each decision in order. tallyAll ds box gives the tally
 -- of each decision in the list ds, and openTally q opens each one. tallyMax
@@ -767,32 +848,44 @@ def pbPlain : PolicyBox -> FreeMon (FreeMon Verdict) :=
 -- pa gives the policy of the decision (pa is the policyAt of the program,
 -- retainer-lang C10).
 def PolicyTally : Type 0 := FreeMon (Option Count)
+
 def tallyAll : FreeMon Nat -> PolicyBox -> FreeMon (Enc (Option Count)) :=
   fun (ds : FreeMon Nat) (box : PolicyBox) => fmMap Nat (Enc (Option Count)) (fun (k : Nat) => tallyAt k box) ds
+
 def openTally : Quorum -> FreeMon Nat -> PolicyBox -> PolicyTally :=
   fun (q : Quorum) (ds : FreeMon Nat) (box : PolicyBox) => fmMap (Enc (Option Count)) (Option Count) (fun (c : Enc (Option Count)) => open (Option Count) q c) (tallyAll ds box)
+
 def tallyMax : PolicyTally -> Option Count :=
   fun (t : PolicyTally) => fmChain (Option Count) (Option Count) optNatIsSet (fun (m : Option Count) (c : Option Count) => bind m (fun (a : Count) => bind c (fun (b : Count) => some (natMax a b)))) (some 0) t
+
 def tallySum : PolicyTally -> Option Count :=
   fun (t : PolicyTally) => fmChain (Option Count) (Option Count) optNatIsSet (fun (m : Option Count) (c : Option Count) => bind m (fun (a : Count) => bind c (fun (b : Count) => natAdd a b))) (some 0) t
+
 def atCount : Count -> PolicyTally -> Option Count :=
   fun (m : Count) (t : PolicyTally) => fmChain (Option Count) (Option Count) optNatIsSet (fun (n : Option Count) (c : Option Count) => bind c (fun (b : Count) => flagIf (natEq b m) (bind n opSucc) n)) (some 0) t
+
 def posOf : Count -> PolicyTally -> Option Nat :=
-  fun (m : Count) (t : PolicyTally) =>
-    bind (fmRun (Option Count) (Option Nat) optNatIsSet (fun (c : Option Count) (f : Option Nat) => bind c (fun (b : Count) => bind f (fun (g : Nat) => flagIf (natEq b m) (some 1) (flagIf (natEq g 0) (some 0) (natAdd g 1))))) (some 0) t) foundAt
+  fun (m : Count) (t : PolicyTally) => bind (fmRun (Option Count) (Option Nat) optNatIsSet (fun (c : Option Count) (f : Option Nat) => bind c (fun (b : Count) => bind f (fun (g : Nat) => flagIf (natEq b m) (some 1) (flagIf (natEq g 0) (some 0) (natAdd g 1))))) (some 0) t) foundAt
+
 def rulePlurality : PolicyTally -> Option Nat :=
   fun (t : PolicyTally) => bind (tallyMax t) (fun (m : Count) => flagIf (natEq m 0) none (bind (atCount m t) (fun (k : Count) => flagIf (natEq k 1) (posOf m t) none)))
+
 def ruleMajority : PolicyTally -> Option Nat :=
   fun (t : PolicyTally) => bind (tallyMax t) (fun (m : Count) => bind (tallySum t) (fun (s : Count) => bind (natSub s m) (fun (rest : Count) => flagIf (natLe m rest) none (posOf m t))))
+
 def chooseD : Nat -> PolicyTally -> Option Nat :=
   fun (r : Nat) (t : PolicyTally) => flagIf (natEq r 0) (rulePlurality t) (flagIf (natEq r 1) (ruleMajority t) none)
+
 def govD : Nat -> Nat -> PolicyTally -> Option Nat :=
   fun (n : Nat) (r : Nat) (t : PolicyTally) => bind (chooseD r t) (fun (d : Nat) => flagIf (natLe n d) none (some d))
+
 def govPi : (Nat -> Policy) -> Nat -> Nat -> PolicyTally -> Option Policy :=
   fun (pa : Nat -> Policy) (n : Nat) (r : Nat) (t : PolicyTally) => bind (govD n r t) (fun (d : Nat) => some (pa d))
+
 -- govC (S6b, Q-S6-6 (a)): the decision under the rule of the Polity in force.
 def govC : Polity -> Nat -> PolicyTally -> Option Nat :=
   fun (s : Polity) (n : Nat) (t : PolicyTally) => govD n (rulePos s) t
+
 -- Part D decision log, freeze and regimes (S6a, Q-S6-3 (a), Q-S6-4 (a)).
 -- A DecLog holds (t, d) for each change of decision (retainer-lang C12).
 -- lastD gives the last decision (none for an empty log). govStep adds (t,
@@ -805,22 +898,27 @@ def govC : Polity -> Nat -> PolicyTally -> Option Nat :=
 -- most one decision, so Schelling-Ising cannot occur and
 -- REFUSE_BIFURCATION has no reach.
 def DecLog : Type 0 := FreeMon (Prod Time Nat)
+
 def lastD : DecLog -> Option Nat :=
   fun (log : DecLog) => fmChain (Prod Time Nat) (Option Nat) optNatIsSet (fun (o : Option Nat) (x : Prod Time Nat) => some (second x)) none log
+
 def govStep : Nat -> Nat -> Time -> PolicyTally -> DecLog -> DecLog :=
-  fun (n : Nat) (r : Nat) (t : Time) (tl : PolicyTally) (log : DecLog) =>
-    option log (fun (d : Nat) => flagIf (option flagNo (fun (l : Nat) => natEq l d) (lastD log)) log (fmMul (Prod Time Nat) log (fmEta (Prod Time Nat) (pair t d)))) (govD n r tl)
+  fun (n : Nat) (r : Nat) (t : Time) (tl : PolicyTally) (log : DecLog) => option log (fun (d : Nat) => flagIf (option flagNo (fun (l : Nat) => natEq l d) (lastD log)) log (fmMul (Prod Time Nat) log (fmEta (Prod Time Nat) (pair t d)))) (govD n r tl)
+
 def logHistory : (Nat -> Policy) -> DecLog -> History :=
   fun (pa : Nat -> Policy) (log : DecLog) => fmMap (Prod Time Nat) (Prod Time Policy) (fun (x : Prod Time Nat) => pair (first x) (pa (second x))) log
+
 family RegimeD := regimeAD | regimeAI
+
 def regimeD : Nat -> Nat -> FreeMon PolicyTally -> RegimeD :=
-  fun (n : Nat) (r : Nat) (tab : FreeMon PolicyTally) =>
-    flagIf (fmChain PolicyTally Flag flagIsSet (fun (f : Flag) (tl : PolicyTally) => option flagNo (fun (d : Nat) => f) (govD n r tl)) flagYes tab) regimeAD regimeAI
+  fun (n : Nat) (r : Nat) (tab : FreeMon PolicyTally) => flagIf (fmChain PolicyTally Flag flagIsSet (fun (f : Flag) (tl : PolicyTally) => option flagNo (fun (d : Nat) => f) (govD n r tl)) flagYes tab) regimeAD regimeAI
+
 -- The positions of a bag (S7 B3, Q4): Pos n has n values, the first
 -- position at each szS and a lift of each position of the tail. No
 -- constructor gives Pos sz0. A domain family, so Fin stays internal (O23).
 family Pos : Size -> Type 0 := posFirst (firstSize : Size) : Pos (szS firstSize)
   | posNext (nextSize : Size) (nextPos : Pos nextSize) : Pos (szS nextSize)
+
 -- The words of adjacent swaps (S7 B3, Q5): wordSwap applies the rest,
 -- then swaps the first two positions, and wordLift applies the inner
 -- word to the tail, then the rest. The orbits of a word action are the
@@ -828,6 +926,7 @@ family Pos : Size -> Type 0 := posFirst (firstSize : Size) : Pos (szS firstSize)
 family Word : Size -> Type 0 := wordNil (nilSize : Size) : Word nilSize
   | wordSwap (wordAt : Size) (wordRest : Word (szS (szS wordAt))) : Word (szS (szS wordAt))
   | wordLift (liftSize : Size) (liftInner : Word liftSize) (liftRest : Word (szS liftSize)) : Word (szS liftSize)
+
 -- The choice bags and the orbits at each size (S3, design C section 3,
 -- USER ruling Q-S3-6 (a)). ChoiceBag is the old cons Bag at the choice
 -- type Sum Unit Unit, and OrbitN n is the quotient of the configurations
@@ -835,33 +934,27 @@ family Word : Size -> Type 0 := wordNil (nilSize : Size) : Word nilSize
 -- parameter, so they are not type constructors (rule R1). sizePred gives
 -- the index of a tail, consP puts a choice in front of a configuration,
 -- swapFront swaps the first two positions and actW is the word action.
-def sizePred : Size -> Size := fun (s : Size) => elim (fun (t : Size) => Size) sz0 (fun (k : Size) (ih : Size) => k) s
+def sizePred : Size -> Size :=
+  fun (s : Size) => elim (fun (t : Size) => Size) sz0 (fun (k : Size) (ih : Size) => k) s
+
 def consP : (n : Size) -> Sum Unit Unit -> (Pos n -> Sum Unit Unit) -> Pos (szS n) -> Sum Unit Unit :=
-  fun (n : Size) (a : Sum Unit Unit) (t : Pos n -> Sum Unit Unit) (p : Pos (szS n)) =>
-    (elim (fun (k : Size) (q : Pos k) => Sum Unit Unit -> (Pos (sizePred k) -> Sum Unit Unit) -> Sum Unit Unit)
-      (fun (m : Size) => fun (b : Sum Unit Unit) (u : Pos m -> Sum Unit Unit) => b)
-      (fun (m : Size) (q : Pos m) (ih : Sum Unit Unit -> (Pos (sizePred m) -> Sum Unit Unit) -> Sum Unit Unit) => fun (b : Sum Unit Unit) (u : Pos m -> Sum Unit Unit) => u q) p) a t
+  fun (n : Size) (a : Sum Unit Unit) (t : Pos n -> Sum Unit Unit) (p : Pos (szS n)) => elim (fun (k : Size) (q : Pos k) => Sum Unit Unit -> (Pos (sizePred k) -> Sum Unit Unit) -> Sum Unit Unit) (fun (m : Size) (b : Sum Unit Unit) (u : Pos m -> Sum Unit Unit) => b) (fun (m : Size) (q : Pos m) (ih : Sum Unit Unit -> (Pos (sizePred m) -> Sum Unit Unit) -> Sum Unit Unit) (b : Sum Unit Unit) (u : Pos m -> Sum Unit Unit) => u q) p a t
+
 def swapFront : (m : Size) -> (Pos (szS (szS m)) -> Sum Unit Unit) -> Pos (szS (szS m)) -> Sum Unit Unit :=
-  fun (m : Size) (c : Pos (szS (szS m)) -> Sum Unit Unit) =>
-    consP (szS m) (c (posNext (szS m) (posFirst m))) (consP m (c (posFirst (szS m))) (fun (p : Pos m) => c (posNext (szS m) (posNext m p))))
+  fun (m : Size) (c : Pos (szS (szS m)) -> Sum Unit Unit) => consP (szS m) (c (posNext (szS m) (posFirst m))) (consP m (c (posFirst (szS m))) (fun (p : Pos m) => c (posNext (szS m) (posNext m p))))
+
 def actW : (n : Size) -> Word n -> (Pos n -> Sum Unit Unit) -> Pos n -> Sum Unit Unit :=
-  fun (n : Size) (w : Word n) => elim (fun (k : Size) (v : Word k) => (Pos k -> Sum Unit Unit) -> Pos k -> Sum Unit Unit)
-    (fun (k : Size) => fun (d : Pos k -> Sum Unit Unit) => d)
-    (fun (m : Size) (v : Word (szS (szS m))) (ih : (Pos (szS (szS m)) -> Sum Unit Unit) -> Pos (szS (szS m)) -> Sum Unit Unit) =>
-      fun (d : Pos (szS (szS m)) -> Sum Unit Unit) => swapFront m (ih d))
-    (fun (m : Size) (u : Word m) (ihu : (Pos m -> Sum Unit Unit) -> Pos m -> Sum Unit Unit) (v : Word (szS m)) (ihv : (Pos (szS m) -> Sum Unit Unit) -> Pos (szS m) -> Sum Unit Unit) =>
-      fun (d : Pos (szS m) -> Sum Unit Unit) => ihv (consP m (d (posFirst m)) (ihu (fun (p : Pos m) => d (posNext m p))))) w
+  fun (n : Size) (w : Word n) => elim (fun (k : Size) (v : Word k) => (Pos k -> Sum Unit Unit) -> Pos k -> Sum Unit Unit) (fun (k : Size) (d : Pos k -> Sum Unit Unit) => d) (fun (m : Size) (v : Word (szS (szS m))) (ih : (Pos (szS (szS m)) -> Sum Unit Unit) -> Pos (szS (szS m)) -> Sum Unit Unit) (d : Pos (szS (szS m)) -> Sum Unit Unit) => swapFront m (ih d)) (fun (m : Size) (u : Word m) (ihu : (Pos m -> Sum Unit Unit) -> Pos m -> Sum Unit Unit) (v : Word (szS m)) (ihv : (Pos (szS m) -> Sum Unit Unit) -> Pos (szS m) -> Sum Unit Unit) (d : Pos (szS m) -> Sum Unit Unit) => ihv (consP m (d (posFirst m)) (ihu (fun (p : Pos m) => d (posNext m p))))) w
+
 family ChoiceBag : Size -> Type 0 := choiceNil : ChoiceBag sz0
   | choiceCons (cbSize : Size) (cbHead : Sum Unit Unit) (cbTail : ChoiceBag cbSize) : ChoiceBag (szS cbSize)
-  | choiceSwap (cbSwapSize : Size) (cbFirst : Sum Unit Unit) (cbSecond : Sum Unit Unit) (cbSwapTail : ChoiceBag cbSwapSize) (i : I) : ChoiceBag (szS (szS cbSwapSize))
-    [ ~i -> choiceCons (szS cbSwapSize) cbFirst (choiceCons cbSwapSize cbSecond cbSwapTail), i -> choiceCons (szS cbSwapSize) cbSecond (choiceCons cbSwapSize cbFirst cbSwapTail) ]
-  | choiceSquash (cbSquashSize : Size) (cbFrom : ChoiceBag cbSquashSize) (cbTo : ChoiceBag cbSquashSize) (cbLeft : Path (ChoiceBag cbSquashSize) cbFrom cbTo) (cbRight : Path (ChoiceBag cbSquashSize) cbFrom cbTo) (i : I) (j : I) : ChoiceBag cbSquashSize
-    [ ~i -> cbLeft @ j, i -> cbRight @ j, ~j -> cbFrom, j -> cbTo ]
+  | choiceSwap (cbSwapSize : Size) (cbFirst : Sum Unit Unit) (cbSecond : Sum Unit Unit) (cbSwapTail : ChoiceBag cbSwapSize) (i : I) : ChoiceBag (szS (szS cbSwapSize)) [ ~i -> choiceCons (szS cbSwapSize) cbFirst (choiceCons cbSwapSize cbSecond cbSwapTail), i -> choiceCons (szS cbSwapSize) cbSecond (choiceCons cbSwapSize cbFirst cbSwapTail) ]
+  | choiceSquash (cbSquashSize : Size) (cbFrom : ChoiceBag cbSquashSize) (cbTo : ChoiceBag cbSquashSize) (cbLeft : Path (ChoiceBag cbSquashSize) cbFrom cbTo) (cbRight : Path (ChoiceBag cbSquashSize) cbFrom cbTo) (i : I) (j : I) : ChoiceBag cbSquashSize [ ~i -> cbLeft @ j, i -> cbRight @ j, ~j -> cbFrom, j -> cbTo ]
+
 family OrbitN : Size -> Type 0 := orbitNOf (onSize : Size) (onOf : Pos onSize -> Sum Unit Unit) : OrbitN onSize
-  | orbitNEq (onEqSize : Size) (onA : Pos onEqSize -> Sum Unit Unit) (onB : Pos onEqSize -> Sum Unit Unit) (onR : Sigma (w : Word onEqSize) (Path (Pos onEqSize -> Sum Unit Unit) (actW onEqSize w onB) onA)) (i : I) : OrbitN onEqSize
-    [ ~i -> orbitNOf onEqSize onA, i -> orbitNOf onEqSize onB ]
-  | orbitNSquash (onSqSize : Size) (onFrom : OrbitN onSqSize) (onTo : OrbitN onSqSize) (onLeft : Path (OrbitN onSqSize) onFrom onTo) (onRight : Path (OrbitN onSqSize) onFrom onTo) (i : I) (j : I) : OrbitN onSqSize
-    [ ~i -> onLeft @ j, i -> onRight @ j, ~j -> onFrom, j -> onTo ]
+  | orbitNEq (onEqSize : Size) (onA : Pos onEqSize -> Sum Unit Unit) (onB : Pos onEqSize -> Sum Unit Unit) (onR : Sigma (w : Word onEqSize) (Path (Pos onEqSize -> Sum Unit Unit) (actW onEqSize w onB) onA)) (i : I) : OrbitN onEqSize [ ~i -> orbitNOf onEqSize onA, i -> orbitNOf onEqSize onB ]
+  | orbitNSquash (onSqSize : Size) (onFrom : OrbitN onSqSize) (onTo : OrbitN onSqSize) (onLeft : Path (OrbitN onSqSize) onFrom onTo) (onRight : Path (OrbitN onSqSize) onFrom onTo) (i : I) (j : I) : OrbitN onSqSize [ ~i -> onLeft @ j, i -> onRight @ j, ~j -> onFrom, j -> onTo ]
+
 -- The charter and its ratifications (S6, O20): an inductive-inductive
 -- block. Ratified c is a rule ratified at the charter c, adopt adds a
 -- ratified rule to a charter, and adoptTwice is law 4 in the type: a
@@ -872,74 +965,48 @@ family OrbitN : Size -> Type 0 := orbitNOf (onSize : Size) (onOf : Pos onSize ->
 -- parameter, so it is not a type constructor (rule R1).
 family Charter := genesis
   | adopt (adoptBase : Charter) (adoptRule : Ratified adoptBase)
-  | adoptTwice (twiceBase : Charter) (twiceRule : Size) (i : I)
-    [ ~i -> adopt twiceBase (ratify twiceBase twiceRule), i -> adopt (adopt twiceBase (ratify twiceBase twiceRule)) (ratify (adopt twiceBase (ratify twiceBase twiceRule)) twiceRule) ]
-  | charterSquash (charterFrom : Charter) (charterTo : Charter) (charterLeft : Path Charter charterFrom charterTo) (charterRight : Path Charter charterFrom charterTo) (i : I) (j : I)
-    [ ~i -> charterLeft @ j, i -> charterRight @ j, ~j -> charterFrom, j -> charterTo ]
+  | adoptTwice (twiceBase : Charter) (twiceRule : Size) (i : I) [ ~i -> adopt twiceBase (ratify twiceBase twiceRule), i -> adopt (adopt twiceBase (ratify twiceBase twiceRule)) (ratify (adopt twiceBase (ratify twiceBase twiceRule)) twiceRule) ]
+  | charterSquash (charterFrom : Charter) (charterTo : Charter) (charterLeft : Path Charter charterFrom charterTo) (charterRight : Path Charter charterFrom charterTo) (i : I) (j : I) [ ~i -> charterLeft @ j, i -> charterRight @ j, ~j -> charterFrom, j -> charterTo ]
 and Ratified : Charter -> Type 0 := ratify (ratifyBase : Charter) (ratifyRule : Size) : Ratified ratifyBase
-  | ratifiedSquash (ratifiedAt : Charter) (ratifiedFrom : Ratified ratifiedAt) (ratifiedTo : Ratified ratifiedAt) (ratifiedLeft : Path (Ratified ratifiedAt) ratifiedFrom ratifiedTo) (ratifiedRight : Path (Ratified ratifiedAt) ratifiedFrom ratifiedTo) (i : I) (j : I) : Ratified ratifiedAt
-    [ ~i -> ratifiedLeft @ j, i -> ratifiedRight @ j, ~j -> ratifiedFrom, j -> ratifiedTo ]
+  | ratifiedSquash (ratifiedAt : Charter) (ratifiedFrom : Ratified ratifiedAt) (ratifiedTo : Ratified ratifiedAt) (ratifiedLeft : Path (Ratified ratifiedAt) ratifiedFrom ratifiedTo) (ratifiedRight : Path (Ratified ratifiedAt) ratifiedFrom ratifiedTo) (i : I) (j : I) : Ratified ratifiedAt [ ~i -> ratifiedLeft @ j, i -> ratifiedRight @ j, ~j -> ratifiedFrom, j -> ratifiedTo ]
 
 -- Equivalences (S3a, R3 (a)): contractible types, fibers, isEquiv and
 -- Equiv as Sigma types (the map, then for each y the center pack x p and
 -- the contraction), idEquiv, and isoToEquiv as in agda/cubical
 -- isoToIsEquiv. isoCap is the fill at k = i1; isoPath is the first part
 -- of the fiber path. The squares are inline, with j flipped.
-def isContr : (A : Type 0) -> Type 0 :=
-  fun (A : Type 0) => Sigma (c : A) ((x : A) -> Path A c x)
+def isContr : (A : Type 0) -> Type 0 := fun (A : Type 0) => Sigma (c : A) ((x : A) -> Path A c x)
+
 def fiber : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (y : B) -> Type 0 :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : A -> B) => fun (y : B) => Sigma (x : A) (Path B (f x) y)
+  fun (A : Type 0) (B : Type 0) (f : A -> B) (y : B) => Sigma (x : A) (Path B (f x) y)
+
 def isEquiv : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> Type 0 :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : A -> B) => (y : B) -> isContr (fiber A B f y)
+  fun (A : Type 0) (B : Type 0) (f : A -> B) => (y : B) -> isContr (fiber A B f y)
+
 def Equiv : (A : Type 0) -> (B : Type 0) -> Type 0 :=
-  fun (A : Type 0) => fun (B : Type 0) => Sigma (f : A -> B) (isEquiv A B f)
+  fun (A : Type 0) (B : Type 0) => Sigma (f : A -> B) (isEquiv A B f)
+
 def idEquiv : (A : Type 0) -> Equiv A A :=
-  fun (A : Type 0) => pack (fun (x : A) => x) (fun (y : A) =>
-    pack (pack y refl) (fun (z : fiber A A (fun (x : A) => x) y) =>
-      fun (i : I) => pack (payload z @ ~i) (fun (j : I) => payload z @ (~i \/ j))))
-def isoCap : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) -> (t : (x : A) -> Path A (g (f x)) x) ->
-  (y : B) -> (x0 : A) -> (p0 : Path B (f x0) y) -> Path A (g y) x0 :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : A -> B) => fun (g : B -> A) => fun (t : (x : A) -> Path A (g (f x)) x) =>
-  fun (y : B) => fun (x0 : A) => fun (p0 : Path B (f x0) y) =>
-    fun (i : I) => hcomp A (i \/ ~i \/ ~i1) (fun (m : I) => [ i -> t x0 @ (i1 /\ m), ~i -> g y, ~i1 -> g (p0 @ ~i) ]) (g (p0 @ ~i))
-def isoPath : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) -> (t : (x : A) -> Path A (g (f x)) x) ->
-  (y : B) -> (x0 : A) -> (p0 : Path B (f x0) y) -> (x1 : A) -> (p1 : Path B (f x1) y) -> Path A x0 x1 :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : A -> B) => fun (g : B -> A) => fun (t : (x : A) -> Path A (g (f x)) x) =>
-  fun (y : B) => fun (x0 : A) => fun (p0 : Path B (f x0) y) => fun (x1 : A) => fun (p1 : Path B (f x1) y) =>
-    fun (i : I) => hcomp A (i \/ ~i \/ ~i1) (fun (m2 : I) => [ i -> isoCap A B f g t y x1 p1 @ (i1 /\ m2), ~i -> isoCap A B f g t y x0 p0 @ (i1 /\ m2), ~i1 -> g y ]) (g y)
-def isoToEquiv : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) ->
-  (s : (y : B) -> Path B (f (g y)) y) -> (t : (x : A) -> Path A (g (f x)) x) -> Equiv A B :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (f : A -> B) => fun (g : B -> A) =>
-  fun (s : (y : B) -> Path B (f (g y)) y) => fun (t : (x : A) -> Path A (g (f x)) x) =>
-  pack f (fun (y : B) => pack (pack (g y) (s y)) (fun (z : fiber A B f y) =>
-    fun (i : I) => pack (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i) (fun (j : I) =>
-      hcomp B (i \/ ~i \/ ~j \/ j) (fun (m4 : I) => [
-        i -> s (payload z @ j) @ m4,
-        ~i -> s (s y @ j) @ m4,
-        ~j -> s (f (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i)) @ m4,
-        j -> s y @ m4 ])
-      (f (hcomp A (i \/ ~i \/ ~j \/ j) (fun (m3 : I) => [
-        i -> hcomp A (~j \/ j \/ m3) (fun (m : I) => [ ~j -> t (witness z) @ (~m3 /\ m), j -> g y, m3 -> g (payload z @ j) ]) (g (payload z @ j)),
-        ~i -> hcomp A (~j \/ j \/ m3) (fun (m : I) => [ ~j -> t (g y) @ (~m3 /\ m), j -> g y, m3 -> g (s y @ j) ]) (g (s y @ j)),
-        ~j -> t (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i) @ ~m3,
-        j -> g y ])
-        (hcomp A (i \/ ~i \/ j) (fun (m2 : I) => [
-          i -> isoCap A B f g t y (witness z) (payload z) @ (~j /\ m2),
-          ~i -> isoCap A B f g t y (g y) (s y) @ (~j /\ m2),
-          j -> g y ]) (g y)))))))
+  fun (A : Type 0) => pack (fun (x : A) => x) (fun (y : A) => pack (pack y refl) (fun (z : fiber A A (fun (x : A) => x) y) (i : I) => pack (payload z @ ~i) (fun (j : I) => payload z @ (~i \/ j))))
+
+def isoCap : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) -> (t : (x : A) -> Path A (g (f x)) x) -> (y : B) -> (x0 : A) -> (p0 : Path B (f x0) y) -> Path A (g y) x0 :=
+  fun (A : Type 0) (B : Type 0) (f : A -> B) (g : B -> A) (t : (x : A) -> Path A (g (f x)) x) (y : B) (x0 : A) (p0 : Path B (f x0) y) (i : I) => hcomp A (i \/ ~i \/ ~i1) (fun (m : I) => [ i -> t x0 @ (i1 /\ m), ~i -> g y, ~i1 -> g (p0 @ ~i) ]) (g (p0 @ ~i))
+
+def isoPath : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) -> (t : (x : A) -> Path A (g (f x)) x) -> (y : B) -> (x0 : A) -> (p0 : Path B (f x0) y) -> (x1 : A) -> (p1 : Path B (f x1) y) -> Path A x0 x1 :=
+  fun (A : Type 0) (B : Type 0) (f : A -> B) (g : B -> A) (t : (x : A) -> Path A (g (f x)) x) (y : B) (x0 : A) (p0 : Path B (f x0) y) (x1 : A) (p1 : Path B (f x1) y) (i : I) => hcomp A (i \/ ~i \/ ~i1) (fun (m2 : I) => [ i -> isoCap A B f g t y x1 p1 @ (i1 /\ m2), ~i -> isoCap A B f g t y x0 p0 @ (i1 /\ m2), ~i1 -> g y ]) (g y)
+
+def isoToEquiv : (A : Type 0) -> (B : Type 0) -> (f : A -> B) -> (g : B -> A) -> (s : (y : B) -> Path B (f (g y)) y) -> (t : (x : A) -> Path A (g (f x)) x) -> Equiv A B :=
+  fun (A : Type 0) (B : Type 0) (f : A -> B) (g : B -> A) (s : (y : B) -> Path B (f (g y)) y) (t : (x : A) -> Path A (g (f x)) x) => pack f (fun (y : B) => pack (pack (g y) (s y)) (fun (z : fiber A B f y) (i : I) => pack (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i) (fun (j : I) => hcomp B (i \/ ~i \/ ~j \/ j) (fun (m4 : I) => [ i -> s (payload z @ j) @ m4, ~i -> s (s y @ j) @ m4, ~j -> s (f (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i)) @ m4, j -> s y @ m4 ]) (f (hcomp A (i \/ ~i \/ ~j \/ j) (fun (m3 : I) => [ i -> hcomp A (~j \/ j \/ m3) (fun (m : I) => [ ~j -> t (witness z) @ (~m3 /\ m), j -> g y, m3 -> g (payload z @ j) ]) (g (payload z @ j)), ~i -> hcomp A (~j \/ j \/ m3) (fun (m : I) => [ ~j -> t (g y) @ (~m3 /\ m), j -> g y, m3 -> g (s y @ j) ]) (g (s y @ j)), ~j -> t (isoPath A B f g t y (g y) (s y) (witness z) (payload z) @ i) @ ~m3, j -> g y ]) (hcomp A (i \/ ~i \/ j) (fun (m2 : I) => [ i -> isoCap A B f g t y (witness z) (payload z) @ (~j /\ m2), ~i -> isoCap A B f g t y (g y) (s y) @ (~j /\ m2), j -> g y ]) (g y)))))))
 
 -- ua (S3b): the Glue line from A to B. At i0 the type is A through e; at
 -- i1 the type is B through idEquiv B. Transport along ua e at a closed
 -- value of A gives witness e of the value (uaBeta).
 def ua : (A : Type 0) -> (B : Type 0) -> (e : Equiv A B) -> Path (Type 0) A B :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (e : Equiv A B) =>
-    fun (i : I) => Glue B (~i \/ i) (fun (_ : I) => [ ~i -> pack A e, i -> pack B (idEquiv B) ])
+  fun (A : Type 0) (B : Type 0) (e : Equiv A B) (i : I) => Glue B (~i \/ i) (fun (_ : I) => [ ~i -> pack A e, i -> pack B (idEquiv B) ])
+
 -- uaArrow (S3c): agda/cubical ua-> with a constant C. A path h a from
 -- f0 a to f1 (witness e a) for each a gives a path of functions over ua e
 -- from f0 to f1. At i0 the hcomp is its ~i tube at j = i1, h a @ i0 =
 -- f0 a; at i1 it is its i tube, f1 a. The base is f1 (unglue a).
-def uaArrow : (A : Type 0) -> (B : Type 0) -> (C : Type 0) -> (e : Equiv A B) -> (f0 : A -> C) -> (f1 : B -> C) ->
-  (h : (a : A) -> Path C (f0 a) (f1 (witness e a))) -> PathP (fun (i : I) => (ua A B e @ i) -> C) f0 f1 :=
-  fun (A : Type 0) => fun (B : Type 0) => fun (C : Type 0) => fun (e : Equiv A B) => fun (f0 : A -> C) => fun (f1 : B -> C) =>
-  fun (h : (a : A) -> Path C (f0 a) (f1 (witness e a))) =>
-    fun (i : I) => fun (a : ua A B e @ i) => hcomp C (~i \/ i) (fun (j : I) => [ ~i -> h a @ ~j, i -> f1 a ]) (f1 (unglue a))
+def uaArrow : (A : Type 0) -> (B : Type 0) -> (C : Type 0) -> (e : Equiv A B) -> (f0 : A -> C) -> (f1 : B -> C) -> (h : (a : A) -> Path C (f0 a) (f1 (witness e a))) -> PathP (fun (i : I) => ua A B e @ i -> C) f0 f1 :=
+  fun (A : Type 0) (B : Type 0) (C : Type 0) (e : Equiv A B) (f0 : A -> C) (f1 : B -> C) (h : (a : A) -> Path C (f0 a) (f1 (witness e a))) (i : I) (a : ua A B e @ i) => hcomp C (~i \/ i) (fun (j : I) => [ ~i -> h a @ ~j, i -> f1 a ]) (f1 (unglue a))

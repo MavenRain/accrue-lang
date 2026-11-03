@@ -2,14 +2,26 @@
 -- divisor gives none), natAdd at 2^64 - 1, and nonZero at both widths
 -- (Q-S8-16: inst 0 Nat, inst 1 U256). A has no trap (rule R0). Each value in
 -- edge.txt comes from `langc --kit eval`.
-def mul : U256 -> U256 -> Option U256 := fun (a b : U256) => u256Mul a b
-def ratioW : U256 -> U256 -> U256 -> Option U256 := fun (a b d : U256) => bind (nonZero d) (fun (z : NonZero U256) => mulDiv a b z)
-def addN : Nat -> Nat -> Option Nat := fun (a b : Nat) => natAdd a b
-def nz : Nat -> Option Nat := fun (n : Nat) => map (fun (z : NonZero Nat) => nonZeroValue z) (nonZero n)
-def nzW : U256 -> Option U256 := fun (x : U256) => map (fun (z : NonZero U256) => nonZeroValue z) (nonZero x)
+def mul : U256 -> U256 -> Option U256 := fun (a : U256) (b : U256) => u256Mul a b
+
+def ratioW : U256 -> U256 -> U256 -> Option U256 :=
+  fun (a : U256) (b : U256) (d : U256) => bind (nonZero d) (fun (z : NonZero U256) => mulDiv a b z)
+
+def addN : Nat -> Nat -> Option Nat := fun (a : Nat) (b : Nat) => natAdd a b
+
+def nz : Nat -> Option Nat :=
+  fun (n : Nat) => map (fun (z : NonZero Nat) => nonZeroValue z) (nonZero n)
+
+def nzW : U256 -> Option U256 :=
+  fun (x : U256) => map (fun (z : NonZero U256) => nonZeroValue z) (nonZero x)
+
 -- Q-S8-17 (a): the empty list and a 4-item list from a fold with a literal
 -- count; each sums its items. nil gets its type from the typed def noNats.
 -- test/ir/heapcap.lang covers the page cap.
 def noNats : List Nat := nil
-def empty : Nat -> Nat := fun (n : Nat) => fold (fun (y : Nat) (acc : Nat) => option 0 (fun (m : Nat) => m) (natAdd y acc)) 0 (fold (fun (xs : List Nat) => cons n xs) noNats 0)
-def full : Nat -> Nat := fun (n : Nat) => fold (fun (y : Nat) (acc : Nat) => option 0 (fun (m : Nat) => m) (natAdd y acc)) 0 (fold (fun (xs : List Nat) => cons n xs) noNats 4)
+
+def empty : Nat -> Nat :=
+  fun (n : Nat) => fold (fun (y : Nat) (acc : Nat) => option 0 (fun (m : Nat) => m) (natAdd y acc)) 0 (fold (fun (xs : List Nat) => cons n xs) noNats 0)
+
+def full : Nat -> Nat :=
+  fun (n : Nat) => fold (fun (y : Nat) (acc : Nat) => option 0 (fun (m : Nat) => m) (natAdd y acc)) 0 (fold (fun (xs : List Nat) => cons n xs) noNats 4)

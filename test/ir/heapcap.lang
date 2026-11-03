@@ -4,5 +4,8 @@
 -- mapUp needs more than 16384 pages (WASM_MAX_PAGES), so the Wasm emitter
 -- (src/wasm.c, program_pages) refuses REFUSE_CAPACITY. lower.c does not
 -- refuse this file.
-def upFrom : (n : Nat) -> List Nat := fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natLe k n) (map (fun (j : Nat) => pair k j) (natAdd k 1)) none) 200000000 1
-def mapUp : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (map (fun (x : Nat) => option 0 (fun (t : Nat) => t) (bind (natAdd x x) (fun (y : Nat) => natAdd y x))) (upFrom n)))
+def upFrom : (n : Nat) -> List Nat :=
+  fun (n : Nat) => unfold (fun (k : Nat) => flagIf (natLe k n) (map (fun (j : Nat) => pair k j) (natAdd k 1)) none) 200000000 1
+
+def mapUp : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (s : Nat) => s) (fold (fun (x : Nat) (acc : Option Nat) => bind acc (fun (a : Nat) => natAdd x a)) (some 0) (map (fun (x : Nat) => option 0 (fun (t : Nat) => t) (bind (natAdd x x) (fun (y : Nat) => natAdd y x))) (upFrom n)))

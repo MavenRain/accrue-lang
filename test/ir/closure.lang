@@ -2,4 +2,5 @@
 -- run time. `langc ir` must refuse it with REFUSE_RUNTIME_CLOSURE. option
 -- takes the Option Nat apart, so the entry result is Nat and the lowering
 -- does not skip the entry.
-def bad : (n : Nat) -> Nat := fun (n : Nat) => option 0 (fun (r : Nat) => r) ((fold (fun (g : (x : Nat) -> Option Nat) => fun (x : Nat) => bind (natAdd x 1) g) (fun (x : Nat) => some x) n) 0)
+def bad : (n : Nat) -> Nat :=
+  fun (n : Nat) => option 0 (fun (r : Nat) => r) (fold (fun (g : (x : Nat) -> Option Nat) (x : Nat) => bind (natAdd x 1) g) (fun (x : Nat) => some x) n 0)

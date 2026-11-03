@@ -3,4 +3,5 @@
 -- first field. `langc eval lazy 3` gives 6. The fold has the
 -- literal count 3 (S8 P3); the form with the count n is in
 -- test/ir/capacity.lang.
-def lazy : (n : Nat) -> Nat := fun (n : Nat) => first (fold (fun (p : Prod Nat (Option Nat)) => pair (option 0 (fun (a : Nat) => a) (natAdd (first p) 1)) (bind (second p) (fun (b : Nat) => natAdd b 9223372036854775807))) (pair n (some 2)) 3)
+def lazy : (n : Nat) -> Nat :=
+  fun (n : Nat) => first (fold (fun (p : Prod Nat (Option Nat)) => pair (option 0 (fun (a : Nat) => a) (natAdd (first p) 1)) (bind (second p) (fun (b : Nat) => natAdd b 9223372036854775807))) (pair n (some 2)) 3)
