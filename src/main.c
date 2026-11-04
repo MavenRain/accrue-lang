@@ -39,7 +39,7 @@ typedef struct {
   const char *js_path; /* accrue S9: build --js OUT.mjs writes the ES module (src/js.c) */
   const char *wgsl_path; /* accrue S10: build --wgsl OUT.wgsl writes the WGSL module (src/wgsl.c) */
   int runtime;
-  int json;
+  int json; /* abi: the JSON form (S9 P5); check: --json (S12 A2) */
   int fmt_check; /* fmt --check (S11 A1): compare PROG with its canonical text */
   CheckMode mode; /* orbit-lang S3: --kit selects the kit mode */
 } Options;
@@ -59,7 +59,7 @@ static const struct {
 };
 
 static int usage(FILE *err) {
-  fputs("usage: langc [--kit] check PROG\n"
+  fputs("usage: langc [--kit] check [--json] PROG\n"
         "       langc [--kit] eval PROG NAME [ARGS...]\n"
         "       langc [--kit] run PROG SCRIPT\n"
         "       langc [--kit] ir PROG\n"
@@ -116,6 +116,12 @@ static int parse_options(int argc, char **argv, Options *opt, Diag *diag) {
   opt->prog_path = argv[2];
   switch (opt->command) {
     case CMD_CHECK:
+      /* check --json PROG (S12 A2, the cairn-lang 98d18ef form): the
+         json_check line. */
+      opt->json = strcmp(argv[2], "--json") == 0;
+      if (opt->json && argc < 4) return diag_fail(diag, "USAGE", NULL, "check --json needs a program path");
+      opt->prog_path = argv[2 + opt->json];
+      return argc == 3 + opt->json ? 1 : diag_fail(diag, "USAGE", NULL, "too many arguments");
     case CMD_IR:
       return argc == 3 ? 1 : diag_fail(diag, "USAGE", NULL, "too many arguments");
     case CMD_ABI:
@@ -247,10 +253,27 @@ static int run_target(const Options *opt, Machine *machine, Diag *diag) {
   return 1;
 }
 
+/* langc [--kit] check --json PROG (S12 A2): exit 0 or 1 with the json_check
+   line on stdout, and main prints no diag. After a lex or parse error the
+   progress stays all zero. OOM is exit 2 with no JSON; an IO or USAGE
+   failure exits 2 before this function. */
+static int check_json(const Options *opt, Arena *arena, const char *text, size_t len, Diag *diag) {
+  CheckProgress progress;
+  DeclList decls;
+  Machine machine;
+  memset(&progress, 0, sizeof progress);
+  int ok = front_load(arena, opt->prog_path, text, len, &decls, diag)
+      && check_program_progress(arena, &decls, &machine, diag, opt->mode, &progress);
+  if (!ok && diag->code != NULL && strcmp(diag->code, "OOM") == 0) return 2;
+  json_check(stdout, opt->prog_path, diag, &progress);
+  return ok ? 0 : 1;
+}
+
 static int run(const Options *opt, Arena *arena, Diag *diag) {
   char *text = NULL;
   size_t len = 0;
   if (!read_source(arena, opt->prog_path, &text, &len, diag)) return 2;
+  if (opt->command == CMD_CHECK && opt->json) return check_json(opt, arena, text, len, diag);
   DeclList decls;
   if (!front_load(arena, opt->prog_path, text, len, &decls, diag)) return 1;
   Machine machine;
@@ -332,7 +355,9 @@ int main(int argc, char **argv) {
   arena_init(&arena, ARENA_LIMIT_BYTES);
   int status = opt.command == CMD_FMT ? run_fmt(&opt, &arena, &diag) : run(&opt, &arena, &diag);
   arena_release(&arena);
-  /* fmt --check prints its own `PROG:LINE: not canonical` line, with no diag. */
-  if (status != 0 && (opt.command != CMD_FMT || diag.set)) diag_print(&diag, stderr);
+  /* fmt --check prints its own `PROG:LINE: not canonical` line, with no diag;
+     check --json puts the diag of exit 1 in its JSON line (S12 A2). */
+  int in_json = opt.command == CMD_CHECK && opt.json && status == 1;
+  if (status != 0 && !in_json && (opt.command != CMD_FMT || diag.set)) diag_print(&diag, stderr);
   return status;
 }

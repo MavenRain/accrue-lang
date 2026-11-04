@@ -1,0 +1,7 @@
+-- A law after the failing decl (S12): laws_total counts lawAfter, a program
+-- law that check does not reach. lawAfter uses decrypt in its type and has
+-- a Path codomain, so it is a law-only def (rule O7).
+def bad : Type 0 := Type 0
+
+def lawAfter : (c : Enc Size) -> Path Size (decrypt Size c) (decrypt Size c) :=
+  fun (c : Enc Size) => refl

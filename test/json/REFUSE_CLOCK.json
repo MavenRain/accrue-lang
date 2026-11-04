@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_CLOCK","span":{"file":"test/json/REFUSE_CLOCK.lang","line":2,"col":1,"end_line":2,"end_col":19},"message":"now: now is a clock word: no program can read a chain or host clock; take the time as a Stamp argument","fix":null}],"progress":{"parsed":1,"typed":0,"laws_discharged":0,"laws_total":0}}

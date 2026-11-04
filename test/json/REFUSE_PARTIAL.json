@@ -1,0 +1,1 @@
+{"diagnostics":[{"code":"REFUSE_PARTIAL","span":{"file":"test/json/REFUSE_PARTIAL.lang","line":2,"col":1,"end_line":2,"end_col":52},"message":"f: pred is a partial name: use foundAt of domain/domain.lang, which gives an Option; take it apart with option or bind","fix":null}],"progress":{"parsed":1,"typed":0,"laws_discharged":0,"laws_total":0}}

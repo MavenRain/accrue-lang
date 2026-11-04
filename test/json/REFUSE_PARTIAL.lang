@@ -1,0 +1,2 @@
+-- REFUSE_PARTIAL (S3 P5, Q-S3-1 (a), site 1): pred is not a word; a guest uses foundAt of domain/domain.lang.
+def f : Count -> Count := fun (n : Count) => pred n

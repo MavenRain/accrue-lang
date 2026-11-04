@@ -1,3 +1,5 @@
+test/json/LEX_CHAR.lang
+test/json/PARSE_EXPECT.lang
 test/parse/addr-digits.lang
 test/parse/bad-char.lang
 test/parse/dangling-at.lang

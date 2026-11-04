@@ -111,7 +111,18 @@ runs 293 canonical rows, 301 round trip rows, 8 fmt rows and 8 check
 rows. A witness row (`test/fmt/piname.lang`, Q-S11-6) shows that the
 dump sees each Pi binder name. The `pick` row reads the def line and
 its indented lines (Q-S11-5; section 1: Q-S11-1 to Q-S11-6).
-Next: S12 (A2: `langc check --json`).
+S12 DONE: A2, `langc check --json`. S12 ports the cairn-lang 98d18ef
+check JSON. `langc check --json PROG` prints one JSON object with
+`diagnostics` and `progress`, and `docs/CHECK-JSON.md` gives the
+schema. A diagnostic has a code, a span, a message and a `fix`
+(Q-S12-1 to Q-S12-4). `progress` gives `parsed`, `typed`,
+`laws_discharged` and `laws_total` (Q-S12-6). The json block of the
+gate runs 21 rows in `test/json/` (byte equal), sees 14 of 14 refusal
+codes and applies 19 fix rows (Q-S12-5). The fmt block runs 312
+canonical rows and 320 round trip rows. The gate kills the mutants M1
+to M4, M6 and M7. The mutant M5 (the newline escape) survived (Q-S12-8,
+O15; section 1: Q-S12-1 to Q-S12-8).
+Next: S13 (A4: `langc mcp`).
 
 ## 1. Rulings
 
@@ -242,6 +253,14 @@ Next: S12 (A2: `langc check --json`).
 | 2026-11-03 | Q-S11-4 RULED (a) 11-03: the CLI is `langc fmt PROG [--check]` (section 8, A1). Done in S11. | S11 |
 | 2026-11-03 | Q-S11-5 RULED (a) 11-03: the `pick` row of `test/gate.sh` reads the def line and its indented lines. After the repo rewrite, a def body can be on the indented lines after the def line. Done in S11. | S11 |
 | 2026-11-03 | Q-S11-6 RULED (a) 11-03: the fmt block of `test/gate.sh` has a witness row. `test/fmt/piname.lang` is `test/fmt/lambda.canon` with one Pi binder name changed, and the two dumps must not be the same. The row shows that the dump sees each Pi binder name. Done in S11. | S11 |
+| 2026-11-03 | Q-S12-1 RULED (a) 11-03: the output contract of `langc check --json` is the cairn-lang contract. `diagnostics` has 0 or 1 entries (the first failure). A pass exits 0. A refusal, a LEX failure or a PARSE failure exits 1, with the JSON on stdout and an empty stderr. OOM, IO and USAGE exit 2 with no JSON and the text diagnostic on stderr. Done in S12. | S12 |
+| 2026-11-03 | Q-S12-2 RULED (a) 11-03: a span has the cairn-lang keys `file`, `line`, `col`, `end_line` and `end_col`. `file` is the path as given. The line and the column start at 1, a column counts bytes, and the end is exclusive. The span is `null` when there is no position. Done in S12. | S12 |
+| 2026-11-03 | Q-S12-3 RULED (a) 11-03: a message is `DEF: MSG`, and DEF is `-` when there is no def. A LEX or PARSE message keeps its `path:line:col:` prefix (cairn-lang). Done in S12. | S12 |
+| 2026-11-03 | Q-S12-4 RULED (a) 11-03: the JSON `fix` is `null` or an edit (a span and a text). It is not `null` only at LEX_CHAR (3 lexer sites, delete 1 byte), REFUSE_CELL, REFUSE_SIG and REFUSE_STATE (cairn-lang). The fix row of each code is a hand-written `test/json/CODE.fix`. `fronttool fix` applies it, and the fixed file checks or fails with a different code (O7). Done in S12. | S12 |
+| 2026-11-03 | Q-S12-5 RULED (a) 11-03: `test/json/` has one row for each REFUSE code in `src/front/check.c` (14) and the rows `ok`, `kit`, LEX_CHAR, PARSE_EXPECT and 3 TYPE_MISMATCH rows (the base, `.after` and `.splice`): 21 rows. The `--kit` rows are as in cairn-lang. The gate prints `json refusal codes: 14 of 14`. Done in S12. | S12 |
+| 2026-11-03 | Q-S12-6 RULED (a) 11-03: `progress` counts the program decls only. `parsed` is the count of program decls, and `typed` is the count before the first failure. `laws_discharged` is the count of program defs with `law_only`. `laws_total` is `laws_discharged` and the marks of a syntactic law scan of the untyped defs (LawScan, from cairn-lang). After a LEX or PARSE failure, the four counts are 0. Done in S12. | S12 |
+| 2026-11-03 | Q-S12-7 RULED (a) 11-03: `src/json.c` exports the new `json_string` and `json_string_n` (cairn-lang), and `docs/CHECK-JSON.md` gives their escapes. The ABI `json_char` does not change, so the JSON ABI rows keep their bytes. Done in S12. | S12 |
+| 2026-11-03 | Q-S12-8 RULED (a) 11-03: the mutant M5 (the newline escape of `json_string` back to `\u000a`) is recorded as SURVIVED, and it did not run. No row message has a newline, and `fronttool` does not link `src/json.c` (Makefile line 13), so no test sees this escape. S12 adds no test (O15). Done in S12. | S12 |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -525,8 +544,8 @@ refusal or a law kills at least one mutant of it.
 | S9 | ES module + JSON: `js.c`, `json.c`, BigInt prelude, `REFUSE_TARGET_SECRET`. | DONE |
 | S10 | WGSL: `wgsl.c`, batch proof check and batch `earned`. | DONE |
 | S11 | A1: canonical forms and `langc fmt`. | DONE |
-| S12 | A2: `langc check --json`. | NEXT |
-| S13 | A4: `langc mcp`. | |
+| S12 | A2: `langc check --json`. | DONE |
+| S13 | A4: `langc mcp`. | NEXT |
 | S14 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table. | |
 | S15 | A6: the token comparison. | |
 | S16 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. | |
@@ -553,8 +572,10 @@ refusal or a law kills at least one mutant of it.
   implementation that the gate would trust.
 - O6 The pinned MCP spec version and the JSON-RPC subset (A4) go in
   `docs/MCP.md` at S13.
-- O7 The `fix` of each refusal code (A2) is one concrete edit. A code
-  with no edit gives `fix: null` and a reason.
+- O7 CLOSED in S12: the JSON `fix` is one concrete edit at LEX_CHAR,
+  REFUSE_CELL, REFUSE_SIG and REFUSE_STATE. The other codes give
+  `fix: null`, and each code has a hand-written fix row in `test/json/`
+  (Q-S12-4).
 - O8 The residual `a - b` with a proof `b <= a` (Q-S3-3). `flagIf` is
   not dependent, so only refl on closed values can make the proof now. A
   dependent `Flag` eliminator comes first. S5b takes L4 as refl on
@@ -593,6 +614,14 @@ refusal or a law kills at least one mutant of it.
   has no WGSL row (`bad: no entry or a wrong argument count`). Thus
   `test/wgsl/zk.lang` gives each coordinate of a point from its own
   entry.
+- O15 The S12 mutant M5 (the newline escape of `json_string` in
+  `src/json.c` back to `\u000a`) survived (Q-S12-8). No row message
+  has a newline, and `fronttool` does not link `src/json.c` (Makefile
+  line 13). A later slice can add a row with a newline in a message,
+  or link `src/json.c` into `fronttool` for a unit test.
+- O16 S12 gives `checker_reset` the decl index for the span. Its third
+  caller, the cofamily path of `src/front/check.c`, gives the current
+  decl index. S12 did not compare this caller with cairn-lang.
 
 ## 12. Questions for the USER (S0)
 
