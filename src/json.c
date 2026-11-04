@@ -10,6 +10,7 @@
    Q-S9-6 (a)). The escapes of json_string are those of quorum-lang
    src/front/json.c; json_char of the abi does not change. */
 #include "json.h"
+#include "front/base.h"
 
 #include <string.h>
 
@@ -51,26 +52,6 @@ int json_abi_entry(const IrFunc *fn, int first, FILE *out) {
   for (k = 0; k < fn->param_count; k++) fprintf(out, "%s\"%s\"", k == 0 ? "" : ",", json_shape(fn->params[k]));
   fprintf(out, "],\"result\":\"%s%s\"}", fn->result_option ? "option " : "", json_shape(fn->result));
   return 1;
-}
-
-/* The width of the UTF-8 character at TEXT, or 0 for an invalid byte (an
-   overlong form, a surrogate, a value past U+10FFFF or a cut sequence).
-   R has no utf8 helper: this is utf8_char_size of cairn-lang 98d18ef
-   src/front/base.c, static here. */
-static size_t utf8_char_size(const char *text, size_t len) {
-  if (len == 0) return 0;
-  unsigned char c = (unsigned char)text[0];
-  size_t width = c < 0x80 ? 1 : c >= 0xc2 && c <= 0xdf ? 2
-    : c >= 0xe0 && c <= 0xef ? 3 : c >= 0xf0 && c <= 0xf4 ? 4 : 0;
-  if (width == 0 || width > len) return 0;
-  for (size_t i = 1; i < width; i++)
-    if (((unsigned char)text[i] & 0xc0) != 0x80) return 0;
-  if (width >= 3) {
-    unsigned char next = (unsigned char)text[1];
-    if ((c == 0xe0 && next < 0xa0) || (c == 0xed && next >= 0xa0)
-        || (c == 0xf0 && next < 0x90) || (c == 0xf4 && next >= 0x90)) return 0;
-  }
-  return width;
 }
 
 /* One byte of a JSON string of json_string_n. */

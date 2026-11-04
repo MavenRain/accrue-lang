@@ -122,7 +122,17 @@ codes and applies 19 fix rows (Q-S12-5). The fmt block runs 312
 canonical rows and 320 round trip rows. The gate kills the mutants M1
 to M4, M6 and M7. The mutant M5 (the newline escape) survived (Q-S12-8,
 O15; section 1: Q-S12-1 to Q-S12-8).
-Next: S13 (A4: `langc mcp`).
+S13 DONE: A4, `langc mcp` and `langc explain`. S13 ports the cairn-lang
+60768e8 MCP server. `langc mcp` reads one JSON-RPC message on each
+line of stdin and gives the CLI verbs as tools (`docs/MCP.md`;
+Q-S13-2 and Q-S13-3). `langc explain CODE` prints the README text of
+each of the 19 refusal codes (Q-S13-4). The mcp block of the gate
+gives `mcp rows: 9 passed` (the rows in `test/mcp/`, byte equal),
+`mcp negatives: 3 of 3`, `mcp tools: 5 of 5`, `mcp builds: 4 of 4`,
+`mcp long line: 1 of 1` and `explain codes: 19 of 19`. The gate kills
+16 of the 17 mutants. The mutant M15 (-32603) survived and is
+equivalent (Q-S13-6; section 1: Q-S13-1 to Q-S13-7).
+Next: S14 (A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table).
 
 ## 1. Rulings
 
@@ -261,6 +271,13 @@ Next: S13 (A4: `langc mcp`).
 | 2026-11-03 | Q-S12-6 RULED (a) 11-03: `progress` counts the program decls only. `parsed` is the count of program decls, and `typed` is the count before the first failure. `laws_discharged` is the count of program defs with `law_only`. `laws_total` is `laws_discharged` and the marks of a syntactic law scan of the untyped defs (LawScan, from cairn-lang). After a LEX or PARSE failure, the four counts are 0. Done in S12. | S12 |
 | 2026-11-03 | Q-S12-7 RULED (a) 11-03: `src/json.c` exports the new `json_string` and `json_string_n` (cairn-lang), and `docs/CHECK-JSON.md` gives their escapes. The ABI `json_char` does not change, so the JSON ABI rows keep their bytes. Done in S12. | S12 |
 | 2026-11-03 | Q-S12-8 RULED (a) 11-03: the mutant M5 (the newline escape of `json_string` back to `\u000a`) is recorded as SURVIVED, and it did not run. No row message has a newline, and `fronttool` does not link `src/json.c` (Makefile line 13), so no test sees this escape. S12 adds no test (O15). Done in S12. | S12 |
+| 2026-11-04 | Q-S13-1 RULED (a) 11-04: the USER commit 02964ec is the S13 base. Done in S13. | S13 |
+| 2026-11-04 | Q-S13-2 RULED (a) 11-04: `langc mcp` pins the MCP revision `2025-11-25`. `initialize` gives this revision and does not compare it with the `protocolVersion` of the client (`docs/MCP.md`, O6). Done in S13. | S13 |
+| 2026-11-04 | Q-S13-3 RULED (a) 11-04: a tool that reads a program takes its path in the argument `path`, not the source text. A relative path starts at the working directory of the server. Done in S13. | S13 |
+| 2026-11-04 | Q-S13-4 RULED (a) 11-04: `src/front/codes.c` has 19 rows, and each row quotes `docs/host/README.md`. The README gets the text of 9 codes, with the `REFUSE_TARGET_SECRET` bullet first. `langc explain CODE` prints the row of `CODE`. Done in S13. | S13 |
+| 2026-11-04 | Q-S13-5 RULED (a) 11-04: the files have the cairn-lang paths (`src/mcp.c`, `src/front/jsonin.c`, `src/front/codes.c`). `utf8_char_size` moves from `src/json.c` to `src/front/base.c` and `src/front/base.h`. Done in S13. | S13 |
+| 2026-11-04 | Q-S13-6 RULED (a) 11-04: the mutant M15 (-32603) is recorded as SURVIVED and equivalent. Only a failure of `open_memstream` or `fclose` (no memory) gets to `src/mcp.c:194`. No source change and no row. Done in S13. | S13 |
+| 2026-11-04 | Q-S13-7 RULED (a) 11-04: the swap of the main and runtime parts is equivalent by design. In `src/wasm.c` both parts are the module bytes (`(void)part;`), and 59 of 59 examples give equal main and runtime bytes. No mutant M18 and no row. Done in S13. | S13 |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -545,8 +562,8 @@ refusal or a law kills at least one mutant of it.
 | S10 | WGSL: `wgsl.c`, batch proof check and batch `earned`. | DONE |
 | S11 | A1: canonical forms and `langc fmt`. | DONE |
 | S12 | A2: `langc check --json`. | DONE |
-| S13 | A4: `langc mcp`. | NEXT |
-| S14 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table. | |
+| S13 | A4: `langc mcp`. | DONE |
+| S14 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table. | NEXT |
 | S15 | A6: the token comparison. | |
 | S16 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. | |
 
@@ -570,8 +587,8 @@ refusal or a law kills at least one mutant of it.
 - O5 The test vectors come from the published standards (NIST CAVP for
   SHA-256, SEC 2 for secp256k1, the FROST RFC 9591 vectors), not from an
   implementation that the gate would trust.
-- O6 The pinned MCP spec version and the JSON-RPC subset (A4) go in
-  `docs/MCP.md` at S13.
+- O6 CLOSED in S13: `docs/MCP.md` gives the pinned MCP revision
+  `2025-11-25` (Q-S13-2) and the JSON-RPC subset (A4).
 - O7 CLOSED in S12: the JSON `fix` is one concrete edit at LEX_CHAR,
   REFUSE_CELL, REFUSE_SIG and REFUSE_STATE. The other codes give
   `fix: null`, and each code has a hand-written fix row in `test/json/`

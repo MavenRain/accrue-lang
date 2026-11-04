@@ -58,4 +58,8 @@ void diag_fix(Diag *diag, Span span, const char *text);
 /* Prints `langc: CODE: DEF: message`. */
 void diag_print(const Diag *diag, FILE *out);
 
+/* The width of the UTF-8 character at TEXT, or 0 for an invalid byte
+   (S13 Q-S13-5 (a)). */
+size_t utf8_char_size(const char *text, size_t len);
+
 #endif

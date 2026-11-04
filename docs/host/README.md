@@ -73,6 +73,14 @@ The compiler enforces these rules:
 | R3 | `REFUSE_REC` | `def rec`, or a definition that refers to itself or to a later definition |
 | Time | `REFUSE_CLOCK` | a clock word (`now`, `block`, `timestamp`, `clock`) as a name or a use; the message says to take the time as a `Stamp` argument (PLAN section 5) |
 | R4 | `REFUSE_NAME` | a core name, a domain name, a reserved name or a repeated name as a new definition |
+| R1, O7 | `REFUSE_CELL` | a type constructor that is not one cell signature or one cocell signature, a cons-list name in place of a cell monad, or a sealed family that is not a cell monad |
+| - | `REFUSE_EVENT` | an event with more fields than the entry parameter limit, an event field that is not an ABI word type (`Nat`, `Flag`, `U256`, `Addr`), or a repeated event field |
+| D-9 | `REFUSE_HISTORY_WRITE` | a history field `h` that is not `(h t)`, `ADD (h t) e` or the variable of `bind (ADD (h t) e)`, with `ADD` as `u256Add` or `natAdd`, a history constructor without all of its arguments, or a definition with `State` in its type that refers to a name that the history rule does not check |
+| - | `REFUSE_KIT` | a kit item outside the base span (PLAN section 4); only the kit mode `langc --kit` admits it |
+| O7 | `REFUSE_LAW` | a law-only name (`decrypt`, `observe`, an elim, a fold or a projection of a sealed family) in a definition whose type is not a law (a `Path` or `Trunc1` codomain) |
+| - | `REFUSE_MAP` | a `Map` key type that is not `Nat`, `U256` or `Addr`, or a `Map` value type that is not `Nat`, `Flag`, `U256` or `Addr` |
+| - | `REFUSE_SIG` | a name of the design signature (PLAN section 3): a slot with the wrong type, a reserved name that no slice gives yet, or a defined or primitive name that the kernel gives |
+| - | `REFUSE_STATE` | a second state, a state type with a name other than `State`, a state with parameters, an index telescope or not one constructor, a state field that is not first-order, or a history field that is not `Nat` or `U256` |
 
 ## CLI
 
@@ -84,6 +92,10 @@ build/langc abi PROG [--text]
 build/langc build PROG -o OUT [--runtime]
 build/langc build PROG --js OUT.mjs
 build/langc build PROG --wgsl OUT.wgsl
+build/langc check --json PROG
+build/langc fmt PROG [--check]
+build/langc explain CODE
+build/langc mcp
 ```
 
 - `check` prints `ok`, or refuses the program.
@@ -109,6 +121,13 @@ build/langc build PROG --wgsl OUT.wgsl
   (`REFUSE_CAPACITY`). As `--js` does, it refuses a run-time `Secret` or
   a zk secret op (`REFUSE_TARGET_SECRET`). `build` takes one of `-o OUT`,
   `--js OUT.mjs` and `--wgsl OUT.wgsl`.
+- `check --json` prints one JSON object with `diagnostics` and
+  `progress` (`docs/CHECK-JSON.md`, S12).
+- `fmt` prints the canonical form of `PROG` (S11). With `--check`, a
+  program that is not canonical gives exit 1.
+- `explain CODE` prints the text of a refusal code in the table above
+  (`src/front/codes.c`, Q-S13-4 (a)).
+- `mcp` runs the MCP server on stdin and stdout (`docs/MCP.md`, S13).
 
 The exit status is 0 for success, 1 for a refused program and 2 for a
 usage or IO error. A diagnostic on stderr has the form
@@ -131,13 +150,17 @@ Compilation is partial evaluation. The compiler normalizes the body of
 each entry with the parameters as free variables. Types and universes erase.
 Proof contents erase. A lambda stays only as the direct function argument of
 `fold`, `unfold`, `map`, `bind`, `filter`, `either` or `option`. The
-lowering puts its body into a loop or a branch. The lowering refuses two
-programs with a HOST-LIMIT code (see `docs/CAPABILITY.md`):
+lowering puts its body into a loop or a branch. The lowering refuses
+programs with four HOST-LIMIT codes (see `docs/CAPABILITY.md`) and one
+O4 code:
 
 - `REFUSE_RUNTIME_CLOSURE`: a function value must exist at run time.
 - `REFUSE_RUNTIME_TREE`: a fold walks a tree that exists only at run time.
 - `REFUSE_CAPACITY`: a list walk, an unfold limit or the heap of a loop has
   no static bound (S8 P3).
+- `REFUSE_LOWER`: a construct does not lower.
+- `REFUSE_TARGET_SECRET`: on the ES or WGSL target, the operation touches a
+  run-time `Secret` or a zk secret op (O4).
 
 ## No trap form
 
