@@ -191,6 +191,10 @@ what the domain holds and how to change it.
 | `parse refusals: 9 checked` | each `test/parse` file fails with the code in `test/parse/expect.txt`; one file has 1100 nested parentheses |
 | `check refusals: 19 checked` | each `test/check` mutant fails with the code in `test/check/expect.txt`; the `TYPE_REFL` message shows both normal forms |
 | `evals: 32 checked` | `langc eval` gives each result in `test/eval/expect.txt` |
+| `skill checks: 5 of 5` | for each `examples/skill/X.lang`, `langc check` (`langc --kit check` when `X.lang` is a line of `examples/skill/kit.txt`) gives `ok`, and `langc fmt examples/skill/X.lang --check` exits 0 with no output |
+| `skill quotes: 5 of 5` | `build/skilltool` finds that the program block of each example G1 to G5 of `skills/accrue-lang/SKILL.md` is byte equal to the file that its `File:` line names |
+| `skill outputs: 20 of 20` | `build/skilltool` runs each `langc` row of the 5 examples (`CMD 2>&1`): the output equals the text block line for line, and the exit code is the number of its `The exit code is N.` sentence |
+| `skill negatives: 3 of 3` | `build/skilltool test/skill/X.md 1` exits 1 with the FAIL line of the change on each of 3 fixtures: the G1 section with a changed program byte, with no text block and with a wrong exit code |
 | `gate: 0 failures` | the sum of all failures |
 
 The `ir`, `wasm` and `differential` lines come with the S8 writer.

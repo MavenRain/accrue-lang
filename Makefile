@@ -32,13 +32,14 @@ WASMTIME_FILES = $(WASMTIME)/include/wasmtime.h $(WASMTIME)/lib/libwasmtime.dyli
 NOTRAP_TOOL = test/notraptool.c
 WGSL_TOOL = test/wgsltool.c src/front/u256.c
 MCP_TOOL = test/mcptool.c
+SKILL_TOOL = test/skilltool.c
 PATH_TOOL = test/pathtool.c $(filter-out src/front/front.c,$(FRONT))
 RUN_TOOL = test/runtool.c $(FRONT)
 HEADERS = $(wildcard src/*.h src/front/*.h)
 
 .PHONY: build check check-clang clean gpu-check
 
-build: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/u256tool build/pathtool build/runtool build/wasmtool build/notraptool build/jstool build/wgsltool build/jstest build/mcptool
+build: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/u256tool build/pathtool build/runtool build/wasmtool build/notraptool build/jstool build/wgsltool build/jstest build/mcptool build/skilltool
 
 build/domain.c: domain/domain.lang gen/embed.c
 	mkdir -p build
@@ -122,6 +123,10 @@ build/mcptool: $(MCP_TOOL)
 	mkdir -p build
 	$(TCC) $(CFLAGS) -o build/mcptool $(MCP_TOOL)
 
+build/skilltool: $(SKILL_TOOL)
+	mkdir -p build
+	$(TCC) $(CFLAGS) -o build/skilltool $(SKILL_TOOL)
+
 check-clang: build/domain.c
 	$(CC) $(CLANG_FLAGS) $(SRC) build/domain.c
 	$(CC) $(CLANG_FLAGS) $(FRONT_TOOL)
@@ -143,8 +148,9 @@ check-clang: build/domain.c
 	$(CC) $(CLANG_FLAGS) $(WGSL_TOOL)
 	$(CC) $(CLANG_FLAGS) test/jstest.c
 	$(CC) $(CLANG_FLAGS) $(MCP_TOOL)
+	$(CC) $(CLANG_FLAGS) $(SKILL_TOOL)
 
-check: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/u256tool build/pathtool build/runtool build/wasmtool build/notraptool build/jstool build/wgsltool build/jstest build/mcptool check-clang
+check: build/langc build/fronttool build/blsagtool build/elgamaltool build/thresholdtool build/dkgtool build/sigmatool build/frosttool build/ballottool build/secptool build/shatool build/u256tool build/pathtool build/runtool build/wasmtool build/notraptool build/jstool build/wgsltool build/jstest build/mcptool build/skilltool check-clang
 	sh test/gate.sh
 	sh test/run.sh
 	sh test/review.sh

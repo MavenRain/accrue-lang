@@ -1,0 +1,48 @@
+-- PLAN row 530 (G2): a closed linear stream and a cancel. hL streams 1000
+-- from 10 to 17, so earned at the end is the deposit (l2Stream). xC cancels
+-- the push book at 30 and payCancel pays the unearned 120 back to the client.
+def grantOn : Grant := grantOf instrStream flagNo
+
+def eL : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 17) (some 10) none
+
+def hL : History :=
+  fmEta (Prod Time Policy) (pair 0 (policyOf (pair (fmEta Segment (segmentOf 0 7 1000u 7u)) (fmUnit Mass)) (windowOf 0 100) grantOn (fmUnit U256)))
+
+def l2Stream : Path (Option U256) (earnedAt hL eL 17) (some 1000u) := refl
+
+def eStream12 : Option U256 := earnedAt hL eL 12
+
+def eStream17 : Option U256 := earnedAt hL eL 17
+
+def rB : Rate := pair (fmEta Segment (segmentOf 0 50 2u 1u)) (fmEta Mass (massOf 0 40u))
+
+def dB : Dispute := fmMul U256 (fmEta U256 2500u) (fmEta U256 5000u)
+
+def histOf : Instrument -> History :=
+  fun (i : Instrument) => fmEta (Prod Time Policy) (pair 0 (policyOf rB (windowOf 0 100) (grantOf i flagNo) dB))
+
+def hPush : History := histOf instrPush
+
+def eB : Engagement := engagementOf 1u 2u 3u 4u (windowOf 10 60) (some 10) none
+
+def xE : Escrow := escrowOf eB (bookOf (fmUnit (Prod Time U256)) 0u none)
+
+def sAt : Time -> Stamp := fun (t : Time) => stampOf t 0u 0u 0u
+
+def Step : Type 0 := Option (Prod Escrow Payout)
+
+def andThen : Step -> (Escrow -> Step) -> Step :=
+  fun (o : Step) (f : Escrow -> Step) => bind o (fun (p : Prod Escrow Payout) => f (first p))
+
+def payOf : Step -> Option Payout :=
+  fun (o : Step) => bind o (fun (p : Prod Escrow Payout) => some (second p))
+
+def xF : Step := escFund (sAt 10) 200u xE
+
+def runOf : History -> Step := fun (h : History) => andThen xF (escSettle h (sAt 20) 30u)
+
+def xS1 : Step := runOf hPush
+
+def xC : Step := andThen xS1 (escCancel hPush (sAt 30))
+
+def payCancel : Option Payout := payOf xC

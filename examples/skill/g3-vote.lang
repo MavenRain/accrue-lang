@@ -1,0 +1,41 @@
+-- PLAN row 531 (G3): an encrypted policy vote. pbA, pbB and pbC are policy
+-- ballots over the decisions 0, 1 and 2. L7 opens a tally, L9 shows that the
+-- order of the ballots has no effect, and L10 gives the policy of the choice.
+def hot1 : FreeMon Verdict :=
+  fmMul Verdict (fmMul Verdict (fmEta Verdict flagNo) (fmEta Verdict flagYes)) (fmEta Verdict flagNo)
+
+def hot2 : FreeMon Verdict :=
+  fmMul Verdict (fmMul Verdict (fmEta Verdict flagNo) (fmEta Verdict flagNo)) (fmEta Verdict flagYes)
+
+def pbA : PolicyBallot := mkPolicyBallot hot1 refl 11u
+
+def pbB : PolicyBallot := mkPolicyBallot hot1 refl 12u
+
+def pbC : PolicyBallot := mkPolicyBallot hot2 refl 13u
+
+def pbBox3 : PolicyBox :=
+  fmMul PolicyBallot (fmMul PolicyBallot (fmEta PolicyBallot pbA) (fmEta PolicyBallot pbB)) (fmEta PolicyBallot pbC)
+
+def l7Slot1 : (q : Quorum) -> Path (Option Count) (open (Option Count) q (tallyAt 1 pbBox3)) (countD 1 (pbPlain pbBox3)) :=
+  fun (q : Quorum) => refl
+
+def tally1 : Enc (Option Count) := tallyAt 1 pbBox3
+
+def decs3 : FreeMon Nat := fmMul Nat (fmMul Nat (fmEta Nat 0) (fmEta Nat 1)) (fmEta Nat 2)
+
+def q22 : Quorum := quorum (szS (szS sz0)) (szS (szS sz0))
+
+def tBox : PolicyTally := openTally q22 decs3 pbBox3
+
+def mkBox3 : PolicyBallot -> PolicyBallot -> PolicyBallot -> PolicyBox :=
+  fun (x : PolicyBallot) (y : PolicyBallot) (z : PolicyBallot) => fmMul PolicyBallot (fmMul PolicyBallot (fmEta PolicyBallot x) (fmEta PolicyBallot y)) (fmEta PolicyBallot z)
+
+def l9ACB : Path (FreeMon (Enc (Option Count))) (tallyAll decs3 (mkBox3 pbA pbC pbB)) (tallyAll decs3 pbBox3) :=
+  refl
+
+def boxPlur : Option Nat := chooseD 0 tBox
+
+def boxMaj : Option Nat := chooseD 1 tBox
+
+def l10Plur : (q : Quorum) -> (pa : Nat -> Policy) -> Path (Option Policy) (govPi pa 3 0 (openTally q decs3 pbBox3)) (some (pa 1)) :=
+  fun (q : Quorum) (pa : Nat -> Policy) => refl

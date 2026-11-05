@@ -132,7 +132,21 @@ gives `mcp rows: 9 passed` (the rows in `test/mcp/`, byte equal),
 `mcp long line: 1 of 1` and `explain codes: 19 of 19`. The gate kills
 16 of the 17 mutants. The mutant M15 (-32603) survived and is
 equivalent (Q-S13-6; section 1: Q-S13-1 to Q-S13-7).
-Next: S14 (A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table).
+S14 DONE: A3 and A5, `skills/accrue-lang/SKILL.md`, G1 to G5,
+`AGENTS.md` and the README table. S14 ports the cairn-lang 2df0354
+skill gate. SKILL.md has YAML front matter (Q-S14-1) and quotes the
+five graded examples in `examples/skill/` (g1-retainer to g5-amend,
+Q-S14-5). Each example is a kit file, cut from R files that the gate
+checks now (Q-S14-2). `test/skilltool.c` checks that each SKILL.md
+block and its file are byte equal, and that each command row gives its
+quoted output. The skill block of the gate gives `skill checks: 5 of
+5`, `skill quotes: 5 of 5`, `skill outputs: 20 of 20` and `skill
+negatives: 3 of 3` (the fixtures in `test/skill/`, Q-S14-3). The gate
+kills the 3 mutants M1 to M3 of `test/skilltool.c`. `AGENTS.md` tells
+an agent how to work in this repo and gives the gate command. The
+README table tells when to use accrue-lang, when not to use it and
+what to use then (Q-S14-4; section 1: Q-S14-1 to Q-S14-5).
+Next: S15 (A6: the token comparison).
 
 ## 1. Rulings
 
@@ -278,6 +292,11 @@ Next: S14 (A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table).
 | 2026-11-04 | Q-S13-5 RULED (a) 11-04: the files have the cairn-lang paths (`src/mcp.c`, `src/front/jsonin.c`, `src/front/codes.c`). `utf8_char_size` moves from `src/json.c` to `src/front/base.c` and `src/front/base.h`. Done in S13. | S13 |
 | 2026-11-04 | Q-S13-6 RULED (a) 11-04: the mutant M15 (-32603) is recorded as SURVIVED and equivalent. Only a failure of `open_memstream` or `fclose` (no memory) gets to `src/mcp.c:194`. No source change and no row. Done in S13. | S13 |
 | 2026-11-04 | Q-S13-7 RULED (a) 11-04: the swap of the main and runtime parts is equivalent by design. In `src/wasm.c` both parts are the module bytes (`(void)part;`), and 59 of 59 examples give equal main and runtime bytes. No mutant M18 and no row. Done in S13. | S13 |
+| 2026-11-04 | Q-S14-1 RULED (a) 11-04: the skill file is `skills/accrue-lang/SKILL.md`, with YAML front matter. Done in S14. | S14 |
+| 2026-11-04 | Q-S14-2 RULED (a) 11-04: G1 to G5 are the graded example rows of section 8, cut from R files that the gate checks now. Done in S14. | S14 |
+| 2026-11-04 | Q-S14-3 RULED (a) 11-04: the whole cairn-lang skill gate: the gate block, `test/skilltool.c`, the Makefile rule, 3 fixtures from the G1 section of SKILL.md and 3 skilltool mutants. Done in S14. | S14 |
+| 2026-11-04 | Q-S14-4 RULED (a) 11-04: `AGENTS.md` (with the R numbers) and the README table after README line 4. `docs/STATUS.md` stays the template. Done in S14. | S14 |
+| 2026-11-04 | Q-S14-5 RULED (a) 11-04: keep the drafted examples and rename them to g1-retainer, g2-cancel, g3-vote, g4-rate and g5-amend. The graded example rows of section 8 give the R facts. Done in S14. | S14 |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -517,7 +536,7 @@ it fits.
 |---|---|---|
 | A1 | One canonical form for each operation: no aliases, no second syntax. `langc fmt PROG` prints the canonical form. `langc fmt PROG --check` exits 1 when a file is not canonical (Q-S11-4). | `fmt` is idempotent; `parse (fmt x)` has the same core term as `x`; every example and test file is canonical. |
 | A2 | `langc check --json FILE`: one JSON object with `diagnostics` (code, span, message, `fix`: a concrete edit) and `progress` (`parsed`, `typed`, `laws_discharged`, `laws_total`). Schema in `docs/CHECK-JSON.md`. | Rows in `test/json/` with the expected JSON, byte equal. Each refusal code has a `fix` row. |
-| A3 | `SKILL.md` with five graded examples (G1 to G5). Each example is a file in `examples/skill/`, and SKILL.md quotes it. | The gate checks each example and checks that the SKILL.md block and the file are byte equal. |
+| A3 | `skills/accrue-lang/SKILL.md` with five graded examples (G1 to G5). Each example is a file in `examples/skill/`, and SKILL.md quotes it. | The gate checks each example and checks that the SKILL.md block and the file are byte equal. |
 | A4 | `langc mcp`: an MCP server over stdio (JSON-RPC 2.0, one message on each line), in C, built by TinyCC into the same `langc`. Tools: `check`, `fmt`, `eval`, `build` (with a target), `explain` (a refusal code). The MCP spec version is pinned in `docs/MCP.md`. | A C tool `test/mcptool.c` sends `test/mcp/*.in` and compares the replies with `*.out`. |
 | A5 | `AGENTS.md` (how an agent works in this repo, with the gate command) and a README table: when to use accrue-lang, when not to use it, and what to use then. | Review only. |
 | A6 | Token counts: G1 to G5 in accrue-lang, Python and Rust. Report `docs/TOKEN-BASELINE.md` with the tokenizer pin, each count and each file hash (Q-S0-8). | `make tokens`, not in `make check`. |
@@ -526,11 +545,11 @@ Graded examples:
 
 | Grade | Example | Uses |
 |---|---|---|
-| G1 | A fixed monthly retainer: open, countersign, fund, `earned` at a stamp, settle | Part E, one stamp key, threshold 1 |
-| G2 | A closed linear stream, cancelled at `t*` | `earned(end) = d`, `cancel`, `unearned` back to the client, L1 |
-| G3 | One encrypted policy vote over two policies | PolicyBallot, tally, `choice`, `GovPi`, L7, L9 |
-| G4 | The rate changes mid-engagement | the policy history, L6 (the past stays) |
-| G5 | The DAO amends `tAmend` and `rule` | self-reference, `amend` as a fold, L11, the freeze regime |
+| G1 | A retainer (`g1-retainer.lang`): open with the client signature, countersign at 20, fund 200 at 30, read the recognized value at 50 | Part E, `egGood`, `csGood`, `csFundCtl`, the 2-of-3 FROST keys `cK` and `fK` |
+| G2 | A closed linear stream and a cancel (`g2-cancel.lang`): `hL` streams 1000 from 10 to 17, and `xC` cancels the push book at 30 | the earned value at the end is the deposit, `payCancel` pays the unearned 120 back to the client |
+| G3 | An encrypted policy vote over the decisions 0, 1 and 2 (`g3-vote.lang`) | the policy ballots `pbA`, `pbB` and `pbC`, a tally, the choice |
+| G4 | The rate changes during the engagement (`g4-rate.lang`): `hA` holds `pA` at 0 and `pB` at 30, and `hC` adds `pC` at 45 | the policy history, L6 (the earned value at each t <= 45 stays the same) |
+| G5 | The DAO amends `tAmend` and the rule (`g5-amend.lang`): `sLow` lowers `tAmend` to 1, so a yes count of 1 enacts `pMaj` | self-reference, the regimes `regAILong` and `regADLong` |
 
 ## 9. Tests
 
@@ -563,8 +582,8 @@ refusal or a law kills at least one mutant of it.
 | S11 | A1: canonical forms and `langc fmt`. | DONE |
 | S12 | A2: `langc check --json`. | DONE |
 | S13 | A4: `langc mcp`. | DONE |
-| S14 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table. | NEXT |
-| S15 | A6: the token comparison. | |
+| S14 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table. | DONE |
+| S15 | A6: the token comparison. | NEXT |
 | S16 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. | |
 
 ## 11. Open items

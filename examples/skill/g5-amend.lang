@@ -1,0 +1,41 @@
+-- PLAN row 533 (G5): the DAO amends tAmend and the rule. sLow lowers tAmend
+-- to 1, so a yes count of 1 then enacts pMaj (the majority rule). L11:
+-- amendAll is a fold. regAILong and regADLong give the two regimes.
+def crew : FreeMon Point :=
+  fmMul Point (fmMul Point (fmEta Point 1u) (fmEta Point 2u)) (fmEta Point 3u)
+
+def s0 : Polity := makePolity crew 2 2 2 1u 2u 3 4 5u 6u 0
+
+def pMaj : Proposal := makePolity crew 2 2 2 1u 2u 3 4 5u 6u 1
+
+def pAmend1 : Proposal := makePolity crew 2 1 2 1u 2u 3 4 5u 6u 0
+
+def mkT3 : Option Count -> Option Count -> Option Count -> PolicyTally :=
+  fun (a : Option Count) (b : Option Count) (c : Option Count) => fmMul (Option Count) (fmMul (Option Count) (fmEta (Option Count) a) (fmEta (Option Count) b)) (fmEta (Option Count) c)
+
+def tSplit : PolicyTally := mkT3 (some 3) (some 2) (some 2)
+
+def sMaj : Polity := stepD s0 (pair pMaj 2)
+
+def sLow : Polity := stepD s0 (pair pAmend1 2)
+
+def sLowMaj : Polity := stepD sLow (pair pMaj 1)
+
+def sLowAmend : Nat := tAmend sLow
+
+def sLowMajRule : Nat := rulePos sLowMaj
+
+def govSplit0 : Option Nat := govC s0 3 tSplit
+
+def govSplitMaj : Option Nat := govC sMaj 3 tSplit
+
+def l11Amend : (ps : FreeMon Decided) -> (qs : FreeMon Decided) -> (s : Polity) -> Path Polity (amendAll (fmMul Decided ps qs) s) (amendAll qs (amendAll ps s)) :=
+  fun (ps : FreeMon Decided) (qs : FreeMon Decided) (s : Polity) => refl
+
+def tZero : PolicyTally := mkT3 (some 0) (some 0) (some 0)
+
+def tLong : PolicyTally := fmMul (Option Count) tZero (fmEta (Option Count) (some 3))
+
+def regAILong : RegimeD := regimeD 3 0 (fmEta PolicyTally tLong)
+
+def regADLong : RegimeD := regimeD 4 0 (fmEta PolicyTally tLong)

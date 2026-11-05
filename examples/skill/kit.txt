@@ -1,0 +1,5 @@
+g1-retainer.lang
+g2-cancel.lang
+g3-vote.lang
+g4-rate.lang
+g5-amend.lang
