@@ -161,7 +161,20 @@ accrue-lang files, and the estimate of the Rust files is 4.50 times.
 estimate: passed`. `make tokens` (the API route) is written but not
 run. S15 adds no gate.sh rows and no mutants (Q-S15-6; section 1:
 Q-S15-1 to Q-S15-6).
-Next: S16 (Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate).
+S16 DONE: the Close. A new probe run on d3ddc7b (copies of the
+cairn-lang probe scripts, each step below `probe/guard.py` at 4096 MB
+and 120 s; Q-S16-2) gives the facts of `probe/CAPABILITY.md`. The Nat
+rows are not the cairn-lang rows: `natAdd` and `natSub` give an
+Option, and `natDiv` and `natMod` take a `NonZero Nat` divisor, so the
+probe Nat program refuses with `REFUSE_PARTIAL` (Q-S16-6). `SPEC.md`
+has the 10 sections of the cairn-lang form with the accrue-lang facts
+(Q-S16-4). `docs/VALIDATION.md` gets its header, the gate paragraph, a
+pointer to the PLAN rows and row V6 (the token estimate). The final
+gate is one serial `make check` (Q-S16-3): EXIT 0 in 592 seconds, the
+40 count lines of S15 are equal, and 0 lines start with `FAIL`. The
+open items stay open for a later plan (Q-S16-5). S16 adds no code, no
+gate rows and no mutants (section 1: Q-S16-1 to Q-S16-6).
+The plan ends after S16.
 
 ## 1. Rulings
 
@@ -318,6 +331,12 @@ Next: S16 (Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate).
 | 2026-11-05 | Q-S15-4 RULED (a) 11-05: the eval rows are all 16 survey rows: G1 `egGood`, `csGood`, `csFundCtl`; G2 `eStream12`, `eStream17`, `payCancel`; G3 `boxPlur`, `boxMaj`, `tally1`; G4 `ea37`, `cvAt`, `cvAfterNew`; G5 `sLowAmend`, `sLowMajRule`, `govSplit0`, `govSplitMaj`. Done in S15. | S15 |
 | 2026-11-05 | Q-S15-5 RULED (a) 11-05: the Python twins use the standard library only. The Rust twins are 1 crate with the bins g1 to g5, `sha2` 0.10 and `k256` 0.13 (the cairn-lang pins) and a pinned `Cargo.lock`. Done in S15. | S15 |
 | 2026-11-05 | Q-S15-6 RULED (a) 11-05: `test/tokcount.c` is a copy of the cairn-lang `test/tokcount.c`, and only the file list and the names change. `make check` gets the 3 cairn-lang check lines. S15 adds no gate.sh rows and no mutants. Done in S15. | S15 |
+| 2026-11-05 | Q-S16-1 RULED (a) 11-05: the S16 work uses the S16 plan and the PLAN rows, and does not read the full rules file again. Done in S16. | S16 |
+| 2026-11-05 | Q-S16-2 RULED (a) 11-05: a new probe run on accrue-lang, from copies of the cairn-lang S16 probe scripts. Each step runs below `probe/guard.py` (4096 MB, 120 s) in a `git archive` copy of d3ddc7b. `probe/CAPABILITY.md` cites the lines of the probe logs. Done in S16. | S16 |
+| 2026-11-05 | Q-S16-3 RULED (a) 11-05: the final gate is one serial `make check` only, as in the cairn-lang close. Done in S16. | S16 |
+| 2026-11-05 | Q-S16-4 RULED (a) 11-05: `SPEC.md` takes the cairn-lang form, with all 10 sections in full. Done in S16. | S16 |
+| 2026-11-05 | Q-S16-5 RULED (a) 11-05: the open O items stay open in section 11 and in SPEC section 9, each "for a later plan". S16 adds no code. Done in S16. | S16 |
+| 2026-11-05 | Q-S16-6 RULED (a) 11-05: no second probe run. The Nat rows of `probe/CAPABILITY.md` cite the `REFUSE_PARTIAL` line of the probe log, and the eval rows `entries addPrice 18446744073709551615 1` and `ratio 7 0` (both `none`) give the overflow and the divide by zero. Done in S16. | S16 |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -605,7 +624,7 @@ refusal or a law kills at least one mutant of it.
 | S13 | A4: `langc mcp`. | DONE |
 | S14 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table. | DONE |
 | S15 | A6: the token comparison. | DONE |
-| S16 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. | NEXT |
+| S16 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. | DONE: `make check` EXIT 0 in 592 seconds; the 40 count lines of S15 are equal (40 of 40), and 0 lines start with `FAIL`. No count line is new. S16 writes the 10 sections of SPEC.md, `probe/CAPABILITY.md` and `docs/VALIDATION.md`. The plan is CLOSED. |
 
 ## 11. Open items
 

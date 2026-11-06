@@ -1,16 +1,18 @@
 # Validation
 
-Date: YYYY-MM-DD. <Tool>: <version>. Host executable: `<path>` at
-<commit>.
+Date: 2026-11-06. tcc: 0.9.28rc 2026-09-04 mob@0fb54300 (AArch64 Darwin).
+Host executable: `build/langc` at d3ddc7b.
 
-`<gate command>` passes: <what the gate checks and builds>, and it runs <N>
-tests with zero failures. The test runner reported <S> seconds.
+`make check` passes: it builds `build/langc` and the test tools, and it
+checks `check --json`, `mcp`, `explain`, the skill, `fmt`, the regression
+groups (among them the domain, the crypto, the Wasm and ES module outputs,
+the traps and the run fuel) and the token report. It prints 40 count lines
+with zero failures. The run took 592 seconds.
 
-> Write here: one paragraph for each slice, in this form.
-
-The <slice> review adds <N> cases in `<test file>`. They check <the forms
-and the cases that work>. Refusals cover <the cases that the compiler must
-refuse>.
+Each slice from S0 to S16 has a row in docs/PLAN.md section 10 and a DONE
+paragraph at the start of docs/PLAN.md that gives the changes of the slice.
+The tables below give the trusted constants, the signature check and the
+assumptions V5 and V6 that the gate does not prove.
 
 ## Trusted constants
 
@@ -41,16 +43,17 @@ five arguments are closed `U256` words. Open arguments keep it stuck.
 
 | Builtin | Type | Since | Check |
 |---|---|---|---|
-| `schnorrOk` | `U256 -> U256 -> U256 -> U256 -> U256 -> Flag` | S7, Q-S7-6 (a), Q-S7-8 (a) | The arguments are the key, R.x, z, head r and e. The C check is the secp256k1 x-only Schnorr check of Q-S7-2 (a): it gives 1 when z G = R + c P, else 0. The unforgeability of the threshold Schnorr signature is V1 to V4 (PLAN section 5). |
+| `schnorrOk` | `U256 -> U256 -> U256 -> U256 -> U256 -> Flag` | S7, Q-S7-6 (a), Q-S7-8 (a) | The arguments are the key, R.x, z, head r and e. The C check is the secp256k1 x-only Schnorr check of Q-S7-2 (a): it gives 1 when z G = R + c P, else 0. The unforgeability of the threshold Schnorr signature is V1 to V4 (PLAN section 6). |
 
 ## Assumptions
 
-Each row is a computational assumption that no path can prove. V1 to V4
-stay in PLAN section 5.
+Each row is an assumption that no path can prove. V1 to V4
+stay in PLAN section 6.
 
 | Item | Since | Assumption |
 |---|---|---|
-| V5 | S6, Q-S0-7 (a), Q-S6-8 (a) | The Pedersen DKG lets a member bias the distribution of the public key (Gennaro, Jarecki, Krawczyk, Rabin). The security of ElGamal and of the threshold Schnorr signature under that bias is an assumption (PLAN section 5, row V5). |
+| V5 | S6, Q-S0-7 (a), Q-S6-8 (a) | The Pedersen DKG lets a member bias the distribution of the public key (Gennaro, Jarecki, Krawczyk, Rabin). The security of ElGamal and of the threshold Schnorr signature under that bias is an assumption (PLAN section 6, row V1 to V5). |
+| V6 | S15, Q-S15-3 (a) | The counts in `docs/TOKEN-BASELINE.md` are an estimate, ceil(bytes / 4), not the counts of a tokenizer: the ratios of the languages are byte ratios, and the Claude token counts can differ. `make check` checks only that the hashes and the estimates match the files (`token report hashes: 15 of 15`, `token estimate: passed`). `make tokens` (the API counts) was not run. |
 
 `src/front/dkg.c` deals and reshares the keys `keyOpen` and `keyAppend`:
 a Pedersen DKG with Feldman commitments and a Schnorr proof for each dealt
