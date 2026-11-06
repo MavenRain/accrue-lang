@@ -146,7 +146,22 @@ kills the 3 mutants M1 to M3 of `test/skilltool.c`. `AGENTS.md` tells
 an agent how to work in this repo and gives the gate command. The
 README table tells when to use accrue-lang, when not to use it and
 what to use then (Q-S14-4; section 1: Q-S14-1 to Q-S14-5).
-Next: S15 (A6: the token comparison).
+S15 DONE: A6, the token comparison. S15 ports the cairn-lang 0175ef1
+token baseline. `test/baseline/` holds the tasks of G1 to G5 in Python
+(the standard library only) and in Rust (1 crate with the bins g1 to
+g5, `sha2` 0.10 and `k256` 0.13, a pinned `Cargo.lock`; Q-S15-5). Each
+program prints the eval rows of its G (16 rows in all, Q-S15-4), byte
+equal to `langc --kit eval`. `test/tokcount.c` is the cairn-lang token
+tool with the accrue-lang files (Q-S15-6). `docs/TOKEN-BASELINE.md`
+holds an offline estimate, ceil(bytes / 4) of each file, and the
+SHA-256 of each of the 15 files (Q-S15-3). For the 5 G together, the
+estimate of the Python files is 3.59 times the estimate of the
+accrue-lang files, and the estimate of the Rust files is 4.50 times.
+`make check` gives `token report hashes: 15 of 15` and `token
+estimate: passed`. `make tokens` (the API route) is written but not
+run. S15 adds no gate.sh rows and no mutants (Q-S15-6; section 1:
+Q-S15-1 to Q-S15-6).
+Next: S16 (Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate).
 
 ## 1. Rulings
 
@@ -297,6 +312,12 @@ Next: S15 (A6: the token comparison).
 | 2026-11-04 | Q-S14-3 RULED (a) 11-04: the whole cairn-lang skill gate: the gate block, `test/skilltool.c`, the Makefile rule, 3 fixtures from the G1 section of SKILL.md and 3 skilltool mutants. Done in S14. | S14 |
 | 2026-11-04 | Q-S14-4 RULED (a) 11-04: `AGENTS.md` (with the R numbers) and the README table after README line 4. `docs/STATUS.md` stays the template. Done in S14. | S14 |
 | 2026-11-04 | Q-S14-5 RULED (a) 11-04: keep the drafted examples and rename them to g1-retainer, g2-cancel, g3-vote, g4-rate and g5-amend. The graded example rows of section 8 give the R facts. Done in S14. | S14 |
+| 2026-11-05 | Q-S15-1 RULED (a) 11-05: the USER commit 238ca53 is the S14 commit and the S15 base. Its tree does not have the last empty line of 3 fixtures in `test/skill/`. Done in S15. | S15 |
+| 2026-11-05 | Q-S15-2 RULED (a) 11-05: the S15 work uses the S15 plan, the S14 records and the PLAN rows, and does not read the full rules file again. Done in S15. | S15 |
+| 2026-11-05 | Q-S15-3 RULED (a) 11-05: the cairn-lang model. `docs/TOKEN-BASELINE.md` holds an offline estimate, ceil(bytes / 4). `make check` checks the hashes and the estimate block. `make tokens` uses count_tokens with the newest `created_at` model and subtracts the count of the frame message `x`. It is written but not run in S15. Done in S15. | S15 |
+| 2026-11-05 | Q-S15-4 RULED (a) 11-05: the eval rows are all 16 survey rows: G1 `egGood`, `csGood`, `csFundCtl`; G2 `eStream12`, `eStream17`, `payCancel`; G3 `boxPlur`, `boxMaj`, `tally1`; G4 `ea37`, `cvAt`, `cvAfterNew`; G5 `sLowAmend`, `sLowMajRule`, `govSplit0`, `govSplitMaj`. Done in S15. | S15 |
+| 2026-11-05 | Q-S15-5 RULED (a) 11-05: the Python twins use the standard library only. The Rust twins are 1 crate with the bins g1 to g5, `sha2` 0.10 and `k256` 0.13 (the cairn-lang pins) and a pinned `Cargo.lock`. Done in S15. | S15 |
+| 2026-11-05 | Q-S15-6 RULED (a) 11-05: `test/tokcount.c` is a copy of the cairn-lang `test/tokcount.c`, and only the file list and the names change. `make check` gets the 3 cairn-lang check lines. S15 adds no gate.sh rows and no mutants. Done in S15. | S15 |
 
 The seed is `bin/new-lang.sh accrue-lang tcc-wasm` from lang-template.
 Native code and EVM are not targets. EVM goes because the request makes
@@ -583,8 +604,8 @@ refusal or a law kills at least one mutant of it.
 | S12 | A2: `langc check --json`. | DONE |
 | S13 | A4: `langc mcp`. | DONE |
 | S14 | A3 and A5: SKILL.md, G1 to G5, AGENTS.md, the README table. | DONE |
-| S15 | A6: the token comparison. | NEXT |
-| S16 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. | |
+| S15 | A6: the token comparison. | DONE |
+| S16 | Close: SPEC.md, probe/CAPABILITY.md, VALIDATION.md, final gate. | NEXT |
 
 ## 11. Open items
 
